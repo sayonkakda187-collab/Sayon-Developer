@@ -1,0 +1,88 @@
+// Prisma schema for the news publishing website.
+//
+// Datasource is SQLite for local development. To upgrade to PostgreSQL later,
+// change `provider` to "postgresql" and point DATABASE_URL at your connection
+// string — no model changes are required. See CLAUDE.md for upgrade notes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Content ──────────────────────────────────────────────────────────────────
+
+model Article {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  excerpt     String
+  content     String // Markdown body
+  coverImage  String?
+  status      String    @default("draft") // "draft" | "published"
+  views       Int       @default(0)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  tags     Tag[]     @relation("ArticleTags")
+  comments Comment[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  articles Article[]
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+
+  articles Article[] @relation("ArticleTags")
+}
+
+// ── Engagement ─────────────────────────────────────────────────────────────--
+
+model Comment {
+  id         String   @id @default(cuid())
+  authorName String
+  content    String
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, approved])
+}
+
+model Newsletter {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+}

@@ -1,0 +1,36 @@
+name: news-site build
+
+# Type-check, lint, and compile the Next.js news site on PRs that touch it.
+on:
+  pull_request:
+    paths:
+      - "news-site/**"
+      - ".github/workflows/news-site-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: news-site
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: news-site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (type-check + lint + compile)
+        run: npm run build
+        env:
+          # The build renders no data (all DB-backed routes are force-dynamic),
+          # but Prisma expects DATABASE_URL to be present during generate/build.
+          DATABASE_URL: "file:./dev.db"
