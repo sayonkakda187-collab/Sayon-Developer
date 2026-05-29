@@ -56,18 +56,24 @@ Run once against the **production** database (use the direct/non-pooled URL):
 cd news-site
 export DATABASE_URL="<direct-postgres-url>"
 export DIRECT_URL="<direct-postgres-url>"
-npx prisma migrate deploy          # apply committed migrations (no prompts)
 
+# Migrations run automatically on every Vercel deploy (see vercel.json), so you
+# normally don't need this. To apply them manually:
+npx prisma migrate deploy
+
+# Seed ONCE to create the sample content + your admin user. This is NOT part of
+# the build command because seeding resets data — run it deliberately:
 ADMIN_EMAIL="you@example.com" ADMIN_PASSWORD="strong-pw" \
   NODE_ENV=production npm run db:seed
 ```
 
-- `migrate deploy` applies the committed migration(s).
-- `db:seed` inserts the sample categories/tags/articles and your admin user. To
-  seed **only** the admin (no sample content), trim `prisma/seed.ts` first.
-
-> Alternative: auto-migrate on deploy by setting the Vercel **Build Command** to
-> `prisma migrate deploy && next build`.
+- **Migrations are automatic:** `vercel.json` sets the build command to
+  `prisma generate && prisma migrate deploy && next build`, so committed
+  migrations apply on every deploy.
+- **Seeding is manual and one-time:** `db:seed` inserts the sample
+  categories/tags/articles and your admin user. It is intentionally *not* in the
+  build command because it resets data. To seed only the admin (no sample
+  content), trim `prisma/seed.ts` first.
 
 ## 6. Deploy
 
