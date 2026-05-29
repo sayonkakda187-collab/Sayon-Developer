@@ -126,7 +126,7 @@ Build in 4 phases, one at a time. Stop and report after each.
 - [x] Article CRUD + Markdown editor (live preview) + image upload + draft/publish + auto unique slugs
 - [x] Manage categories & tags
 
-### Phase 4 — Comments + Newsletter + SEO
-- [ ] Comments: post (unapproved) + admin approve/delete + show approved only
+### Phase 4 — Comments + Newsletter + SEO ✅
+- [x] Comments: visitors post (stored unapproved) + admin approve/unapprove/delete at `/admin/comments` + only approved shown publicly
 - [x] Newsletter signup (dedupe) — shipped early in Phase 2 (`/api/newsletter` + footer form)
-- [ ] SEO: per-page meta + Open Graph (articles/categories done in Phase 2 via Next Metadata), `sitemap.xml`, `robots.txt`, image optimization (`next/image` done)
+- [x] SEO: per-page meta + Open Graph, `sitemap.xml` (`app/sitemap.ts`), `robots.txt` (`app/robots.ts`), semantic HTML, `next/image` optimization

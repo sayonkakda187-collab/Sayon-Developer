@@ -3,12 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  getApprovedComments,
   getArticleBySlug,
   getRelatedArticles,
   incrementViews,
 } from "@/lib/queries";
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
+import { CommentForm } from "@/components/CommentForm";
 import { formatDate, formatNumber } from "@/lib/site";
 
 type Props = { params: { slug: string } };
@@ -19,10 +21,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: article.title,
     description: article.excerpt,
+    alternates: { canonical: `/news/${article.slug}` },
     openGraph: {
       title: article.title,
       description: article.excerpt,
       type: "article",
+      url: `/news/${article.slug}`,
       publishedTime: article.publishedAt?.toISOString(),
       images: article.coverImage ? [{ url: article.coverImage }] : undefined,
     },
@@ -34,10 +38,13 @@ export default async function ArticlePage({ params }: Props) {
   if (!article) notFound();
 
   await incrementViews(article.id);
-  const related = await getRelatedArticles({
-    categoryId: article.categoryId,
-    excludeId: article.id,
-  });
+  const [related, comments] = await Promise.all([
+    getRelatedArticles({
+      categoryId: article.categoryId,
+      excludeId: article.id,
+    }),
+    getApprovedComments(article.id),
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -89,16 +96,50 @@ export default async function ArticlePage({ params }: Props) {
         )}
       </article>
 
-      {/* Comments — interactive posting + moderation arrives in Phase 4. */}
       <section
         id="comments"
         aria-label="Comments"
         className="mt-12 border-t border-gray-200 pt-8"
       >
-        <h2 className="font-serif text-2xl font-bold">Comments</h2>
-        <p className="mt-3 rounded-lg bg-gray-50 p-4 text-sm text-gray-500">
-          Comments are coming soon.
-        </p>
+        <h2 className="font-serif text-2xl font-bold">
+          Comments{" "}
+          <span className="text-gray-400">({comments.length})</span>
+        </h2>
+
+        {comments.length === 0 ? (
+          <p className="mt-3 text-gray-500">
+            No comments yet. Be the first to share your thoughts.
+          </p>
+        ) : (
+          <ul className="mt-6 space-y-6">
+            {comments.map((c) => (
+              <li key={c.id} className="border-b border-gray-100 pb-6 last:border-0">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-semibold text-gray-900">
+                    {c.authorName}
+                  </span>
+                  <time
+                    dateTime={c.createdAt.toISOString()}
+                    className="text-xs text-gray-400"
+                  >
+                    {formatDate(c.createdAt)}
+                  </time>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-gray-700">
+                  {c.content}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-8">
+          <h3 className="font-serif text-lg font-bold">Leave a comment</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Comments are reviewed before they appear.
+          </p>
+          <CommentForm articleId={article.id} />
+        </div>
       </section>
 
       {related.length > 0 && (

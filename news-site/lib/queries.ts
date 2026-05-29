@@ -114,3 +114,11 @@ export async function searchArticles(query: string) {
     take: 50,
   });
 }
+
+/** Approved comments for an article, newest first. */
+export function getApprovedComments(articleId: string) {
+  return prisma.comment.findMany({
+    where: { articleId, approved: true },
+    orderBy: { createdAt: "desc" },
+  });
+}

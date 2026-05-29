@@ -28,6 +28,12 @@ export default async function AdminPanelLayout({
                 Articles
               </Link>
               <Link
+                href="/admin/comments"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Comments
+              </Link>
+              <Link
                 href="/admin/categories"
                 className="text-gray-600 hover:text-gray-900"
               >

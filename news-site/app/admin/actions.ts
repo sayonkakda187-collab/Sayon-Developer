@@ -136,3 +136,26 @@ export async function deleteTag(formData: FormData) {
   if (id) await prisma.tag.delete({ where: { id } });
   redirect("/admin/categories");
 }
+
+export async function approveComment(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (id) await prisma.comment.update({ where: { id }, data: { approved: true } });
+  redirect("/admin/comments");
+}
+
+export async function unapproveComment(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (id) {
+    await prisma.comment.update({ where: { id }, data: { approved: false } });
+  }
+  redirect("/admin/comments");
+}
+
+export async function deleteComment(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (id) await prisma.comment.delete({ where: { id } });
+  redirect("/admin/comments");
+}
