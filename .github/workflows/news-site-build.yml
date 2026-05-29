@@ -16,6 +16,12 @@ jobs:
     defaults:
       run:
         working-directory: news-site
+    # No DB connection happens during `prisma generate` (postinstall) or
+    # `next build` (all DB-backed routes are force-dynamic), but Prisma needs
+    # these env vars to be present. Dummy values are fine — nothing connects.
+    env:
+      DATABASE_URL: "postgresql://user:password@localhost:5432/news?schema=public"
+      DIRECT_URL: "postgresql://user:password@localhost:5432/news?schema=public"
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +36,3 @@ jobs:
 
       - name: Build (type-check + lint + compile)
         run: npm run build
-        env:
-          # The build renders no data (all DB-backed routes are force-dynamic),
-          # but Prisma expects DATABASE_URL to be present during generate/build.
-          DATABASE_URL: "file:./dev.db"
