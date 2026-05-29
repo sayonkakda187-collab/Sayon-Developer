@@ -91,6 +91,14 @@ npm run db:studio   # open Prisma Studio
 
 Environment: copy `.env.example` → `.env` (defaults to SQLite at `prisma/dev.db`).
 
+## Admin & auth (Phase 3)
+
+- **Login:** `/admin/login`. Default seeded credentials: `admin@example.com` / `admin1234` (override before seeding with `ADMIN_EMAIL` / `ADMIN_PASSWORD`).
+- **Sessions:** stateless, HMAC-signed httpOnly cookie (`AUTH_SECRET`); passwords hashed with Node `scrypt`. No external auth dependency.
+- **Route protection:** `app/admin/(panel)/layout.tsx` calls `requireAdmin()`; the login page lives outside that group so it isn't gated. Admin API routes check `getSessionUser()` directly.
+- **Mutations:** Server Actions in `app/admin/actions.ts` (each re-checks `requireAdmin`).
+- **Image uploads:** saved to `/public/uploads` (gitignored). This is local-filesystem storage — fine for local/self-hosted dev, but on serverless/read-only hosts you'd swap in object storage (S3/R2/etc.).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
@@ -111,12 +119,12 @@ Build in 4 phases, one at a time. Stop and report after each.
 - [x] `/search?q=` (server-side search over title + excerpt + content)
 - [x] Responsive header (search + category nav) + footer with working newsletter signup
 
-### Phase 3 — Admin Panel + Auth
-- [ ] Session-based auth; all `/admin` routes protected
-- [ ] Seed admin user
-- [ ] Dashboard stats
-- [ ] Article CRUD + markdown editor + image upload + draft/publish + auto slugs
-- [ ] Manage categories & tags
+### Phase 3 — Admin Panel + Auth ✅
+- [x] Session-based auth (scrypt + HMAC-signed httpOnly cookie); all `/admin` routes protected via the `(panel)` layout
+- [x] Seed admin user (`admin@example.com` / `admin1234` by default)
+- [x] Dashboard stats (articles, total views, comments, categories, subscribers)
+- [x] Article CRUD + Markdown editor (live preview) + image upload + draft/publish + auto unique slugs
+- [x] Manage categories & tags
 
 ### Phase 4 — Comments + Newsletter + SEO
 - [ ] Comments: post (unapproved) + admin approve/delete + show approved only

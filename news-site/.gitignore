@@ -35,6 +35,10 @@ yarn-error.log*
 /prisma/*.db
 /prisma/*.db-journal
 
+# admin image uploads (runtime-generated; keep the folder, ignore contents)
+/public/uploads/*
+!/public/uploads/.gitkeep
+
 # vercel
 .vercel
 

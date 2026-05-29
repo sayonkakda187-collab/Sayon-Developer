@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../lib/password";
 
 const prisma = new PrismaClient();
 
@@ -278,6 +279,18 @@ on cautious.`,
     });
   }
 
+  // ── Admin user ────────────────────────────────────────────────────────────
+  await prisma.user.deleteMany();
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin1234";
+  await prisma.user.create({
+    data: {
+      email: adminEmail,
+      passwordHash: hashPassword(adminPassword),
+      role: "admin",
+    },
+  });
+
   const [categoryCount, tagCount, articleCount] = await Promise.all([
     prisma.category.count(),
     prisma.tag.count(),
@@ -286,6 +299,7 @@ on cautious.`,
   console.log(
     `✅ Seed complete: ${categoryCount} categories, ${tagCount} tags, ${articleCount} published articles.`,
   );
+  console.log(`👤 Admin login: ${adminEmail} / ${adminPassword}`);
 }
 
 main()

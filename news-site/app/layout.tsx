@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
 import { siteConfig } from "@/lib/site";
 
-// The header/footer read categories from the DB, so the app renders per-request.
+// Header/footer read categories from the DB, so the app renders per-request.
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -24,9 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col bg-white text-gray-900 antialiased">
-        <SiteHeader />
-        <div className="flex-1">{children}</div>
-        <SiteFooter />
+        {children}
       </body>
     </html>
   );
