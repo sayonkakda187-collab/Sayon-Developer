@@ -17,6 +17,7 @@ visitors read, browse by category, search, and comment.
 - **Next.js 14** (App Router) + **TypeScript**
 - **Tailwind CSS** (light theme only)
 - **Prisma** ORM with **SQLite** (upgradeable to PostgreSQL — see below)
+- **Markdown**: `react-markdown` + `remark-gfm` render `Article.content` (added in Phase 2; renders no raw HTML, so it's XSS-safe)
 - Server Components by default; Client Components only where interactivity needs it.
 
 ### Upgrading SQLite → PostgreSQL later
@@ -103,12 +104,12 @@ Build in 4 phases, one at a time. Stop and report after each.
 - [x] Seed data: 3 categories + 6 published articles with cover images (+ 8 tags)
 - [x] Migration + seed run successfully
 
-### Phase 2 — Public Pages
-- [ ] Homepage (featured hero + latest grid + category sections)
-- [ ] `/news/[slug]` (full article, view counter, related, comments placeholder)
-- [ ] `/category/[slug]` (paginated)
-- [ ] `/search?q=` (server-side search)
-- [ ] Responsive header + footer with newsletter signup
+### Phase 2 — Public Pages ✅
+- [x] Homepage (featured hero + latest grid + category sections)
+- [x] `/news/[slug]` (full article, view counter, related, comments placeholder)
+- [x] `/category/[slug]` (paginated)
+- [x] `/search?q=` (server-side search over title + excerpt + content)
+- [x] Responsive header (search + category nav) + footer with working newsletter signup
 
 ### Phase 3 — Admin Panel + Auth
 - [ ] Session-based auth; all `/admin` routes protected
@@ -119,5 +120,5 @@ Build in 4 phases, one at a time. Stop and report after each.
 
 ### Phase 4 — Comments + Newsletter + SEO
 - [ ] Comments: post (unapproved) + admin approve/delete + show approved only
-- [ ] Newsletter signup (dedupe)
-- [ ] SEO: meta + Open Graph, `sitemap.xml`, `robots.txt`, image optimization
+- [x] Newsletter signup (dedupe) — shipped early in Phase 2 (`/api/newsletter` + footer form)
+- [ ] SEO: per-page meta + Open Graph (articles/categories done in Phase 2 via Next Metadata), `sitemap.xml`, `robots.txt`, image optimization (`next/image` done)
