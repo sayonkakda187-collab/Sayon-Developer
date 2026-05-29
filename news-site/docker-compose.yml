@@ -1,0 +1,20 @@
+# Local PostgreSQL for development.
+#   docker compose up -d      # start
+#   docker compose down       # stop (keeps data)
+#   docker compose down -v    # stop and wipe data
+# Connection matches the defaults in .env.example.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: newsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
