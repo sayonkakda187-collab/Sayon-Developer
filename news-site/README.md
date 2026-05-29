@@ -2,8 +2,7 @@
 
 A full-stack general news site where an admin publishes articles and visitors
 read, browse by category, search, and comment. Built with **Next.js 14** (App
-Router), **TypeScript**, **Tailwind CSS**, and **Prisma** + **SQLite**
-(upgradeable to PostgreSQL).
+Router), **TypeScript**, **Tailwind CSS**, and **Prisma** + **PostgreSQL**.
 
 > See [`CLAUDE.md`](./CLAUDE.md) for full conventions, the data model, and the
 > build roadmap.
@@ -23,8 +22,9 @@ Router), **TypeScript**, **Tailwind CSS**, and **Prisma** + **SQLite**
 ## Getting started
 
 ```bash
+docker compose up -d   # start a local PostgreSQL (or point DATABASE_URL elsewhere)
 npm install            # install dependencies (runs `prisma generate`)
-cp .env.example .env   # configure environment (defaults to SQLite)
+cp .env.example .env   # defaults point at the local Docker Postgres
 npm run db:reset       # create + migrate + seed the database
 npm run dev            # http://localhost:3000
 ```
@@ -57,9 +57,9 @@ set a strong `AUTH_SECRET` in production.)
 - **Markdown:** rendered with `react-markdown` + `remark-gfm` (no raw HTML).
 - **Image uploads:** saved to `/public/uploads` (local filesystem). For
   serverless/read-only hosts, swap in object storage (S3/R2/etc.).
-- **Database:** to move to PostgreSQL, change the `datasource` provider in
-  `prisma/schema.prisma` to `postgresql`, point `DATABASE_URL` at your database,
-  and run a fresh migration — no model changes required.
+- **Database:** PostgreSQL via Prisma, configured by `DATABASE_URL` (pooled) and
+  `DIRECT_URL` (migrations). Local dev uses Docker Compose; see `DEPLOY.md` for
+  Neon / Vercel Postgres setup.
 
 ## Project structure
 
