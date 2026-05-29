@@ -281,8 +281,21 @@ on cautious.`,
 
   // ── Admin user ────────────────────────────────────────────────────────────
   await prisma.user.deleteMany();
-  const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin1234";
+  const isProd = process.env.NODE_ENV === "production";
+  // Read credentials from the environment; fall back to known values only
+  // outside production so local dev stays convenient.
+  const adminEmail = (
+    process.env.ADMIN_EMAIL ?? (isProd ? "" : "admin@example.com")
+  )
+    .trim()
+    .toLowerCase();
+  const adminPassword =
+    process.env.ADMIN_PASSWORD ?? (isProd ? "" : "admin1234");
+  if (!adminEmail || !adminPassword) {
+    throw new Error(
+      "ADMIN_EMAIL and ADMIN_PASSWORD must be set to seed an admin user in production.",
+    );
+  }
   await prisma.user.create({
     data: {
       email: adminEmail,
@@ -299,7 +312,12 @@ on cautious.`,
   console.log(
     `✅ Seed complete: ${categoryCount} categories, ${tagCount} tags, ${articleCount} published articles.`,
   );
-  console.log(`👤 Admin login: ${adminEmail} / ${adminPassword}`);
+  // Avoid printing the password in production logs.
+  if (isProd) {
+    console.log(`👤 Admin user created: ${adminEmail}`);
+  } else {
+    console.log(`👤 Admin login: ${adminEmail} / ${adminPassword}`);
+  }
 }
 
 main()

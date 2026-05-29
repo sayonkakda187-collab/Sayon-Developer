@@ -7,8 +7,16 @@ import { verifyPassword } from "@/lib/password";
 const SESSION_COOKIE = "admin_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days, in seconds
 
-function secret() {
-  return process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me";
+function secret(): string {
+  const value = process.env.AUTH_SECRET;
+  if (value && value.length > 0) return value;
+  // Never sign sessions with a hardcoded secret in production.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AUTH_SECRET is required in production. Set it to a long random value (e.g. `openssl rand -hex 32`).",
+    );
+  }
+  return "dev-insecure-secret-change-me";
 }
 
 function sign(payload: string): string {
