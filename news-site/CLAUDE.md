@@ -16,15 +16,19 @@ visitors read, browse by category, search, and comment.
 
 - **Next.js 14** (App Router) + **TypeScript**
 - **Tailwind CSS** (light theme only)
-- **Prisma** ORM with **SQLite** (upgradeable to PostgreSQL — see below)
+- **Prisma** ORM with **PostgreSQL** (local via Docker Compose; Neon / Vercel Postgres in production)
 - **Markdown**: `react-markdown` + `remark-gfm` render `Article.content` (added in Phase 2; renders no raw HTML, so it's XSS-safe)
 - Server Components by default; Client Components only where interactivity needs it.
 
-### Upgrading SQLite → PostgreSQL later
+### Database (PostgreSQL)
 
-Change `provider` in `prisma/schema.prisma` from `"sqlite"` to `"postgresql"`,
-set `DATABASE_URL` to a Postgres connection string, then run a fresh migration.
-No model changes required.
+PostgreSQL in every environment (local = Docker, production = Neon / Vercel
+Postgres). The provider is `postgresql`; the connection is env-driven —
+`DATABASE_URL` (pooled, runtime) and `DIRECT_URL` (direct, used for migrations).
+
+- Local: `docker compose up -d` (see `docker-compose.yml`), then
+  `npm run db:migrate && npm run db:seed`.
+- Production / deploy: see `DEPLOY.md`.
 
 ## Conventions
 
@@ -44,8 +48,8 @@ news-site/
   app/            # routes (App Router) — public pages + /admin + route handlers
   components/     # shared React components
   lib/            # db client + server utilities
-  prisma/         # schema.prisma, migrations, seed.ts, dev.db (gitignored)
-  public/         # static assets + uploaded images
+  prisma/         # schema.prisma, migrations, seed.ts
+  public/uploads/ # local-dev image upload fallback (gitignored)
 ```
 
 ## Database models
@@ -81,15 +85,17 @@ news-site/
 ## Local commands
 
 ```bash
-npm run dev         # start dev server (http://localhost:3000)
-npm run build       # production build
-npm run db:migrate  # create/apply a migration (prisma migrate dev)
-npm run db:seed     # seed sample data
-npm run db:reset    # drop, re-migrate, and re-seed
-npm run db:studio   # open Prisma Studio
+docker compose up -d  # local PostgreSQL (see docker-compose.yml)
+npm run dev           # start dev server (http://localhost:3000)
+npm run build         # production build
+npm run db:migrate    # create/apply a migration (prisma migrate dev)
+npm run db:deploy     # apply migrations without prompts (production)
+npm run db:seed       # seed sample data + dev admin
+npm run db:reset      # drop, re-migrate, and re-seed
+npm run db:studio     # open Prisma Studio
 ```
 
-Environment: copy `.env.example` → `.env` (defaults to SQLite at `prisma/dev.db`).
+Environment: copy `.env.example` → `.env` (defaults point at the local Docker Postgres). Deployment: see `DEPLOY.md`.
 
 ## Admin & auth (Phase 3)
 
@@ -97,7 +103,7 @@ Environment: copy `.env.example` → `.env` (defaults to SQLite at `prisma/dev.d
 - **Sessions:** stateless, HMAC-signed httpOnly cookie (`AUTH_SECRET`); passwords hashed with Node `scrypt`. No external auth dependency.
 - **Route protection:** `app/admin/(panel)/layout.tsx` calls `requireAdmin()`; the login page lives outside that group so it isn't gated. Admin API routes check `getSessionUser()` directly.
 - **Mutations:** Server Actions in `app/admin/actions.ts` (each re-checks `requireAdmin`).
-- **Image uploads:** saved to `/public/uploads` (gitignored). This is local-filesystem storage — fine for local/self-hosted dev, but on serverless/read-only hosts you'd swap in object storage (S3/R2/etc.).
+- **Image uploads:** **Vercel Blob** when `BLOB_READ_WRITE_TOKEN` is set (required on Vercel — read-only filesystem); otherwise a `/public/uploads` fallback for local dev. Blob public URLs are allow-listed in `next.config.mjs`.
 
 ## Roadmap
 
