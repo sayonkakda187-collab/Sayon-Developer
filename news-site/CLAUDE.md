@@ -106,6 +106,37 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
 - **Mutations:** Server Actions in `app/admin/actions.ts` (each re-checks `requireAdmin`).
 - **Image uploads:** **Vercel Blob** when `BLOB_READ_WRITE_TOKEN` is set (required on Vercel — read-only filesystem); otherwise a `/public/uploads` fallback for local dev. Blob public URLs are allow-listed in `next.config.mjs`.
 
+## Ads (AdsKeeper)
+
+The article reading page (`/news/[slug]`) has AdsKeeper ad placements wired up.
+Everything is config-driven from **one file: `lib/ads.ts`** — that's the only
+file you edit to go live.
+
+**To go live (3 steps in `lib/ads.ts`):**
+1. Paste your **SITE ID** (the number from your head loader URL
+   `https://jsc.adskeeper.com/site/SITE_ID.js`) into `ADSKEEPER_SITE_ID`.
+2. In the AdsKeeper dashboard → **Add Widget**, create one widget per placement
+   and paste each **WIDGET ID** into `ADS.TOP`, `ADS.IN_ARTICLE`, `ADS.SIDEBAR`.
+3. Set `ADS_ENABLED = true`.
+
+Until all three are done, **real visitors see nothing** (clean page, no empty
+boxes). Labeled dashed placeholder boxes marking each slot show in **local dev**
+and on **Vercel preview** deployments (keyed off `NEXT_PUBLIC_VERCEL_ENV`), so
+you can review the placements before adding IDs — but never on the production
+domain. No DB/auth/backend involvement — these IDs are public and safe to commit.
+
+**How it's built:**
+- `components/AdsHead.tsx` — loads the AdsKeeper preloader once via `next/script`
+  (`afterInteractive`), only on the public site (mounted in `(public)/layout.tsx`,
+  never in `/admin`), and only when enabled with a real SITE ID.
+- `components/AdSlot.tsx` — `<AdSlot widgetId={…} />` renders the AdsKeeper body
+  container (`data-type="_mgwidget"`) and lazily triggers `_mgq.push(["_mgc.load"])`
+  via IntersectionObserver. Reserves `minHeight` (no layout shift), carries an
+  "Advertisement" label, and matches the site tokens in light/dark.
+- Placements on `/news/[slug]`: **TOP** (below the lede), **IN_ARTICLE** (split
+  into the middle of the body at a paragraph boundary), **SIDEBAR** (above
+  "Related Stories"; this layout is single-column).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
