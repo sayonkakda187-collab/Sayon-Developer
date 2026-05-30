@@ -18,8 +18,7 @@ type ArticleInput = {
   tagIds: string[];
 };
 
-const inputClass =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent";
+const inputClass = "adm-input";
 
 export function ArticleForm({
   action,
@@ -86,16 +85,10 @@ export function ArticleForm({
       {article?.id && <input type="hidden" name="id" value={article.id} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">
+        <h1 className="adm-serif text-2xl font-bold text-fg">
           {article?.id ? "Edit article" : "New article"}
           {article && (
-            <span
-              className={`ml-3 align-middle rounded-full px-2 py-0.5 text-xs font-medium ${
-                article.status === "published"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-surface-2 text-fg-muted"
-              }`}
-            >
+            <span className={`adm-pill ${article.status === "published" ? "" : "amber"}`} style={{ marginLeft: 12, verticalAlign: "middle" }}>
               {article.status}
             </span>
           )}
@@ -105,7 +98,8 @@ export function ArticleForm({
             type="submit"
             name="status"
             value="draft"
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-border bg-surface px-4 text-sm font-medium text-fg transition-colors hover:bg-surface-2 sm:flex-none"
+            className="adm-btn-ghost"
+            style={{ flex: 1, minHeight: 44 }}
           >
             Save draft
           </button>
@@ -113,7 +107,8 @@ export function ArticleForm({
             type="submit"
             name="status"
             value="published"
-            className="btn-primary inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-4 text-sm font-semibold transition sm:flex-none"
+            className="adm-btn-primary"
+            style={{ flex: 1, minHeight: 44 }}
           >
             Publish
           </button>

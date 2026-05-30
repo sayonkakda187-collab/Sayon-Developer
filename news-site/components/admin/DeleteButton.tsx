@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 export function DeleteButton({
   action,
   id,
@@ -9,7 +11,7 @@ export function DeleteButton({
 }: {
   action: (formData: FormData) => void | Promise<void>;
   id: string;
-  label?: string;
+  label?: ReactNode;
   confirmText?: string;
   className?: string;
 }) {
