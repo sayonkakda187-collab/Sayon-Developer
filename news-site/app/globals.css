@@ -15,9 +15,10 @@
   --fg: 22 22 26; /* headlines */
   --fg-muted: 71 71 79; /* body */
   --fg-faint: 116 116 125; /* meta */
-  --accent: 79 70 229; /* indigo-600 */
-  --accent-fg: 255 255 255; /* text on accent */
-  --accent-link: 67 56 202; /* indigo-700, AA on light */
+  --accent: 214 0 28; /* #D6001C — fills: buttons, tags, dot, active underline */
+  --accent-fg: 255 255 255; /* text on accent fills */
+  --accent-link: 193 0 24; /* #C10018 — red text links on light (AA ~5:1) */
+  --accent-bright: 255 90 95; /* #FF5A5F — accent text on dark imagery (hero) */
 }
 
 .dark {
@@ -28,9 +29,9 @@
   --fg: 244 243 239;
   --fg-muted: 180 180 189;
   --fg-faint: 131 131 140;
-  --accent: 129 140 248; /* indigo-400 */
-  --accent-fg: 17 17 21;
-  --accent-link: 165 180 252; /* indigo-300 */
+  --accent: 214 0 28; /* #D6001C — white text stays AA on dark too */
+  --accent-fg: 255 255 255;
+  --accent-link: 255 107 117; /* #FF6B75 — red text links on dark (AA) */
 }
 
 /* Default border color follows the theme token. */

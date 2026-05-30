@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Article, Category } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-export const ARTICLES_PER_PAGE = 6;
+export const ARTICLES_PER_PAGE = 8;
 
 /** Shape returned for list/grid views (article plus its category). */
 export type ArticleWithCategory = Article & { category: Category | null };
@@ -11,6 +11,16 @@ const published = { status: "published" } as const;
 
 export function getCategories() {
   return prisma.category.findMany({ orderBy: { name: "asc" } });
+}
+
+/** Latest published headlines for the top "trending" bar (display only). */
+export function getTrending(take = 6) {
+  return prisma.article.findMany({
+    where: published,
+    orderBy: { publishedAt: "desc" },
+    select: { title: true, slug: true },
+    take,
+  });
 }
 
 /** Homepage payload: a featured hero, the latest grid, and per-category sections. */
@@ -30,7 +40,7 @@ export async function getHomepage() {
         where: published,
         orderBy: { publishedAt: "desc" },
         include: { category: true },
-        take: 3,
+        take: 4,
       },
     },
   });

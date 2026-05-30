@@ -24,6 +24,7 @@ const config: Config = {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           fg: "rgb(var(--accent-fg) / <alpha-value>)",
           link: "rgb(var(--accent-link) / <alpha-value>)",
+          bright: "rgb(var(--accent-bright) / <alpha-value>)",
         },
       },
       fontFamily: {
