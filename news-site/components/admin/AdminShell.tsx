@@ -19,10 +19,10 @@ import {
 import { logout } from "@/app/admin/actions";
 
 const NAV = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "Articles", href: "/admin/articles", icon: Newspaper },
-  { name: "Categories & Tags", href: "/admin/categories", icon: Tags },
-  { name: "Comments", href: "/admin/comments", icon: MessageSquare },
+  { name: "Dashboard", short: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "Articles", short: "Articles", href: "/admin/articles", icon: Newspaper },
+  { name: "Categories & Tags", short: "Tags", href: "/admin/categories", icon: Tags },
+  { name: "Comments", short: "Comments", href: "/admin/comments", icon: MessageSquare },
 ];
 
 export function AdminShell({
@@ -188,10 +188,33 @@ export function AdminShell({
           </div>
         )}
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="min-w-0 flex-1 px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-8">
           {children}
         </main>
       </div>
+
+      {/* Bottom tab bar (mobile, thumb-reachable) */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-surface lg:hidden">
+        {NAV.map(({ short, href, icon: Icon }) => {
+          const active = isActive(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`flex min-h-[56px] flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                active ? "text-fg" : "text-fg-faint"
+              }`}
+            >
+              <Icon
+                className={`h-5 w-5 ${active ? "text-green-600" : ""}`}
+                strokeWidth={2}
+              />
+              {short}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
