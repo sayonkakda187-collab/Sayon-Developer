@@ -27,13 +27,17 @@
  */
 
 // 1) Your AdsKeeper SITE ID (the number in the head loader URL). ← REPLACE
-export const ADSKEEPER_SITE_ID = "REPLACE_WITH_SITE_ID";
+export const ADSKEEPER_SITE_ID = "1097964";
 
 // 2) One WIDGET ID per on-page placement. ← REPLACE each with the widget id
 //    from AdsKeeper dashboard → Add Widget.
+//    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
+//    should only appear in a single container per page. So only TOP is live for
+//    now; create a separate widget for each of the other two before enabling
+//    them (reusing 2019769 here is not supported and would leave them unfilled).
 export const ADS = {
   /** Top of the article, just under the headline/lede. */
-  TOP: "REPLACE_WITH_WIDGET_ID",
+  TOP: "2019769",
   /** Injected into the middle of the article body, between paragraphs. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
   /** Sidebar / related area — here, just above "Related Stories". */
@@ -43,7 +47,7 @@ export const ADS = {
 // 3) Master on/off switch. Leave false until your IDs above are real.
 //    Typed as `boolean` (not the literal `false`) so the on/off branches in
 //    AdSlot/AdsHead type-check cleanly when you flip it.
-export const ADS_ENABLED: boolean = false;
+export const ADS_ENABLED: boolean = true;
 
 // ── Helpers (no need to edit below) ─────────────────────────────────────────
 
