@@ -6,8 +6,8 @@ import {
   deleteComment,
 } from "@/app/admin/actions";
 import { DeleteButton } from "@/components/admin/DeleteButton";
-import { StatusPill } from "@/components/admin/StatusPill";
 import { formatDate } from "@/lib/site";
+import { CommentsIcon, CheckIcon } from "@/components/admin/icons";
 
 export default async function AdminCommentsPage() {
   const comments = await prisma.comment.findMany({
@@ -17,60 +17,62 @@ export default async function AdminCommentsPage() {
   const pendingCount = comments.filter((c) => !c.approved).length;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Comments</h1>
-        <p className="mt-1 text-sm text-fg-muted">{pendingCount} pending review</p>
+    <div>
+      <div className="adm-page-h">
+        <h1>Comments</h1>
+        <p>
+          {comments.length === 0
+            ? "Moderate reader discussion"
+            : `${pendingCount} pending review`}
+        </p>
       </div>
 
       {comments.length === 0 ? (
-        <div className="rounded-xl border border-border bg-surface p-10 text-center shadow-sm">
-          <p className="text-fg-muted">No comments yet.</p>
+        <div className="adm-card">
+          <div className="adm-empty">
+            <div className="adm-ill">
+              <CommentsIcon className="h-[38px] w-[38px]" />
+            </div>
+            <h2 className="adm-serif">No comments yet</h2>
+            <p>When readers comment on your articles, they&apos;ll appear here for review.</p>
+          </div>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
           {comments.map((c) => (
-            <li
-              key={c.id}
-              className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-fg">{c.authorName}</span>
-                  <StatusPill status={c.approved ? "approved" : "pending"} />
+            <div key={c.id} className="adm-card adm-card-pad">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, color: "var(--adm-ink)" }}>{c.authorName}</span>
+                  <span className={`adm-pill ${c.approved ? "" : "amber"}`}>
+                    {c.approved ? "Approved" : "Pending"}
+                  </span>
                 </div>
-                <time className="text-xs text-fg-faint">
-                  {formatDate(c.createdAt)}
-                </time>
+                <time className="adm-amt" style={{ flex: "none" }}>{formatDate(c.createdAt)}</time>
               </div>
 
-              <p className="mt-2 whitespace-pre-wrap text-sm text-fg-muted">
+              <p style={{ marginTop: 8, fontSize: 13.5, color: "var(--adm-ink)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                 {c.content}
               </p>
 
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-fg-faint">
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 11, flexWrap: "wrap" }}>
+                <span className="adm-amt">
                   on{" "}
-                  <Link
-                    href={`/news/${c.article.slug}`}
-                    target="_blank"
-                    className="text-fg-muted hover:underline"
-                  >
+                  <Link href={`/news/${c.article.slug}`} target="_blank" style={{ color: "var(--adm-muted)", textDecoration: "underline" }}>
                     {c.article.title}
                   </Link>
                 </span>
-                <div className="ml-auto flex items-center gap-4">
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
                   {c.approved ? (
                     <form action={unapproveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-fg-muted transition-colors hover:text-fg">
-                        Unapprove
-                      </button>
+                      <button type="submit" className="adm-btn-ghost">Unapprove</button>
                     </form>
                   ) : (
                     <form action={approveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-green-700 transition-colors hover:text-green-800">
+                      <button type="submit" className="adm-btn-ghost" style={{ color: "#15803d" }}>
+                        <CheckIcon className="h-4 w-4" />
                         Approve
                       </button>
                     </form>
@@ -78,13 +80,15 @@ export default async function AdminCommentsPage() {
                   <DeleteButton
                     action={deleteComment}
                     id={c.id}
+                    label="Delete"
+                    className="adm-btn-ghost"
                     confirmText="Delete this comment?"
                   />
                 </div>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
