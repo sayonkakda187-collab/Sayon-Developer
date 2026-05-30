@@ -84,6 +84,44 @@ body {
   }
 }
 
+/* ── Skeletons (route loading shells) ────────────────────────────────────────
+ * A neutral placeholder block with a subtle shimmer. Server-rendered (no JS),
+ * shown by loading.tsx so navigations paint an instant layout-matched shell.
+ */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(var(--surface-2));
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--fg) / 0.06),
+    transparent
+  );
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes sk-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+/* Admin skeletons sit on frosted cards — tint to the admin surface. */
+.admin-shell .sk {
+  background-color: rgba(15, 23, 42, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+  }
+}
+
 /* ── Motion ──────────────────────────────────────────────────────────────────
  * Scroll reveals are hidden only when JS is present (`.js`, set pre-paint) and
  * revealed by adding `.is-visible` (see components/Reveal.tsx). Opacity-only on
@@ -105,15 +143,27 @@ body {
   transform: none;
 }
 
-/* ── View Transitions (card → article shared-element morph) ───────────────── */
+/* ── View Transitions ─────────────────────────────────────────────────────────
+ * Default page change = a quick opacity-only cross-fade (~280ms) so navigation
+ * feels continuous, never abrupt; the shared cover image morphs card → hero.
+ * Transform/opacity only (GPU-friendly); fully skipped under reduced motion.
+ */
 ::view-transition-group(shared-article-image) {
   animation-duration: 420ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
-::view-transition-old(root),
+/* Clean cross-fade for the rest of the page (no slide; keeps it snappy). */
+::view-transition-old(root) {
+  animation: vt-fade-out 200ms ease both;
+}
 ::view-transition-new(root) {
-  animation-duration: 320ms;
-  animation-timing-function: ease;
+  animation: vt-fade-in 280ms ease both;
+}
+@keyframes vt-fade-out {
+  to { opacity: 0; }
+}
+@keyframes vt-fade-in {
+  from { opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

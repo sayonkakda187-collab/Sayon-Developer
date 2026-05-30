@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "next-view-transitions";
 import { getHomepage, type ArticleWithCategory } from "@/lib/queries";
 import { FeaturedHero } from "@/components/FeaturedHero";
 import { ArticleCard } from "@/components/ArticleCard";
