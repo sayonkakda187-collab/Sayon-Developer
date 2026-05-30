@@ -30,31 +30,31 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-      <header className="border-b border-border pb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent motion-safe:animate-fade-up">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <header className="border-b border-border pb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-link">
           Category
         </p>
-        <h1 className="mt-3 font-display text-4xl font-bold tracking-tight motion-safe:animate-fade-up [animation-delay:80ms] sm:text-5xl">
+        <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
           {category.name}
         </h1>
         {category.description && (
-          <p className="mt-4 max-w-2xl text-lg text-fg-muted motion-safe:animate-fade-up [animation-delay:160ms]">
+          <p className="mt-3 max-w-2xl text-base text-fg-muted">
             {category.description}
           </p>
         )}
-        <p className="mt-4 text-sm text-fg-faint motion-safe:animate-fade-up [animation-delay:240ms]">
+        <p className="mt-3 text-xs font-medium uppercase tracking-wide text-fg-faint">
           {total} {total === 1 ? "article" : "articles"}
         </p>
       </header>
 
       {articles.length === 0 ? (
-        <p className="mt-12 text-fg-muted">No articles in this category yet.</p>
+        <p className="mt-10 text-fg-muted">No articles in this category yet.</p>
       ) : (
-        <div className="mt-10 grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
           {articles.map((article, i) => (
-            <Reveal key={article.id} delay={Math.min(i, 5) * 70}>
-              <ArticleCard article={article} priority={i < 3} />
+            <Reveal key={article.id} delay={Math.min(i, 4) * 55}>
+              <ArticleCard article={article} priority={i < 4} />
             </Reveal>
           ))}
         </div>

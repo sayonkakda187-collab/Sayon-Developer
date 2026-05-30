@@ -7,8 +7,8 @@ export async function SiteFooter() {
   const categories = await getCategories();
 
   return (
-    <footer className="mt-20 border-t border-border bg-surface">
-      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+    <footer className="border-t border-border bg-surface">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-12 md:grid-cols-[1.5fr_1fr_1.5fr]">
           <div>
             <h2 className="font-display text-2xl font-bold tracking-tight text-fg">

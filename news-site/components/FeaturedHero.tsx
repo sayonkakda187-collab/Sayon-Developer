@@ -1,52 +1,65 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ArticleWithCategory } from "@/lib/queries";
-import { formatDate } from "@/lib/site";
+import { timeAgo } from "@/lib/site";
 
 export function FeaturedHero({ article }: { article: ArticleWithCategory }) {
   return (
-    <section className="group relative overflow-hidden rounded-2xl bg-surface-2">
-      <Link href={`/news/${article.slug}`} className="block">
-        <div className="relative aspect-[4/3] w-full sm:aspect-[16/9] lg:aspect-[2.1/1]">
-          {article.coverImage && (
-            <Image
-              src={article.coverImage}
-              alt={article.title}
-              fill
-              priority
-              sizes="(max-width: 1152px) 100vw, 1152px"
-              className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
-        </div>
+    <section className="group relative overflow-hidden rounded-lg bg-black">
+      <div className="relative aspect-[4/3] w-full sm:aspect-[16/9] lg:aspect-[2.4/1]">
+        {article.coverImage && (
+          <Image
+            src={article.coverImage}
+            alt={article.title}
+            fill
+            priority
+            sizes="(max-width: 1280px) 100vw, 1280px"
+            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10" />
+      </div>
 
-        <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10">
-          <div className="max-w-3xl">
-            {article.category && (
-              <span className="inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-accent-fg motion-safe:animate-fade-up [animation-delay:120ms]">
-                {article.category.name}
-              </span>
-            )}
-            <h1 className="mt-4 text-balance font-display text-3xl font-bold leading-[1.05] tracking-tight text-white motion-safe:animate-fade-up [animation-delay:200ms] sm:text-5xl lg:text-6xl">
+      <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 lg:p-12">
+        <div className="max-w-3xl">
+          {article.category && (
+            <Link
+              href={`/category/${article.category.slug}`}
+              className="inline-block text-xs font-bold uppercase tracking-[0.18em] text-accent-bright motion-safe:animate-fade-up"
+            >
+              {article.category.name}
+            </Link>
+          )}
+          <h1 className="mt-3 text-balance font-display text-3xl font-bold leading-[1.04] tracking-tight text-white motion-safe:animate-fade-up [animation-delay:90ms] sm:text-5xl lg:text-6xl">
+            <Link
+              href={`/news/${article.slug}`}
+              className="transition-colors hover:text-white/90"
+            >
               {article.title}
-            </h1>
-            <p className="mt-4 line-clamp-2 max-w-2xl text-base text-white/80 motion-safe:animate-fade-up [animation-delay:280ms] sm:text-lg">
-              {article.excerpt}
-            </p>
-            <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white motion-safe:animate-fade-up [animation-delay:360ms]">
-              <time dateTime={article.publishedAt?.toISOString()} className="text-white/70">
-                {formatDate(article.publishedAt)}
-              </time>
-              <span aria-hidden className="text-white/40">·</span>
-              Read story
-              <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-1">
+            </Link>
+          </h1>
+          <p className="mt-4 line-clamp-2 max-w-2xl text-base text-white/85 motion-safe:animate-fade-up [animation-delay:170ms] sm:text-lg">
+            {article.excerpt}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-4 motion-safe:animate-fade-up [animation-delay:250ms]">
+            <Link
+              href={`/news/${article.slug}`}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition hover:opacity-90"
+            >
+              Read full story
+              <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">
                 →
               </span>
-            </span>
+            </Link>
+            <time
+              dateTime={article.publishedAt?.toISOString()}
+              className="text-sm font-medium text-white/60"
+            >
+              {timeAgo(article.publishedAt)}
+            </time>
           </div>
         </div>
-      </Link>
+      </div>
     </section>
   );
 }

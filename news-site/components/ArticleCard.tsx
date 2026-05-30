@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ArticleWithCategory } from "@/lib/queries";
-import { formatDate } from "@/lib/site";
+import { timeAgo } from "@/lib/site";
 
 export function ArticleCard({
   article,
@@ -11,33 +11,30 @@ export function ArticleCard({
   priority?: boolean;
 }) {
   return (
-    <article className="group flex h-full flex-col motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1">
+    <article className="group flex h-full flex-col motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5">
       <Link
         href={`/news/${article.slug}`}
-        className="relative block aspect-[16/10] overflow-hidden rounded-xl bg-surface-2 transition-shadow duration-300 group-hover:shadow-xl group-hover:shadow-black/5 dark:group-hover:shadow-black/40"
+        className="relative block aspect-[16/10] overflow-hidden rounded-md bg-surface-2 transition-shadow duration-300 group-hover:shadow-lg group-hover:shadow-black/10 dark:group-hover:shadow-black/40"
       >
         {article.coverImage && (
           <Image
             src={article.coverImage}
             alt={article.title}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             priority={priority}
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
           />
         )}
+        {article.category && (
+          <span className="absolute left-2.5 top-2.5 rounded-sm bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-fg">
+            {article.category.name}
+          </span>
+        )}
       </Link>
 
-      <div className="mt-4 flex flex-1 flex-col">
-        {article.category && (
-          <Link
-            href={`/category/${article.category.slug}`}
-            className="text-xs font-semibold uppercase tracking-[0.15em] text-accent"
-          >
-            {article.category.name}
-          </Link>
-        )}
-        <h3 className="mt-2 font-display text-xl font-semibold leading-snug tracking-tight">
+      <div className="mt-2.5 flex flex-1 flex-col">
+        <h3 className="font-display text-base font-bold leading-snug tracking-tight">
           <Link
             href={`/news/${article.slug}`}
             className="transition-colors group-hover:text-accent-link"
@@ -45,14 +42,11 @@ export function ArticleCard({
             {article.title}
           </Link>
         </h3>
-        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-fg-muted">
-          {article.excerpt}
-        </p>
         <time
           dateTime={article.publishedAt?.toISOString()}
-          className="mt-3 text-xs text-fg-faint"
+          className="mt-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint"
         >
-          {formatDate(article.publishedAt)}
+          {timeAgo(article.publishedAt)}
         </time>
       </div>
     </article>
