@@ -8,6 +8,7 @@ import {
   Newspaper,
   Tags,
   MessageSquare,
+  MessageCircle,
   ExternalLink,
   LogOut,
   Menu,
@@ -35,10 +36,7 @@ export function AdminShell({
   const [open, setOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Close the mobile drawer on navigation.
   useEffect(() => setOpen(false), [pathname]);
-
-  // ⌘K / Ctrl+K focuses the search field.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -55,138 +53,144 @@ export function AdminShell({
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
-  const sidebar = (
-    <div className="flex h-full flex-col text-gray-300" style={{ backgroundColor: "#111317" }}>
-      <div className="flex h-16 items-center gap-2.5 px-5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-sm font-bold text-white">
-          DL
-        </span>
-        <span className="text-[15px] font-semibold text-white">
-          Daily Ledger
-        </span>
-      </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {NAV.map(({ name, href, icon: Icon }) => {
-          const active = isActive(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-white/10 text-white"
-                  : "text-gray-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              {active && (
-                <span
-                  aria-hidden
-                  className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-green-400"
-                />
-              )}
-              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-              {name}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="space-y-1 border-t border-white/10 px-3 py-4">
-        <Link
-          href="/"
-          target="_blank"
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-        >
-          <ExternalLink className="h-[18px] w-[18px]" />
-          View site
-        </Link>
-        <form action={logout}>
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white">
-            <LogOut className="h-[18px] w-[18px]" />
-            Log out
-          </button>
-        </form>
-      </div>
+  const nav = (
+    <nav className="space-y-1 p-3">
+      {NAV.map(({ name, href, icon: Icon }) => {
+        const active = isActive(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              active
+                ? "surface-dark"
+                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+            }`}
+          >
+            <Icon
+              className={`h-[18px] w-[18px] ${active ? "text-green-400" : ""}`}
+              strokeWidth={2}
+            />
+            {name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const bottom = (
+    <div className="space-y-1 border-t border-border p-3">
+      <Link
+        href="/"
+        target="_blank"
+        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+      >
+        <ExternalLink className="h-[18px] w-[18px]" />
+        View site
+      </Link>
+      <form action={logout}>
+        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg">
+          <LogOut className="h-[18px] w-[18px]" />
+          Log out
+        </button>
+      </form>
     </div>
   );
 
   return (
-    <div className="admin-shell flex min-h-screen bg-bg text-fg">
-      {/* Sidebar (desktop) */}
-      <aside
-        className="sticky top-0 hidden h-screen w-64 shrink-0 lg:block"
-        style={{ backgroundColor: "#111317" }}
-      >
-        {sidebar}
-      </aside>
+    <div className="admin-shell flex min-h-screen flex-col bg-bg text-fg">
+      {/* Dark top bar */}
+      <header className="surface-dark sticky top-0 z-40 flex h-16 items-center gap-3 px-4 sm:px-6">
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Open menu"
+          className="rounded-md p-2 text-gray-300 hover:bg-white/10 lg:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
 
-      {/* Sidebar (mobile drawer) */}
-      {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setOpen(false)}
-            aria-hidden
+        <Link href="/admin" className="shrink-0 text-lg font-bold tracking-tight">
+          The Daily Ledger
+        </Link>
+
+        <form
+          action="/search"
+          role="search"
+          className="relative mx-auto hidden w-full max-w-md sm:block"
+        >
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            ref={searchRef}
+            name="q"
+            type="search"
+            placeholder="Search articles…"
+            aria-label="Search articles"
+            className="w-full rounded-full bg-white/10 py-2 pl-10 pr-16 text-sm text-white outline-none transition placeholder:text-gray-400 focus:bg-white/20"
           />
-          <div
-            className="absolute inset-y-0 left-0 w-64"
-            style={{ backgroundColor: "#111317" }}
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-medium text-gray-300">
+            ⌘F
+          </kbd>
+        </form>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            href="/admin/comments"
+            aria-label="Comments"
+            className="relative rounded-full bg-white/10 p-2 text-gray-200 transition hover:bg-white/20"
           >
-            {sidebar}
-            <button
-              onClick={() => setOpen(false)}
-              aria-label="Close menu"
-              className="absolute right-3 top-4 text-gray-400 hover:text-white"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+            <Bell className="h-[18px] w-[18px]" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-green-400" />
+          </Link>
+          <span className="hidden rounded-full bg-white/10 p-2 text-gray-200 sm:inline-flex">
+            <MessageCircle className="h-[18px] w-[18px]" />
+          </span>
+          <span
+            title={userEmail}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
+          >
+            {initials}
+          </span>
         </div>
-      )}
+      </header>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur sm:px-6">
-          <button
-            onClick={() => setOpen(true)}
-            aria-label="Open menu"
-            className="-ml-1 rounded-md p-2 text-fg-muted hover:bg-surface-2 lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+      <div className="flex flex-1">
+        {/* Light sidebar (desktop) */}
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col justify-between border-r border-border bg-surface lg:flex">
+          {nav}
+          {bottom}
+        </aside>
 
-          <form action="/search" role="search" className="relative w-full max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
-            <input
-              ref={searchRef}
-              name="q"
-              type="search"
-              placeholder="Search articles…"
-              aria-label="Search articles"
-              className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-14 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent"
+        {/* Sidebar (mobile drawer) */}
+        {open && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setOpen(false)}
+              aria-hidden
             />
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-fg-faint sm:block">
-              ⌘K
-            </kbd>
-          </form>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <Link
-              href="/admin/comments"
-              aria-label="Comments"
-              className="rounded-full p-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              <Bell className="h-5 w-5" />
-            </Link>
-            <span
-              title={userEmail}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700"
-            >
-              {initials}
-            </span>
+            <div className="absolute inset-y-0 left-0 flex w-64 flex-col justify-between bg-surface">
+              <div>
+                <div className="flex h-16 items-center justify-between px-4">
+                  <span className="text-lg font-bold">Menu</span>
+                  <button
+                    onClick={() => setOpen(false)}
+                    aria-label="Close menu"
+                    className="rounded-md p-2 text-fg-muted hover:bg-surface-2"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {nav}
+              </div>
+              {bottom}
+            </div>
           </div>
-        </header>
+        )}
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          {children}
+        </main>
       </div>
     </div>
   );

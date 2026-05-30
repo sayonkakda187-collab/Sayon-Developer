@@ -21,7 +21,7 @@ export default async function AdminArticlesPage() {
         </div>
         <Link
           href="/admin/articles/new"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90"
+          className="btn-primary inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition"
         >
           <Plus className="h-4 w-4" />
           New Article

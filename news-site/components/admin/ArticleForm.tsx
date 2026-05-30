@@ -113,7 +113,7 @@ export function ArticleForm({
             type="submit"
             name="status"
             value="published"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90"
+            className="btn-primary rounded-full px-4 py-2 text-sm font-semibold transition"
           >
             Publish
           </button>
