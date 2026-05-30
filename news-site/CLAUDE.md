@@ -15,9 +15,10 @@ visitors read, browse by category, search, and comment.
 ## Stack (do not change without asking)
 
 - **Next.js 14** (App Router) + **TypeScript**
-- **Tailwind CSS** (light theme only)
+- **Tailwind CSS** — light + dark themes via CSS-variable design tokens (`darkMode: "class"`)
 - **Prisma** ORM with **PostgreSQL** (local via Docker Compose; Neon / Vercel Postgres in production)
 - **Markdown**: `react-markdown` + `remark-gfm` render `Article.content` (added in Phase 2; renders no raw HTML, so it's XSS-safe)
+- **Fonts**: Fraunces (display) + Inter (body) via `next/font`. **Motion**: vanilla CSS (`transform`/`opacity`) + a tiny `Reveal` IntersectionObserver component — no animation library; always honor `prefers-reduced-motion`.
 - Server Components by default; Client Components only where interactivity needs it.
 
 ### Database (PostgreSQL)
@@ -35,8 +36,8 @@ Postgres). The provider is `postgresql`; the connection is env-driven —
 - TypeScript everywhere; prefer Server Components and server-side data fetching.
 - Import the shared Prisma client from `@/lib/db` — never instantiate `PrismaClient` directly elsewhere.
 - The `@/*` path alias maps to the project root (`news-site/`).
-- Keep the design clean, modern, magazine-style: light theme, strong typography, mobile-first, accessible, fast.
-- `status` and `role` are stored as strings (SQLite has no enums): Article status is `"draft" | "published"`; User role is `"admin"`.
+- Keep the design clean, modern, magazine-style: light/dark themes, strong typography, mobile-first, accessible, fast.
+- `status` and `role` are stored as strings: Article status is `"draft" | "published"`; User role is `"admin"`.
 - Slugs are unique and URL-safe; auto-generate them from titles/names.
 - Don't add new dependencies without asking first.
 - After finishing a phase, report what's done + how to test, then update the roadmap checkboxes below.

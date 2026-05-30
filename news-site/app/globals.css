@@ -82,3 +82,48 @@ body {
     text-wrap: pretty;
   }
 }
+
+/* ── Motion ──────────────────────────────────────────────────────────────────
+ * Scroll reveals are hidden only when JS is present (`.js`, set pre-paint) and
+ * revealed by adding `.is-visible` (see components/Reveal.tsx). Opacity-only on
+ * phones; a small rise is added at >=640px. Fully disabled under reduced motion.
+ */
+.js [data-reveal] {
+  opacity: 0;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (min-width: 640px) {
+  .js [data-reveal] {
+    transform: translateY(16px);
+  }
+}
+.js [data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Incoming-page fade for navigations (pure CSS; safe without JS). */
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.page-transition {
+  animation: page-in 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .page-transition {
+    animation: none !important;
+  }
+}

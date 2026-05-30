@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getHomepage } from "@/lib/queries";
 import { FeaturedHero } from "@/components/FeaturedHero";
 import { ArticleCard } from "@/components/ArticleCard";
+import { Reveal } from "@/components/Reveal";
 
 function SectionHeader({ title, href }: { title: string; href?: string }) {
   return (
@@ -48,10 +49,14 @@ export default async function Home() {
 
       {latest.length > 0 && (
         <section className="mt-16 sm:mt-20">
-          <SectionHeader title="Latest news" />
+          <Reveal>
+            <SectionHeader title="Latest news" />
+          </Reveal>
           <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
             {latest.map((article, i) => (
-              <ArticleCard key={article.id} article={article} priority={i < 3} />
+              <Reveal key={article.id} delay={Math.min(i, 5) * 70}>
+                <ArticleCard article={article} priority={i < 3} />
+              </Reveal>
             ))}
           </div>
         </section>
@@ -59,13 +64,17 @@ export default async function Home() {
 
       {sections.map((category) => (
         <section key={category.id} className="mt-16 sm:mt-20">
-          <SectionHeader
-            title={category.name}
-            href={`/category/${category.slug}`}
-          />
+          <Reveal>
+            <SectionHeader
+              title={category.name}
+              href={`/category/${category.slug}`}
+            />
+          </Reveal>
           <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-            {category.articles.map((article) => (
-              <ArticleCard key={article.id} article={article} />
+            {category.articles.map((article, i) => (
+              <Reveal key={article.id} delay={Math.min(i, 5) * 70}>
+                <ArticleCard article={article} />
+              </Reveal>
             ))}
           </div>
         </section>

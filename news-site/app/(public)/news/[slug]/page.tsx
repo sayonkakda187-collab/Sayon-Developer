@@ -11,6 +11,7 @@ import {
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
+import { Reveal } from "@/components/Reveal";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
@@ -58,18 +59,18 @@ export default async function ArticlePage({ params }: Props) {
           {article.category && (
             <Link
               href={`/category/${article.category.slug}`}
-              className="text-xs font-semibold uppercase tracking-[0.15em] text-accent"
+              className="text-xs font-semibold uppercase tracking-[0.15em] text-accent motion-safe:animate-fade-up"
             >
               {article.category.name}
             </Link>
           )}
-          <h1 className="mt-3 text-balance font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
+          <h1 className="mt-3 text-balance font-display text-4xl font-bold leading-[1.08] tracking-tight motion-safe:animate-fade-up [animation-delay:80ms] sm:text-5xl">
             {article.title}
           </h1>
-          <p className="mt-5 text-pretty text-lg leading-relaxed text-fg-muted sm:text-xl">
+          <p className="mt-5 text-pretty text-lg leading-relaxed text-fg-muted motion-safe:animate-fade-up [animation-delay:160ms] sm:text-xl">
             {article.excerpt}
           </p>
-          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-faint">
+          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-faint motion-safe:animate-fade-up [animation-delay:240ms]">
             <span className="font-medium text-fg">By {siteConfig.name}</span>
             <span aria-hidden>·</span>
             <time dateTime={article.publishedAt?.toISOString()}>
@@ -90,7 +91,7 @@ export default async function ArticlePage({ params }: Props) {
             height={675}
             priority
             sizes="(max-width: 768px) 100vw, 768px"
-            className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover sm:mt-10"
+            className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover motion-safe:animate-fade-up [animation-delay:300ms] sm:mt-10"
           />
         )}
 
@@ -160,15 +161,19 @@ export default async function ArticlePage({ params }: Props) {
 
       {related.length > 0 && (
         <section className="mt-16 border-t border-border pt-10">
-          <div className="mb-8 flex items-center gap-3">
-            <span className="h-7 w-1.5 rounded-full bg-accent" aria-hidden />
-            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Related stories
-            </h2>
-          </div>
+          <Reveal>
+            <div className="mb-8 flex items-center gap-3">
+              <span className="h-7 w-1.5 rounded-full bg-accent" aria-hidden />
+              <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                Related stories
+              </h2>
+            </div>
+          </Reveal>
           <div className="grid gap-x-8 gap-y-12 sm:grid-cols-3">
-            {related.map((item) => (
-              <ArticleCard key={item.id} article={item} />
+            {related.map((item, i) => (
+              <Reveal key={item.id} delay={i * 70}>
+                <ArticleCard article={item} />
+              </Reveal>
             ))}
           </div>
         </section>
