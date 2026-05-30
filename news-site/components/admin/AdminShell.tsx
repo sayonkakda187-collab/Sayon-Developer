@@ -56,9 +56,9 @@ export function AdminShell({
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-[#0f1115] text-gray-300">
+    <div className="flex h-full flex-col text-gray-300" style={{ backgroundColor: "#111317" }}>
       <div className="flex h-16 items-center gap-2.5 px-5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-fg">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-sm font-bold text-white">
           DL
         </span>
         <span className="text-[15px] font-semibold text-white">
@@ -73,12 +73,18 @@ export function AdminShell({
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-green-500/15 text-green-300"
+                  ? "bg-white/10 text-white"
                   : "text-gray-400 hover:bg-white/5 hover:text-white"
               }`}
             >
+              {active && (
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-green-400"
+                />
+              )}
               <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
               {name}
             </Link>
@@ -107,7 +113,10 @@ export function AdminShell({
   return (
     <div className="admin-shell flex min-h-screen bg-bg text-fg">
       {/* Sidebar (desktop) */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 lg:block">
+      <aside
+        className="sticky top-0 hidden h-screen w-64 shrink-0 lg:block"
+        style={{ backgroundColor: "#111317" }}
+      >
         {sidebar}
       </aside>
 
@@ -119,7 +128,10 @@ export function AdminShell({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute inset-y-0 left-0 w-64">
+          <div
+            className="absolute inset-y-0 left-0 w-64"
+            style={{ backgroundColor: "#111317" }}
+          >
             {sidebar}
             <button
               onClick={() => setOpen(false)}
@@ -167,7 +179,7 @@ export function AdminShell({
             </Link>
             <span
               title={userEmail}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-fg"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700"
             >
               {initials}
             </span>

@@ -82,7 +82,7 @@ export default async function DashboardPage() {
           <div key={label} className="rounded-xl border border-border bg-surface p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-fg-muted">{label}</span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
                 <Icon className="h-5 w-5" />
               </span>
             </div>
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
           <h2 className="font-semibold">Recent articles</h2>
           <Link
             href="/admin/articles"
-            className="text-sm font-medium text-accent-link hover:underline"
+            className="text-sm font-medium text-fg-muted transition-colors hover:text-fg"
           >
             View all
           </Link>
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
                 <tr key={a.id} className="transition-colors hover:bg-surface-2">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-bold uppercase text-accent">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-bold uppercase text-gray-500">
                         {a.title.slice(0, 1)}
                       </span>
                       <span className="line-clamp-1 font-medium text-fg">
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
                     <div className="flex items-center justify-end gap-3">
                       <Link
                         href={`/admin/articles/${a.id}/edit`}
-                        className="font-medium text-accent-link hover:underline"
+                        className="font-medium text-fg-muted transition-colors hover:text-fg"
                       >
                         Edit
                       </Link>

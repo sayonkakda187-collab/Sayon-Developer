@@ -32,7 +32,7 @@ export default async function AdminArticlesPage() {
         <div className="rounded-xl border border-border bg-surface p-10 text-center shadow-sm">
           <p className="text-fg-muted">
             No articles yet.{" "}
-            <Link href="/admin/articles/new" className="text-accent-link underline">
+            <Link href="/admin/articles/new" className="text-fg underline">
               Create the first one
             </Link>
             .
@@ -57,7 +57,7 @@ export default async function AdminArticlesPage() {
                   <tr key={a.id} className="transition-colors hover:bg-surface-2">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-bold uppercase text-accent">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-bold uppercase text-gray-500">
                           {a.title.slice(0, 1)}
                         </span>
                         <span className="line-clamp-1 font-medium text-fg">
@@ -92,7 +92,7 @@ export default async function AdminArticlesPage() {
                         )}
                         <Link
                           href={`/admin/articles/${a.id}/edit`}
-                          className="font-medium text-accent-link hover:underline"
+                          className="font-medium text-fg-muted transition-colors hover:text-fg"
                         >
                           Edit
                         </Link>
