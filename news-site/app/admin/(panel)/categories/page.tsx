@@ -22,7 +22,7 @@ export default async function CategoriesPage() {
   const inputClass =
     "w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent";
   const primaryBtn =
-    "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90";
+    "btn-primary rounded-lg px-4 py-2 text-sm font-semibold transition";
 
   return (
     <div className="space-y-6">

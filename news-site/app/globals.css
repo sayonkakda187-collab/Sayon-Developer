@@ -146,3 +146,17 @@ body {
   --accent-fg: 255 255 255;
   --accent-link: 21 128 61;
 }
+
+/* Admin dark surfaces (top bar, active nav pill) + primary buttons. Plain CSS
+   classes so the dark never depends on Tailwind arbitrary-value JIT. */
+.admin-shell .surface-dark {
+  background-color: #111827;
+  color: #fff;
+}
+.admin-shell .btn-primary {
+  background-color: #111827;
+  color: #fff;
+}
+.admin-shell .btn-primary:hover {
+  background-color: #1f2937;
+}
