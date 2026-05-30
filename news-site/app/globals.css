@@ -460,3 +460,157 @@ body {
   .adm-rise, .adm-bar-fill, .adm-cfill, .adm-donut svg, .adm-screen { animation: none !important; }
   .adm-gfill { transition: none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Desktop / browser layer (≥1024px) — "The Daily Ledger" admin redesign.
+   Full-viewport: a frosted top bar over a left sidebar + scrolling main, with
+   a 4-up gauge row, a vertical bar chart, a table, and a donut. The phone
+   chrome above is hidden; the same routes/data drive both.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Responsive visibility helpers (mobile-first): desktop-only hidden until ≥1024px.
+   Each element re-asserts its own display type inside the breakpoint below. */
+.admin-shell .adm-only-desktop { display: none !important; }
+
+/* Desktop chrome elements — hidden until the breakpoint. */
+.adm-topbar { display: none; }
+.adm-sidebar { display: none; }
+.adm-frame { display: contents; } /* transparent on mobile → canvas stays centered */
+
+/* Date-range control + refresh (used on both, sized up on desktop). */
+.adm-iconchip {
+  width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--adm-card); border: 1px solid var(--adm-bd); border-radius: 12px; color: #334155; cursor: pointer;
+  box-shadow: var(--adm-shadow); backdrop-filter: blur(14px) saturate(150%); -webkit-backdrop-filter: blur(14px) saturate(150%);
+  transition: transform 0.15s, color 0.15s;
+}
+.adm-iconchip:hover { transform: translateY(-1px); color: var(--adm-green); }
+@keyframes adm-spin { to { transform: rotate(360deg); } }
+.adm-spinning { animation: adm-spin 0.9s cubic-bezier(0.5, 0.1, 0.4, 1); transform-origin: center; }
+.adm-daterange { position: relative; }
+.adm-rangepop {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 268px; z-index: 50;
+  background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.18); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  padding: 16px; opacity: 0; transform: translateY(-6px) scale(0.98); transform-origin: top right; pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.adm-rangepop.open { opacity: 1; transform: none; pointer-events: auto; }
+.adm-rp-title { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--adm-muted-2); margin-bottom: 11px; }
+.adm-rp-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 16px; }
+.adm-rp-presets button { font-size: 12px; font-weight: 700; color: #475569; background: rgba(15, 23, 42, 0.05); border: 1px solid transparent; border-radius: 9px; padding: 9px 0; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.adm-rp-presets button:hover { background: rgba(15, 23, 42, 0.09); }
+.adm-rp-presets button.on { background: var(--adm-green); color: #fff; }
+.adm-rp-slider { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 6px; background: linear-gradient(90deg, #16a34a var(--pct, 100%), rgba(15, 23, 42, 0.1) var(--pct, 100%)); outline: none; margin: 2px 0 0; cursor: pointer; }
+.adm-rp-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 3px solid #16a34a; box-shadow: 0 2px 6px rgba(16, 24, 40, 0.25); cursor: pointer; }
+.adm-rp-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #16a34a; cursor: pointer; }
+.adm-rp-val { font-size: 13px; color: var(--adm-muted); margin-top: 12px; text-align: center; }
+.adm-rp-val b { color: var(--adm-ink-strong); font-weight: 700; font-size: 15px; font-family: var(--font-newsreader), Georgia, serif; }
+
+/* Page head + actions (responsive: stacks on mobile, row on desktop). */
+.adm-pagehead { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.adm-head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.adm-head-actions .adm-btn-primary { flex: none; }
+
+/* Two-column content rows (stack on mobile). */
+.adm-grid-2 { display: flex; flex-direction: column; gap: 13px; margin-bottom: 13px; }
+
+/* Desktop vertical bar chart (Article views). */
+.adm-vbars { display: flex; align-items: flex-end; gap: 16px; height: 210px; margin-top: 22px; padding: 0 4px; }
+.adm-bcol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; min-width: 0; }
+.adm-bval { font-size: 13px; font-weight: 700; color: var(--adm-ink); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.adm-bbar { width: 100%; border-radius: 10px 10px 4px 4px; transform-origin: bottom; animation: adm-bar-rise 1s cubic-bezier(0.25, 0.8, 0.3, 1) both; }
+.adm-bname { font-size: 12px; color: var(--adm-muted); margin-top: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@keyframes adm-bar-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* Desktop table (Recent articles). */
+.adm-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+.adm-table thead th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--adm-muted-2); padding: 8px 10px; border-bottom: 1px solid var(--adm-bd); }
+.adm-table tbody td { padding: 13px 10px; border-bottom: 1px solid rgba(15, 23, 42, 0.05); font-size: 13.5px; color: var(--adm-ink); vertical-align: middle; }
+.adm-table tbody tr:last-child td { border-bottom: none; }
+.adm-table tbody tr { transition: background 0.15s; }
+.adm-table tbody tr:hover { background: rgba(15, 23, 42, 0.03); }
+.adm-tt { display: flex; align-items: center; gap: 12px; }
+.adm-tt .adm-ini { width: 32px; height: 32px; }
+.adm-tt .adm-ttl { font-weight: 600; color: var(--adm-ink); }
+.adm-num-td { font-variant-numeric: tabular-nums; color: var(--adm-muted); }
+.adm-cat-cell { color: var(--adm-muted); }
+
+@media (min-width: 1024px) {
+  /* The stage becomes the full window: gradient background, column layout. */
+  .admin-shell.adm-stage { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; padding: 0; background: var(--adm-gradient); height: 100dvh; overflow: hidden; }
+
+  .admin-shell .adm-only-desktop { display: block !important; }
+  .admin-shell .adm-only-mobile { display: none !important; }
+  .admin-shell .adm-topbar.adm-only-desktop { display: flex !important; }
+  .admin-shell .adm-sidebar.adm-only-desktop { display: flex !important; }
+  .admin-shell .adm-vbars.adm-only-desktop { display: flex !important; }
+  .admin-shell .adm-table.adm-only-desktop { display: table !important; }
+
+  /* Hide the phone chrome. */
+  .adm-appbar, .adm-tabbar, .adm-drawer, .adm-drawer-back { display: none !important; }
+
+  /* Top bar (full width, frosted-transparent over the gradient). */
+  .adm-topbar { display: flex; align-items: center; gap: 18px; height: 64px; flex: none; padding: 0 26px; position: relative; z-index: 10; }
+  .adm-topbar .adm-brand { flex: none; }
+  .adm-topbar .adm-wordmark { font-size: 22px; }
+  .adm-topbar .adm-eyebrow { letter-spacing: 1.4px; }
+  .adm-search-wrap { flex: 1; display: flex; justify-content: center; }
+  .adm-topbar .adm-search { margin-top: 0; max-width: 540px; }
+  .adm-top-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+  .adm-topbar .adm-iconbtn, .adm-topbar .adm-avatar { width: 42px; height: 42px; }
+
+  /* Frame = sidebar + main. */
+  .adm-frame { display: flex; flex-direction: row; flex: 1; min-height: 0; }
+  .adm-sidebar { display: flex; flex-direction: column; width: 236px; flex: none; padding: 14px 16px 18px; }
+  .adm-navgroup { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .adm-navitem { display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 12px; color: #475569; font-size: 14.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background 0.15s; }
+  .adm-navitem svg { width: 19px; height: 19px; flex: none; }
+  .adm-navitem:hover { background: rgba(255, 255, 255, 0.45); }
+  .adm-navitem.on { background: rgba(255, 255, 255, 0.78); border-color: rgba(255, 255, 255, 0.9); color: var(--adm-ink-strong); box-shadow: 0 4px 14px rgba(16, 24, 40, 0.07); }
+  .adm-navitem[data-tab="dashboard"].on svg { color: var(--adm-green); }
+  .adm-navitem[data-tab="articles"].on svg { color: var(--adm-amber); }
+  .adm-navitem[data-tab="categories"].on svg { color: var(--adm-purple); }
+  .adm-navitem[data-tab="comments"].on svg { color: var(--adm-blue); }
+  .adm-navfoot { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 12px; }
+  .adm-navfoot .adm-navitem { font-weight: 500; font-size: 14px; color: #64748b; }
+
+  /* Canvas → the scrolling main column. */
+  .admin-shell .adm-canvas { max-width: none; width: auto; height: auto; min-height: 0; flex: 1; border-radius: 0; box-shadow: none; background: transparent; display: flex; flex-direction: column; }
+  .adm-scroll { padding: 8px 30px 40px; }
+  .adm-scroll::-webkit-scrollbar { width: 9px; }
+  .adm-scroll::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.16); border-radius: 9px; border: 2px solid transparent; background-clip: content-box; }
+
+  /* Type + spacing bumps to the desktop scale. */
+  .adm-welcome h1, .adm-page-h h1 { font-size: 32px; letter-spacing: -0.5px; }
+  .adm-welcome p, .adm-page-h p { font-size: 14.5px; margin-top: 5px; }
+  .adm-card-pad { padding: 22px; }
+  .adm-card-title { font-size: 18px; font-family: var(--font-newsreader), Georgia, serif; font-weight: 600; }
+  .adm-card-sub { font-size: 13px; }
+
+  /* Page head row. */
+  .adm-pagehead { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 8px 0 22px; }
+  .adm-head-actions { gap: 11px; flex-wrap: nowrap; }
+
+  /* 4-up gauges, gauge beside its label. */
+  .adm-stats { grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 18px; }
+  .adm-stat { flex-direction: row; align-items: center; text-align: left; gap: 16px; padding: 18px 16px 16px; }
+  .adm-gauge { width: 108px; height: 60px; }
+  .adm-gauge svg { width: 108px; height: 60px; }
+  .adm-stat-meta { min-width: 0; }
+  .adm-glabel { font-size: 13.5px; font-weight: 700; margin-top: 0; }
+  .adm-gsub { font-size: 12px; margin-top: 5px; }
+
+  /* Content rows: 2fr / 1fr. */
+  .adm-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .adm-catbars { gap: 20px; margin-top: 24px; }
+  .adm-crow { font-size: 15px; margin-bottom: 9px; }
+  .adm-ctrack { height: 8px; }
+  .adm-donut { width: 176px; height: 176px; }
+  .adm-donut .adm-center b { font-size: 34px; font-family: var(--font-newsreader), Georgia, serif; }
+  .adm-mini-legend, .adm-legend-mini { gap: 18px; margin-top: 18px; padding-top: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-bbar, .adm-spinning { animation: none !important; }
+}

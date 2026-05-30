@@ -132,3 +132,74 @@ export function getApprovedComments(articleId: string) {
     orderBy: { createdAt: "desc" },
   });
 }
+
+/* ── Admin dashboard analytics ─────────────────────────────────────────────
+ * `days` (1–30) is a real publish-date window: the view metrics (Total Views,
+ * the Article Views chart, Recent Articles) are computed from articles
+ * PUBLISHED within the last N days. Inventory counts (articles, categories,
+ * comments, subscribers) are all-time — only the view metrics are windowed.
+ */
+export function clampRangeDays(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 30;
+  return Math.min(30, Math.max(1, n));
+}
+
+export async function getDashboardData(rangeDays: number) {
+  const days = clampRangeDays(rangeDays);
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - (days - 1)); // inclusive of today
+
+  const windowedPublished = {
+    status: "published",
+    publishedAt: { gte: since },
+  } as const;
+
+  const [
+    totalArticles,
+    publishedArticles,
+    draftArticles,
+    totalComments,
+    pendingComments,
+    subscriberCount,
+    cats,
+    windowViewsAgg,
+    windowArticles,
+  ] = await Promise.all([
+    prisma.article.count(),
+    prisma.article.count({ where: published }),
+    prisma.article.count({ where: { status: "draft" } }),
+    prisma.comment.count(),
+    prisma.comment.count({ where: { approved: false } }),
+    prisma.newsletter.count(),
+    prisma.category.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { articles: true } } },
+    }),
+    prisma.article.aggregate({
+      _sum: { views: true },
+      where: windowedPublished,
+    }),
+    prisma.article.findMany({
+      where: windowedPublished,
+      orderBy: { publishedAt: "desc" },
+      include: { category: { select: { name: true } } },
+    }),
+  ]);
+
+  return {
+    days,
+    totalArticles,
+    publishedArticles,
+    draftArticles,
+    totalComments,
+    pendingComments,
+    subscriberCount,
+    cats,
+    windowViews: windowViewsAgg._sum.views ?? 0,
+    windowArticles, // published within the window (for bars + recent)
+  };
+}
+
+export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;

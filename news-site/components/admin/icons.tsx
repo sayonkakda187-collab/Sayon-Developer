@@ -105,6 +105,22 @@ export const CheckIcon = (p: P) => (
     <path d="M20 6 9 17l-5-5" />
   </svg>
 );
+export const RefreshIcon = (p: P) => (
+  <svg {...base} strokeWidth={2} className={p.className} aria-hidden>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <path d="M21 3v6h-6" />
+  </svg>
+);
+export const ChevronDownIcon = (p: P) => (
+  <svg {...base} strokeWidth={2.4} className={p.className} aria-hidden>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+export const MessageIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.8} className={p.className} aria-hidden>
+    <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5.2A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
+  </svg>
+);
 
 // Category tile icons (filled-on-color tiles on the Categories screen).
 export const CategoryGlyph = ({ name, className }: { name: string; className?: string }) => {
