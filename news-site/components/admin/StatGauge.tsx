@@ -107,8 +107,10 @@ export function StatGauge({
           {display.toLocaleString("en-US")}
         </div>
       </div>
-      <div className="adm-glabel">{label}</div>
-      <div className="adm-gsub">{sub}</div>
+      <div className="adm-stat-meta">
+        <div className="adm-glabel">{label}</div>
+        <div className="adm-gsub">{sub}</div>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   CommentsIcon,
   ExternalLinkIcon,
   LogOutIcon,
+  MessageIcon,
 } from "./icons";
 
 const NAV = [
@@ -36,9 +37,10 @@ export function AdminShell({
   const [drawerMode, setDrawerMode] = useState(false);
   const scrollRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const deskSearchRef = useRef<HTMLInputElement>(null);
 
-  // Nav mode is a flag (?nav=drawer); default = bottom tab bar. Read on the
-  // client to keep SSR markup stable (no hydration mismatch).
+  // Nav mode is a flag (?nav=drawer); default = bottom tab bar (mobile only).
+  // Read on the client to keep SSR markup stable (no hydration mismatch).
   useEffect(() => {
     setDrawerMode(new URLSearchParams(window.location.search).get("nav") === "drawer");
   }, [pathname]);
@@ -49,12 +51,13 @@ export function AdminShell({
     scrollRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
-  // ⌘F / Ctrl+F focuses the search field.
+  // ⌘F / Ctrl+F focuses whichever search field is visible.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        searchRef.current?.focus();
+        const desktop = window.matchMedia("(min-width: 1024px)").matches;
+        (desktop ? deskSearchRef.current : searchRef.current)?.focus();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -65,52 +68,30 @@ export function AdminShell({
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
+  const brand = (
+    <Link href="/admin" className="adm-brand">
+      <span className="adm-mark">
+        <BookIcon className="h-[18px] w-[18px]" />
+      </span>
+      <span>
+        <span className="adm-wordmark adm-serif">The Daily Ledger</span>
+        <span className="adm-eyebrow" style={{ display: "block" }}>
+          Publisher dashboard
+        </span>
+      </span>
+    </Link>
+  );
+
   return (
     <div className="admin-shell adm-stage" style={{ flex: 1 }}>
-      <div className="adm-canvas">
-        {/* Header — light frosted glass */}
-        <header className="adm-appbar">
-          <div className="adm-appbar-row">
-            {drawerMode && (
-              <button
-                type="button"
-                className="adm-iconbtn"
-                aria-label="Open menu"
-                onClick={() => setOpen(true)}
-              >
-                <HamburgerIcon className="h-5 w-5" />
-              </button>
-            )}
-            <Link href="/admin" className="adm-brand">
-              <span className="adm-mark">
-                <BookIcon className="h-[18px] w-[18px]" />
-              </span>
-              <span>
-                <span className="adm-wordmark adm-serif">The Daily Ledger</span>
-                <span className="adm-eyebrow" style={{ display: "block" }}>
-                  Publisher dashboard
-                </span>
-              </span>
-            </Link>
-            <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
-              <BellIcon className="h-[19px] w-[19px]" />
-              <span className="adm-dot" />
-            </Link>
-            <button
-              type="button"
-              className="adm-avatar"
-              aria-label="Account menu"
-              title={userEmail}
-              onClick={() => setOpen(true)}
-            >
-              {initials}
-            </button>
-          </div>
-
+      {/* ── Desktop top bar (≥1024px) ── */}
+      <header className="adm-topbar adm-only-desktop">
+        {brand}
+        <div className="adm-search-wrap">
           <form action="/search" role="search" className="adm-search">
-            <SearchIcon className="h-4 w-4" />
+            <SearchIcon className="h-[17px] w-[17px]" />
             <input
-              ref={searchRef}
+              ref={deskSearchRef}
               name="q"
               type="search"
               placeholder="Search articles…"
@@ -118,50 +99,23 @@ export function AdminShell({
             />
             <span className="adm-kbd">⌘F</span>
           </form>
-        </header>
+        </div>
+        <div className="adm-top-actions">
+          <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
+            <BellIcon className="h-5 w-5" />
+            <span className="adm-dot" />
+          </Link>
+          <Link href="/admin/comments" className="adm-iconbtn" aria-label="Comments">
+            <MessageIcon className="h-5 w-5" />
+          </Link>
+          <span className="adm-avatar" title={userEmail}>{initials}</span>
+        </div>
+      </header>
 
-        {/* Scroll content (the active screen) */}
-        <main className="adm-scroll" ref={scrollRef}>
-          <div key={pathname} className="adm-screen">
-            {children}
-          </div>
-        </main>
-
-        {/* Bottom tab bar (default) */}
-        {!drawerMode && (
-          <nav className="adm-tabbar" aria-label="Primary">
-            {NAV.map(({ tab, label, href, Icon }) => {
-              const active = isActive(href);
-              return (
-                <Link
-                  key={tab}
-                  href={href}
-                  data-tab={tab}
-                  className={`adm-tab ${active ? "on" : ""}`}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
-        )}
-
-        {/* Slide-out drawer — account actions + the ?nav=drawer variant */}
-        <div
-          className={`adm-drawer-back ${open ? "open" : ""}`}
-          onClick={() => setOpen(false)}
-          aria-hidden
-        />
-        <aside className={`adm-drawer ${open ? "open" : ""}`} aria-hidden={!open}>
-          <div className="adm-dhead">
-            <span className="adm-mark">
-              <BookIcon className="h-[18px] w-[18px]" />
-            </span>
-            <span className="adm-dname adm-serif">The Daily Ledger</span>
-          </div>
-          <div className="adm-dnav">
+      <div className="adm-frame">
+        {/* ── Desktop sidebar (≥1024px) ── */}
+        <aside className="adm-sidebar adm-only-desktop">
+          <div className="adm-navgroup">
             {NAV.map(({ tab, drawerLabel, href, Icon }) => {
               const active = isActive(href);
               return (
@@ -169,7 +123,7 @@ export function AdminShell({
                   key={tab}
                   href={href}
                   data-tab={tab}
-                  className={`adm-dlink ${active ? "on" : ""}`}
+                  className={`adm-navitem ${active ? "on" : ""}`}
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon />
@@ -178,19 +132,135 @@ export function AdminShell({
               );
             })}
           </div>
-          <div className="adm-dfoot">
-            <Link href="/" target="_blank" className="adm-dlink">
+          <div className="adm-navfoot">
+            <Link href="/" target="_blank" className="adm-navitem">
               <ExternalLinkIcon />
               View site
             </Link>
             <form action={logout}>
-              <button type="submit" className="adm-dlink">
+              <button type="submit" className="adm-navitem" style={{ width: "100%" }}>
                 <LogOutIcon />
                 Log out
               </button>
             </form>
           </div>
         </aside>
+
+        <div className="adm-canvas">
+          {/* ── Phone header (frosted glass, <1024px) ── */}
+          <header className="adm-appbar">
+            <div className="adm-appbar-row">
+              {drawerMode && (
+                <button
+                  type="button"
+                  className="adm-iconbtn"
+                  aria-label="Open menu"
+                  onClick={() => setOpen(true)}
+                >
+                  <HamburgerIcon className="h-5 w-5" />
+                </button>
+              )}
+              {brand}
+              <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
+                <BellIcon className="h-[19px] w-[19px]" />
+                <span className="adm-dot" />
+              </Link>
+              <button
+                type="button"
+                className="adm-avatar"
+                aria-label="Account menu"
+                title={userEmail}
+                onClick={() => setOpen(true)}
+              >
+                {initials}
+              </button>
+            </div>
+
+            <form action="/search" role="search" className="adm-search">
+              <SearchIcon className="h-4 w-4" />
+              <input
+                ref={searchRef}
+                name="q"
+                type="search"
+                placeholder="Search articles…"
+                aria-label="Search articles"
+              />
+              <span className="adm-kbd">⌘F</span>
+            </form>
+          </header>
+
+          {/* ── Scroll content (the active screen) ── */}
+          <main className="adm-scroll" ref={scrollRef}>
+            <div key={pathname} className="adm-screen">
+              {children}
+            </div>
+          </main>
+
+          {/* ── Bottom tab bar (mobile default) ── */}
+          {!drawerMode && (
+            <nav className="adm-tabbar" aria-label="Primary">
+              {NAV.map(({ tab, label, href, Icon }) => {
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={tab}
+                    href={href}
+                    data-tab={tab}
+                    className={`adm-tab ${active ? "on" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* ── Slide-out drawer (mobile account actions + ?nav=drawer) ── */}
+          <div
+            className={`adm-drawer-back ${open ? "open" : ""}`}
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <aside className={`adm-drawer ${open ? "open" : ""}`} aria-hidden={!open}>
+            <div className="adm-dhead">
+              <span className="adm-mark">
+                <BookIcon className="h-[18px] w-[18px]" />
+              </span>
+              <span className="adm-dname adm-serif">The Daily Ledger</span>
+            </div>
+            <div className="adm-dnav">
+              {NAV.map(({ tab, drawerLabel, href, Icon }) => {
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={tab}
+                    href={href}
+                    data-tab={tab}
+                    className={`adm-dlink ${active ? "on" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon />
+                    {drawerLabel}
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="adm-dfoot">
+              <Link href="/" target="_blank" className="adm-dlink">
+                <ExternalLinkIcon />
+                View site
+              </Link>
+              <form action={logout}>
+                <button type="submit" className="adm-dlink">
+                  <LogOutIcon />
+                  Log out
+                </button>
+              </form>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );
