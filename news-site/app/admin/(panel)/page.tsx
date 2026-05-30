@@ -1,50 +1,15 @@
 import Link from "next/link";
-import { FileText, Eye, MessageSquare, Mail, Plus, Calendar } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { formatNumber, formatDate } from "@/lib/site";
-import { StatusPill } from "@/components/admin/StatusPill";
+import { formatNumber } from "@/lib/site";
+import { StatGauge } from "@/components/admin/StatGauge";
+import { ArticleRow, categoryColor } from "@/components/admin/ArticleRow";
+import { CalendarIcon, PlusIcon } from "@/components/admin/icons";
 
-const DONUT_COLORS = ["#22c55e", "#a855f7", "#f59e0b", "#3b82f6", "#ef4444", "#14b8a6"];
-
-function Donut({
-  segments,
-  centerValue,
-}: {
-  segments: { label: string; value: number; color: string }[];
-  centerValue: number;
-}) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  let acc = 0;
-  return (
-    <div className="relative h-40 w-40 shrink-0">
-      <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-        {segments.map((s, i) => {
-          const pct = (s.value / total) * 100;
-          const circle = (
-            <circle
-              key={i}
-              cx="18"
-              cy="18"
-              r="15.915"
-              fill="none"
-              stroke={s.color}
-              strokeWidth="4"
-              pathLength={100}
-              strokeDasharray={`${pct} ${100 - pct}`}
-              strokeDashoffset={-acc}
-            />
-          );
-          acc += pct;
-          return circle;
-        })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold tabular-nums">{formatNumber(centerValue)}</span>
-        <span className="text-[11px] text-fg-faint">articles</span>
-      </div>
-    </div>
-  );
+// Fraction (0..1) for a gauge arc — log-ish so small and large counts both read
+// well. Views uses a larger reference so a busy publication still leaves headroom.
+function frac(value: number, ref: number) {
+  if (value <= 0) return 0.04;
+  return Math.max(0.08, Math.min(0.96, value / ref));
 }
 
 export default async function DashboardPage() {
@@ -69,14 +34,14 @@ export default async function DashboardPage() {
     prisma.newsletter.count(),
     prisma.article.findMany({
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 3,
       include: { category: true },
     }),
     prisma.article.findMany({
       where: { status: "published" },
       orderBy: { views: "desc" },
-      take: 7,
-      select: { id: true, title: true, views: true },
+      take: 6,
+      select: { id: true, title: true, views: true, category: { select: { name: true } } },
     }),
     prisma.category.findMany({
       orderBy: { name: "asc" },
@@ -86,206 +51,181 @@ export default async function DashboardPage() {
 
   const totalViews = viewsAgg._sum.views ?? 0;
   const maxViews = Math.max(1, ...topByViews.map((a) => a.views));
-  const maxCat = Math.max(1, ...cats.map((c) => c._count.articles));
   const catTotal = cats.reduce((s, c) => s + c._count.articles, 0);
   const uncategorized = Math.max(0, totalArticles - catTotal);
+
   const donutSegments = [
     ...cats.map((c, i) => ({
       label: c.name,
       value: c._count.articles,
-      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      color: categoryColor(c.name, i),
     })),
     ...(uncategorized > 0
-      ? [{ label: "Uncategorized", value: uncategorized, color: "#9ca3af" }]
+      ? [{ label: "Uncategorized", value: uncategorized, color: "#94a3b8" }]
       : []),
   ].filter((s) => s.value > 0);
 
-  const stats = [
-    { label: "Total Articles", value: totalArticles, sub: `${publishedArticles} published · ${draftArticles} draft`, icon: FileText },
-    { label: "Total Views", value: totalViews, sub: "across all articles", icon: Eye },
-    { label: "Total Comments", value: totalComments, sub: `${pendingComments} pending review`, icon: MessageSquare },
-    { label: "Subscribers", value: subscriberCount, sub: "newsletter signups", icon: Mail },
+  const gauges = [
+    { value: totalArticles, label: "Total Articles", sub: `${publishedArticles} published · ${draftArticles} draft`, frac: frac(totalArticles, 10), c1: "#34d27b", c2: "#16a34a", gradId: "g-articles" },
+    { value: totalViews, label: "Total Views", sub: "across all articles", frac: frac(totalViews, 8000), c1: "#fbbf24", c2: "#f59e0b", gradId: "g-views" },
+    { value: totalComments, label: "Total Comments", sub: `${pendingComments} pending review`, frac: frac(totalComments, 20), c1: "#fb7185", c2: "#ef4444", gradId: "g-comments" },
+    { value: subscriberCount, label: "Subscribers", sub: "newsletter signups", frac: frac(subscriberCount, 50), c1: "#a78bfa", c2: "#7c3aed", gradId: "g-subs" },
   ];
 
+  // The donut renders as a rotated stack of stroked circles (matches the spec).
+  const C = 2 * Math.PI * 56; // circumference at r=56
+  const donutTotal = donutSegments.reduce((s, x) => s + x.value, 0) || 1;
+  let donutAcc = 0;
+
   return (
-    <div className="space-y-6">
-      {/* Welcome header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome back 👋</h1>
-          <p className="mt-1 text-sm text-fg-muted">
-            Here&apos;s the latest overview of The Daily Ledger.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted">
-            <Calendar className="h-4 w-4" />
-            Last 30 days
-          </span>
-          <Link
-            href="/admin/articles/new"
-            className="btn-primary inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition"
-          >
-            <Plus className="h-4 w-4" />
-            New Article
-          </Link>
-        </div>
+    <div>
+      <div className="adm-welcome adm-rise">
+        <h1 className="adm-serif">Welcome back 👋</h1>
+        <p>Here&apos;s the latest overview of The Daily Ledger.</p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, sub, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="text-sm font-medium text-fg-muted">{label}</span>
-            </div>
-            <div className="mt-4 text-3xl font-bold tabular-nums">
-              {formatNumber(value)}
-            </div>
-            <div className="mt-1 text-xs text-fg-faint">{sub}</div>
-          </div>
+      <div className="adm-toprow adm-rise" style={{ animationDelay: "0.07s" }}>
+        <span className="adm-chip">
+          <CalendarIcon className="h-3.5 w-3.5" />
+          Last 30 days
+        </span>
+        <Link href="/admin/articles/new" className="adm-btn-primary">
+          <PlusIcon className="h-[15px] w-[15px]" />
+          New Article
+        </Link>
+      </div>
+
+      {/* Stat gauges */}
+      <div className="adm-stats adm-rise" style={{ animationDelay: "0.14s" }}>
+        {gauges.map((g) => (
+          <StatGauge key={g.label} {...g} />
         ))}
       </div>
 
-      {/* Article views chart + Top categories */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm lg:col-span-2">
-          <h2 className="font-semibold">Article views</h2>
-          <p className="text-xs text-fg-faint">Top published articles by total views</p>
-          {topByViews.length === 0 ? (
-            <p className="mt-8 text-sm text-fg-faint">No published articles yet.</p>
-          ) : (
-            <div className="mt-6 flex h-44 items-end gap-2 sm:gap-3">
-              {topByViews.map((a, i) => {
-                const h = Math.max(8, Math.round((a.views / maxViews) * 100));
-                const top = i === 0;
-                return (
-                  <div
-                    key={a.id}
-                    className="flex h-full flex-1 flex-col items-center justify-end gap-2"
-                    title={`${a.title} — ${formatNumber(a.views)} views`}
-                  >
-                    <span className="text-[10px] font-semibold tabular-nums text-fg-faint">
-                      {formatNumber(a.views)}
-                    </span>
+      {/* Article views */}
+      <div className="adm-card adm-card-pad adm-section adm-rise" style={{ animationDelay: "0.21s" }}>
+        <div className="adm-card-title">Article views</div>
+        <div className="adm-card-sub">Top published articles by total views</div>
+        {topByViews.length === 0 ? (
+          <p className="adm-card-sub" style={{ marginTop: 14 }}>No published articles yet.</p>
+        ) : (
+          <>
+            <div className="adm-bars">
+              {topByViews.map((a) => (
+                <div key={a.id} className="adm-bar-row">
+                  <span className="adm-bl">{a.title.split(" ").slice(0, 2).join(" ")}</span>
+                  <div className="adm-bar-track">
                     <div
-                      className="w-full rounded-md"
-                      style={{ height: `${h}%`, backgroundColor: top ? "#16a34a" : "#e5e7eb" }}
+                      className="adm-bar-fill"
+                      style={{
+                        width: `${Math.round((a.views / maxViews) * 100)}%`,
+                        background: categoryColor(a.category?.name),
+                      }}
                     />
-                    <span className="w-full truncate text-center text-[10px] text-fg-faint">
-                      {a.title.split(" ").slice(0, 2).join(" ")}
-                    </span>
                   </div>
-                );
-              })}
+                  <span className="adm-bv">{formatNumber(a.views)}</span>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <h2 className="font-semibold">Top categories</h2>
-          <div className="mt-4 space-y-4">
-            {cats.length === 0 && (
-              <p className="text-sm text-fg-faint">No categories yet.</p>
-            )}
-            {cats.map((c) => (
-              <div key={c.id}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{c.name}</span>
-                  <span className="text-fg-faint">{c._count.articles}</span>
-                </div>
-                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${Math.round((c._count.articles / maxCat) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+            <div className="adm-legend-mini">
+              <span><i style={{ background: "#16a34a" }} />Business</span>
+              <span><i style={{ background: "#f59e0b" }} />Technology</span>
+              <span><i style={{ background: "#a855f7" }} />World</span>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Recent articles + content donut */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-semibold">Recent articles</h2>
-            <Link
-              href="/admin/articles"
-              className="text-sm font-medium text-fg-muted transition-colors hover:text-fg"
-            >
-              View all
-            </Link>
+      {/* Top categories */}
+      <div className="adm-card adm-card-pad adm-section adm-rise" style={{ animationDelay: "0.28s" }}>
+        <div className="adm-card-title">Top categories</div>
+        {cats.length === 0 ? (
+          <p className="adm-card-sub" style={{ marginTop: 12 }}>No categories yet.</p>
+        ) : (
+          <div className="adm-catbars">
+            {cats.map((c, i) => {
+              const max = Math.max(1, ...cats.map((x) => x._count.articles));
+              return (
+                <div key={c.id}>
+                  <div className="adm-crow">
+                    {c.name} <span>{c._count.articles}</span>
+                  </div>
+                  <div className="adm-ctrack">
+                    <div
+                      className="adm-cfill"
+                      style={{
+                        width: `${Math.round((c._count.articles / max) * 100)}%`,
+                        background: categoryColor(c.name, i),
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase tracking-wide text-fg-faint">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Title</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium">Category</th>
-                  <th className="px-5 py-3 text-right font-medium">Views</th>
-                  <th className="px-5 py-3 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recent.map((a) => (
-                  <tr key={a.id} className="transition-colors hover:bg-surface-2">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-bold uppercase text-gray-500">
-                          {a.title.slice(0, 1)}
-                        </span>
-                        <Link
-                          href={`/admin/articles/${a.id}/edit`}
-                          className="line-clamp-1 font-medium text-fg hover:underline"
-                        >
-                          {a.title}
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusPill status={a.status} />
-                    </td>
-                    <td className="px-5 py-3 text-fg-muted">
-                      {a.category?.name ?? "—"}
-                    </td>
-                    <td className="px-5 py-3 text-right tabular-nums text-fg-muted">
-                      {formatNumber(a.views)}
-                    </td>
-                    <td className="px-5 py-3 text-fg-faint">
-                      {formatDate(a.publishedAt ?? a.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
+      </div>
 
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <h2 className="font-semibold">Content by category</h2>
-          {donutSegments.length === 0 ? (
-            <p className="mt-6 text-sm text-fg-faint">No articles yet.</p>
-          ) : (
-            <div className="mt-4 flex flex-col items-center gap-5">
-              <Donut segments={donutSegments} centerValue={totalArticles} />
-              <ul className="w-full space-y-2">
-                {donutSegments.map((s) => (
-                  <li key={s.label} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                      {s.label}
-                    </span>
-                    <span className="font-medium tabular-nums">{s.value}</span>
-                  </li>
-                ))}
-              </ul>
+      {/* Content by category (donut) */}
+      <div className="adm-card adm-card-pad adm-section adm-rise" style={{ animationDelay: "0.35s" }}>
+        <div className="adm-card-title">Content by category</div>
+        <div className="adm-card-sub">Distribution of all published articles</div>
+        {donutSegments.length === 0 ? (
+          <p className="adm-card-sub" style={{ marginTop: 14 }}>No articles yet.</p>
+        ) : (
+          <div className="adm-donut-wrap">
+            <div className="adm-donut">
+              <svg width="148" height="148" viewBox="0 0 148 148">
+                <g transform="rotate(-90 74 74)">
+                  {donutSegments.map((s) => {
+                    const seg = (s.value / donutTotal) * C;
+                    const circle = (
+                      <circle
+                        key={s.label}
+                        cx="74"
+                        cy="74"
+                        r="56"
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth="20"
+                        strokeDasharray={`${seg.toFixed(2)} ${(C - seg).toFixed(2)}`}
+                        strokeDashoffset={-donutAcc}
+                      />
+                    );
+                    donutAcc += seg;
+                    return circle;
+                  })}
+                </g>
+              </svg>
+              <div className="adm-center">
+                <b>{formatNumber(totalArticles)}</b>
+                <s>articles</s>
+              </div>
             </div>
+            <div className="adm-legend">
+              {donutSegments.map((s) => (
+                <div key={s.label} className="adm-lrow">
+                  <span className="adm-sw" style={{ background: s.color }} />
+                  {s.label}
+                  <span className="adm-lv">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Recent articles */}
+      <div className="adm-card adm-card-pad adm-rise" style={{ animationDelay: "0.42s" }}>
+        <div className="adm-list-head">
+          <div className="adm-card-title">Recent articles</div>
+          <Link href="/admin/articles" className="adm-link">View all</Link>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          {recent.length === 0 ? (
+            <p className="adm-card-sub">No articles yet.</p>
+          ) : (
+            recent.map((a) => <ArticleRow key={a.id} a={a} />)
           )}
         </div>
       </div>

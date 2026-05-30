@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { BookIcon } from "@/components/admin/icons";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,20 +35,29 @@ export default function LoginPage() {
     }
   }
 
-  const fieldClass =
-    "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent";
-
   return (
-    <div className="admin-shell flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <Link href="/" className="font-display text-2xl font-bold tracking-tight text-fg">
-          The Daily Ledger
-        </Link>
-        <h1 className="mt-6 text-lg font-semibold text-fg">Admin sign in</h1>
-
-        <form onSubmit={onSubmit} className="mt-5 space-y-4">
+    <div
+      className="admin-shell adm-stage"
+      style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20, minHeight: "100dvh" }}
+    >
+      <div className="adm-auth-card adm-rise">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="adm-mark">
+            <BookIcon className="h-[18px] w-[18px]" />
+          </span>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-fg-muted">
+            <div className="adm-wordmark adm-serif" style={{ fontSize: 19 }}>The Daily Ledger</div>
+            <div className="adm-eyebrow">Publisher dashboard</div>
+          </div>
+        </div>
+
+        <h1 className="adm-serif" style={{ marginTop: 22, fontSize: 20, fontWeight: 700, color: "var(--adm-ink)" }}>
+          Admin sign in
+        </h1>
+
+        <form onSubmit={onSubmit} style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label htmlFor="email" style={{ fontSize: 13, fontWeight: 600, color: "var(--adm-muted)" }}>
               Email
             </label>
             <input
@@ -58,11 +67,12 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={fieldClass}
+              className="adm-input"
+              style={{ marginTop: 5 }}
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-fg-muted">
+            <label htmlFor="password" style={{ fontSize: 13, fontWeight: 600, color: "var(--adm-muted)" }}>
               Password
             </label>
             <input
@@ -72,18 +82,18 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={fieldClass}
+              className="adm-input"
+              style={{ marginTop: 5 }}
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600">{error}</p>
-          )}
+          {error && <p style={{ fontSize: 13, color: "#dc2626" }}>{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60"
+            className="adm-btn-primary"
+            style={{ width: "100%", opacity: loading ? 0.6 : 1, marginTop: 2 }}
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
