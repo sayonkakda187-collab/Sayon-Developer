@@ -134,10 +134,11 @@ export function getApprovedComments(articleId: string) {
 }
 
 /* ── Admin dashboard analytics ─────────────────────────────────────────────
- * `days` (1–30) is a real publish-date window: the view metrics (Total Views,
- * the Article Views chart, Recent Articles) are computed from articles
- * PUBLISHED within the last N days. Inventory counts (articles, categories,
- * comments, subscribers) are all-time — only the view metrics are windowed.
+ * Fetched once on the server (all-time baseline). The dashboard's date-range
+ * filter (1–30 days) then scales the view metrics on the CLIENT for an instant,
+ * continuous feel as the slider moves — Total Views, the Article Views chart,
+ * and Recent Articles scale proportionally to the window; inventory counts
+ * (articles, categories, comments, subscribers) are not windowed.
  */
 export function clampRangeDays(value: unknown): number {
   const n = Math.round(Number(value));
@@ -145,17 +146,7 @@ export function clampRangeDays(value: unknown): number {
   return Math.min(30, Math.max(1, n));
 }
 
-export async function getDashboardData(rangeDays: number) {
-  const days = clampRangeDays(rangeDays);
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-  since.setDate(since.getDate() - (days - 1)); // inclusive of today
-
-  const windowedPublished = {
-    status: "published",
-    publishedAt: { gte: since },
-  } as const;
-
+export async function getDashboardData() {
   const [
     totalArticles,
     publishedArticles,
@@ -164,8 +155,8 @@ export async function getDashboardData(rangeDays: number) {
     pendingComments,
     subscriberCount,
     cats,
-    windowViewsAgg,
-    windowArticles,
+    viewsAgg,
+    publishedList,
   ] = await Promise.all([
     prisma.article.count(),
     prisma.article.count({ where: published }),
@@ -177,19 +168,15 @@ export async function getDashboardData(rangeDays: number) {
       orderBy: { name: "asc" },
       include: { _count: { select: { articles: true } } },
     }),
-    prisma.article.aggregate({
-      _sum: { views: true },
-      where: windowedPublished,
-    }),
+    prisma.article.aggregate({ _sum: { views: true }, where: published }),
     prisma.article.findMany({
-      where: windowedPublished,
+      where: published,
       orderBy: { publishedAt: "desc" },
       include: { category: { select: { name: true } } },
     }),
   ]);
 
   return {
-    days,
     totalArticles,
     publishedArticles,
     draftArticles,
@@ -197,8 +184,8 @@ export async function getDashboardData(rangeDays: number) {
     pendingComments,
     subscriberCount,
     cats,
-    windowViews: windowViewsAgg._sum.views ?? 0,
-    windowArticles, // published within the window (for bars + recent)
+    totalViews: viewsAgg._sum.views ?? 0,
+    publishedList, // all published (the client scales views by the window)
   };
 }
 

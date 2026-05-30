@@ -640,7 +640,7 @@ body {
 .adm-spinning { animation: adm-spin 0.9s cubic-bezier(0.5, 0.1, 0.4, 1); transform-origin: center; }
 .adm-daterange { position: relative; }
 .adm-rangepop {
-  position: absolute; top: calc(100% + 8px); right: 0; width: 268px; z-index: 70;
+  position: fixed; width: 268px; z-index: 9999;
   background: #ffffff; border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 16px;
   box-shadow: 0 18px 44px rgba(16, 24, 40, 0.22);
   padding: 16px; opacity: 0; transform: translateY(-6px) scale(0.98); transform-origin: top right; pointer-events: none;
@@ -827,4 +827,15 @@ body {
   .adm-spinner { animation-duration: 0.001ms !important; }
   .admin-shell .adm-tab:active, .admin-shell .adm-iconbtn:active, .admin-shell .adm-btn-primary:active,
   .admin-shell .adm-btn-ghost:active, .admin-shell .adm-fchip:active { transform: none !important; }
+}
+
+/* ── Live-filter charts: smoothly retween as the date slider drags ───────────
+ * The mount-animated bars (.adm-bbar / .adm-bar-fill) play a one-shot grow on
+ * first paint; the *-live variants additionally transition height/width so the
+ * Article Views chart glides continuously while the range slider moves.
+ */
+.admin-shell .adm-bbar-live { transition: height 0.28s cubic-bezier(0.25, 0.8, 0.3, 1); }
+.admin-shell .adm-bar-fill-live { transition: width 0.28s cubic-bezier(0.25, 0.8, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .adm-bbar-live, .admin-shell .adm-bar-fill-live { transition: none; }
 }

@@ -12,9 +12,45 @@ import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
 import { Reveal } from "@/components/Reveal";
+import { AdSlot } from "@/components/AdSlot";
+import { ADS } from "@/lib/ads";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
+
+/**
+ * Split markdown into two halves at a paragraph boundary nearest the middle, so
+ * the in-article ad sits between paragraphs (never mid-sentence). Returns null
+ * for short articles (fewer than 4 blocks) to avoid crowding, and keeps fenced
+ * code blocks intact by only cutting where the ``` fences are balanced.
+ */
+function splitForMidAd(content: string): [string, string] | null {
+  const blocks = content.split(/\n{2,}/);
+  if (blocks.length < 4) return null;
+
+  const total = content.length;
+  const fenceCount = (s: string) => (s.match(/```/g) || []).length;
+
+  let acc = 0;
+  let idx = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    acc += blocks[i].length + 2; // +2 approximates the blank line we split on
+    if (acc >= total / 2) {
+      idx = i + 1;
+      break;
+    }
+  }
+  // Keep at least one block on each side of the ad.
+  idx = Math.min(Math.max(idx, 1), blocks.length - 1);
+
+  // If the cut would land inside a code fence, walk forward until balanced.
+  while (idx < blocks.length && fenceCount(blocks.slice(0, idx).join("\n\n")) % 2 !== 0) {
+    idx++;
+  }
+  if (idx >= blocks.length) return null;
+
+  return [blocks.slice(0, idx).join("\n\n"), blocks.slice(idx).join("\n\n")];
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const article = await getArticleBySlug(params.slug);
@@ -65,6 +101,8 @@ export default async function ArticlePage({ params }: Props) {
       <span>{formatNumber(article.views + 1)} views</span>
     </>
   );
+
+  const midSplit = splitForMidAd(article.content);
 
   return (
     <main>
@@ -130,7 +168,19 @@ export default async function ArticlePage({ params }: Props) {
             {article.excerpt}
           </p>
 
-          <Markdown content={article.content} />
+          {/* TOP ad — below the headline/lede, above the article body. */}
+          <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={140} />
+
+          {midSplit ? (
+            <>
+              <Markdown content={midSplit[0]} />
+              {/* IN-ARTICLE ad — between paragraphs, near the middle. */}
+              <AdSlot name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
+              <Markdown content={midSplit[1]} />
+            </>
+          ) : (
+            <Markdown content={article.content} />
+          )}
 
           {article.tags.length > 0 && (
             <div className="mt-12 flex flex-wrap gap-2">
@@ -191,6 +241,10 @@ export default async function ArticlePage({ params }: Props) {
             <CommentForm articleId={article.id} />
           </div>
         </section>
+
+        {/* SIDEBAR/RELATED ad — this layout is single-column (no sidebar), so
+            the slot sits just above "Related Stories". */}
+        <AdSlot name="SIDEBAR" widgetId={ADS.SIDEBAR} minHeight={320} />
 
         {related.length > 0 && (
           <section className="mt-16 border-t border-border pt-10">
