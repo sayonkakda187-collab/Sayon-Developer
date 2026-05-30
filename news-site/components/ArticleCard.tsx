@@ -11,10 +11,10 @@ export function ArticleCard({
   priority?: boolean;
 }) {
   return (
-    <article className="group flex flex-col">
+    <article className="group flex h-full flex-col motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1">
       <Link
         href={`/news/${article.slug}`}
-        className="relative block aspect-[16/10] overflow-hidden rounded-xl bg-surface-2"
+        className="relative block aspect-[16/10] overflow-hidden rounded-xl bg-surface-2 transition-shadow duration-300 group-hover:shadow-xl group-hover:shadow-black/5 dark:group-hover:shadow-black/40"
       >
         {article.coverImage && (
           <Image

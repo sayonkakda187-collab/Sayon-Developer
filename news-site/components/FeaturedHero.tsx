@@ -24,17 +24,17 @@ export function FeaturedHero({ article }: { article: ArticleWithCategory }) {
         <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10">
           <div className="max-w-3xl">
             {article.category && (
-              <span className="inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-accent-fg">
+              <span className="inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-accent-fg motion-safe:animate-fade-up [animation-delay:120ms]">
                 {article.category.name}
               </span>
             )}
-            <h1 className="mt-4 text-balance font-display text-3xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
+            <h1 className="mt-4 text-balance font-display text-3xl font-bold leading-[1.05] tracking-tight text-white motion-safe:animate-fade-up [animation-delay:200ms] sm:text-5xl lg:text-6xl">
               {article.title}
             </h1>
-            <p className="mt-4 line-clamp-2 max-w-2xl text-base text-white/80 sm:text-lg">
+            <p className="mt-4 line-clamp-2 max-w-2xl text-base text-white/80 motion-safe:animate-fade-up [animation-delay:280ms] sm:text-lg">
               {article.excerpt}
             </p>
-            <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white motion-safe:animate-fade-up [animation-delay:360ms]">
               <time dateTime={article.publishedAt?.toISOString()} className="text-white/70">
                 {formatDate(article.publishedAt)}
               </time>

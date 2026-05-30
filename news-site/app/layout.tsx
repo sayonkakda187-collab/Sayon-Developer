@@ -33,8 +33,9 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
 };
 
-// Sets the theme class before paint to avoid a flash of the wrong theme.
-const themeInit = `(function(){try{var t=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t?(t==='dark'||(t==='system'&&m)):m;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+// Runs before paint: sets the theme class (no flash) and marks `js` enabled so
+// CSS scroll-reveals only hide content when JavaScript can reveal it.
+const themeInit = `(function(){try{var r=document.documentElement;r.classList.add('js');var t=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t?(t==='dark'||(t==='system'&&m)):m;r.classList.toggle('dark',d);}catch(e){}})();`;
 
 export default function RootLayout({
   children,
