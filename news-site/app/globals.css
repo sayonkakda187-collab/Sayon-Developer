@@ -489,9 +489,9 @@ body {
 .adm-spinning { animation: adm-spin 0.9s cubic-bezier(0.5, 0.1, 0.4, 1); transform-origin: center; }
 .adm-daterange { position: relative; }
 .adm-rangepop {
-  position: absolute; top: calc(100% + 8px); right: 0; width: 268px; z-index: 50;
-  background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 16px;
-  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.18); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  position: absolute; top: calc(100% + 8px); right: 0; width: 268px; z-index: 70;
+  background: #ffffff; border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.22);
   padding: 16px; opacity: 0; transform: translateY(-6px) scale(0.98); transform-origin: top right; pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
