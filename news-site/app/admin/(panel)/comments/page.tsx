@@ -6,6 +6,7 @@ import {
   deleteComment,
 } from "@/app/admin/actions";
 import { DeleteButton } from "@/components/admin/DeleteButton";
+import { StatusPill } from "@/components/admin/StatusPill";
 import { formatDate } from "@/lib/site";
 
 export default async function AdminCommentsPage() {
@@ -16,32 +17,27 @@ export default async function AdminCommentsPage() {
   const pendingCount = comments.filter((c) => !c.approved).length;
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
-          Comments
-        </h1>
-        <span className="text-sm text-fg-faint">{pendingCount} pending</span>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Comments</h1>
+        <p className="mt-1 text-sm text-fg-muted">{pendingCount} pending review</p>
       </div>
 
       {comments.length === 0 ? (
-        <p className="mt-8 text-fg-muted">No comments yet.</p>
+        <div className="rounded-xl border border-border bg-surface p-10 text-center shadow-sm">
+          <p className="text-fg-muted">No comments yet.</p>
+        </div>
       ) : (
-        <ul className="mt-6 space-y-4">
+        <ul className="space-y-3">
           {comments.map((c) => (
-            <li key={c.id} className="rounded-xl border border-border bg-surface p-4">
+            <li
+              key={c.id}
+              className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-fg">{c.authorName}</span>
-                  {c.approved ? (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/15 dark:text-green-300">
-                      approved
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-                      pending
-                    </span>
-                  )}
+                  <StatusPill status={c.approved ? "approved" : "pending"} />
                 </div>
                 <time className="text-xs text-fg-faint">
                   {formatDate(c.createdAt)}
@@ -74,7 +70,7 @@ export default async function AdminCommentsPage() {
                   ) : (
                     <form action={approveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300">
+                      <button className="font-medium text-accent-link hover:underline">
                         Approve
                       </button>
                     </form>

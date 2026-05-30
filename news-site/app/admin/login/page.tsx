@@ -39,7 +39,7 @@ export default function LoginPage() {
     "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+    <div className="admin-shell flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
         <Link href="/" className="font-display text-2xl font-bold tracking-tight text-fg">
           The Daily Ledger
