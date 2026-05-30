@@ -6,7 +6,7 @@ import { markdownComponents } from "@/lib/markdownComponents";
 // HTML by default, so injected markup is not executed.
 export function Markdown({ content }: { content: string }) {
   return (
-    <div className="mt-8 text-[1.075rem] leading-8 text-gray-800">
+    <div className="text-lg text-fg-muted">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
         {content}
       </ReactMarkdown>

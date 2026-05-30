@@ -9,7 +9,19 @@ export function SearchForm({
   autoFocus?: boolean;
 }) {
   return (
-    <form action="/search" role="search" className={className}>
+    <form action="/search" role="search" className={`relative ${className}`}>
+      <svg
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        aria-hidden
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
       <input
         type="search"
         name="q"
@@ -18,7 +30,7 @@ export function SearchForm({
         autoFocus={autoFocus}
         placeholder="Search articles…"
         aria-label="Search articles"
-        className="w-full rounded-full border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-900"
+        className="w-full rounded-full border border-border bg-surface py-2 pl-9 pr-4 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent"
       />
     </form>
   );

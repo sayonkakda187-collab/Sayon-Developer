@@ -12,36 +12,34 @@ export function Pagination({
   if (pageCount <= 1) return null;
 
   const href = (p: number) => (p <= 1 ? basePath : `${basePath}?page=${p}`);
+  const linkClass =
+    "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-accent hover:text-accent-link";
+  const disabledClass =
+    "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-fg-faint opacity-50";
 
   return (
     <nav
-      className="mt-12 flex items-center justify-between border-t border-gray-200 pt-6"
+      className="mt-14 flex items-center justify-between border-t border-border pt-6"
       aria-label="Pagination"
     >
       {page > 1 ? (
-        <Link
-          href={href(page - 1)}
-          className="text-sm font-medium text-gray-700 hover:text-red-700"
-        >
+        <Link href={href(page - 1)} className={linkClass}>
           ← Newer
         </Link>
       ) : (
-        <span className="text-sm text-gray-300">← Newer</span>
+        <span className={disabledClass}>← Newer</span>
       )}
 
-      <span className="text-sm text-gray-500">
+      <span className="text-sm text-fg-faint">
         Page {page} of {pageCount}
       </span>
 
       {page < pageCount ? (
-        <Link
-          href={href(page + 1)}
-          className="text-sm font-medium text-gray-700 hover:text-red-700"
-        >
+        <Link href={href(page + 1)} className={linkClass}>
           Older →
         </Link>
       ) : (
-        <span className="text-sm text-gray-300">Older →</span>
+        <span className={disabledClass}>Older →</span>
       )}
     </nav>
   );

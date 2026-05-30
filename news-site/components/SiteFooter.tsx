@@ -7,25 +7,28 @@ export async function SiteFooter() {
   const categories = await getCategories();
 
   return (
-    <footer className="mt-16 border-t border-gray-200 bg-gray-50">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="grid gap-10 md:grid-cols-3">
+    <footer className="mt-20 border-t border-border bg-surface">
+      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="grid gap-12 md:grid-cols-[1.5fr_1fr_1.5fr]">
           <div>
-            <h2 className="font-serif text-xl font-extrabold text-gray-900">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-fg">
               {siteConfig.name}
             </h2>
-            <p className="mt-2 max-w-xs text-sm text-gray-600">
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-fg-muted">
               {siteConfig.description}
             </p>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-faint">
               Sections
             </h3>
-            <ul className="mt-3 space-y-2 text-sm">
+            <ul className="mt-4 space-y-2.5 text-sm">
               <li>
-                <Link href="/" className="text-gray-700 hover:text-red-700">
+                <Link
+                  href="/"
+                  className="text-fg-muted transition-colors hover:text-accent-link"
+                >
                   Home
                 </Link>
               </li>
@@ -33,7 +36,7 @@ export async function SiteFooter() {
                 <li key={c.id}>
                   <Link
                     href={`/category/${c.slug}`}
-                    className="text-gray-700 hover:text-red-700"
+                    className="text-fg-muted transition-colors hover:text-accent-link"
                   >
                     {c.name}
                   </Link>
@@ -43,17 +46,17 @@ export async function SiteFooter() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-faint">
               Newsletter
             </h3>
-            <p className="mt-3 text-sm text-gray-600">
-              Get the day&apos;s top stories delivered to your inbox.
+            <p className="mt-4 text-sm leading-relaxed text-fg-muted">
+              The day&apos;s biggest stories, delivered to your inbox.
             </p>
             <NewsletterForm />
           </div>
         </div>
 
-        <div className="mt-10 border-t border-gray-200 pt-6 text-xs text-gray-400">
+        <div className="mt-12 border-t border-border pt-6 text-xs text-fg-faint">
           © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
         </div>
       </div>

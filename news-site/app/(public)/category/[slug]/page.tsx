@@ -29,28 +29,30 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <header className="border-b border-gray-200 pb-6">
-        <p className="text-sm font-semibold uppercase tracking-wider text-red-700">
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+      <header className="border-b border-border pb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent">
           Category
         </p>
-        <h1 className="mt-1 font-serif text-3xl font-extrabold sm:text-4xl">
+        <h1 className="mt-3 font-display text-4xl font-bold tracking-tight sm:text-5xl">
           {category.name}
         </h1>
         {category.description && (
-          <p className="mt-2 max-w-2xl text-gray-600">{category.description}</p>
+          <p className="mt-4 max-w-2xl text-lg text-fg-muted">
+            {category.description}
+          </p>
         )}
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="mt-4 text-sm text-fg-faint">
           {total} {total === 1 ? "article" : "articles"}
         </p>
       </header>
 
       {articles.length === 0 ? (
-        <p className="mt-10 text-gray-600">No articles in this category yet.</p>
+        <p className="mt-12 text-fg-muted">No articles in this category yet.</p>
       ) : (
-        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {articles.map((article) => (
-            <ArticleCard key={article.id} article={article} />
+        <div className="mt-10 grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+          {articles.map((article, i) => (
+            <ArticleCard key={article.id} article={article} priority={i < 3} />
           ))}
         </div>
       )}

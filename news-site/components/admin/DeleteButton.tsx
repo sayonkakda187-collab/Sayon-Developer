@@ -5,7 +5,7 @@ export function DeleteButton({
   id,
   label = "Delete",
   confirmText = "Delete this permanently? This cannot be undone.",
-  className = "text-sm font-medium text-red-700 hover:underline",
+  className = "text-sm font-medium text-red-600 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   id: string;

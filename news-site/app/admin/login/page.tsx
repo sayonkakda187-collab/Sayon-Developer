@@ -35,17 +35,20 @@ export default function LoginPage() {
     }
   }
 
+  const fieldClass =
+    "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent";
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <Link href="/" className="font-serif text-2xl font-extrabold">
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
+        <Link href="/" className="font-display text-2xl font-bold tracking-tight text-fg">
           The Daily Ledger
         </Link>
-        <h1 className="mt-6 text-lg font-semibold">Admin sign in</h1>
+        <h1 className="mt-6 text-lg font-semibold text-fg">Admin sign in</h1>
 
-        <form onSubmit={onSubmit} className="mt-4 space-y-4">
+        <form onSubmit={onSubmit} className="mt-5 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-sm font-medium text-fg-muted">
               Email
             </label>
             <input
@@ -55,11 +58,11 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+              className={fieldClass}
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-sm font-medium text-fg-muted">
               Password
             </label>
             <input
@@ -69,16 +72,18 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+              className={fieldClass}
             />
           </div>
 
-          {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60"
+            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg transition hover:opacity-90 disabled:opacity-60"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>

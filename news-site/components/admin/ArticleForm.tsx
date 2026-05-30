@@ -19,7 +19,7 @@ type ArticleInput = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent";
 
 export function ArticleForm({
   action,
@@ -86,14 +86,14 @@ export function ArticleForm({
       {article?.id && <input type="hidden" name="id" value={article.id} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-serif text-2xl font-bold">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
           {article?.id ? "Edit article" : "New article"}
           {article && (
             <span
               className={`ml-3 align-middle rounded-full px-2 py-0.5 text-xs font-medium ${
                 article.status === "published"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-600"
+                  ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300"
+                  : "bg-surface-2 text-fg-muted"
               }`}
             >
               {article.status}
@@ -105,7 +105,7 @@ export function ArticleForm({
             type="submit"
             name="status"
             value="draft"
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-2"
           >
             Save draft
           </button>
@@ -113,7 +113,7 @@ export function ArticleForm({
             type="submit"
             name="status"
             value="published"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90"
           >
             Publish
           </button>
@@ -124,17 +124,17 @@ export function ArticleForm({
         {/* Main column */}
         <div className="space-y-5 lg:col-span-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Title</label>
+            <label className="block text-sm font-medium text-fg-muted">Title</label>
             <input
               name="title"
               required
               defaultValue={article?.title}
-              className={`${inputClass} mt-1 font-serif text-lg`}
+              className={`${inputClass} mt-1 font-display text-lg`}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-fg-muted">
               Excerpt
             </label>
             <textarea
@@ -148,14 +148,14 @@ export function ArticleForm({
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-fg-muted">
                 Content (Markdown)
               </label>
               <div className="flex items-center gap-3 text-sm">
                 <button
                   type="button"
                   onClick={() => inlineInputRef.current?.click()}
-                  className="text-gray-600 hover:text-gray-900"
+                  className="text-fg-muted transition-colors hover:text-fg"
                 >
                   {uploading === "inline" ? "Uploading…" : "Insert image"}
                 </button>
@@ -169,7 +169,7 @@ export function ArticleForm({
                 <button
                   type="button"
                   onClick={() => setShowPreview((p) => !p)}
-                  className="text-gray-600 hover:text-gray-900"
+                  className="text-fg-muted transition-colors hover:text-fg"
                 >
                   {showPreview ? "Write" : "Preview"}
                 </button>
@@ -177,9 +177,9 @@ export function ArticleForm({
             </div>
 
             {showPreview ? (
-              <div className="mt-1 min-h-[20rem] rounded-md border border-gray-200 bg-white px-4 py-3">
+              <div className="mt-1 min-h-[20rem] rounded-lg border border-border bg-surface px-4 py-3">
                 {content.trim() ? (
-                  <div className="text-[1.02rem] leading-7 text-gray-800">
+                  <div className="text-fg-muted">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
@@ -188,7 +188,7 @@ export function ArticleForm({
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400">Nothing to preview yet.</p>
+                  <p className="text-sm text-fg-faint">Nothing to preview yet.</p>
                 )}
               </div>
             ) : (
@@ -201,11 +201,12 @@ export function ArticleForm({
                 className={`${inputClass} mt-1 font-mono text-sm leading-6`}
               />
             )}
-            {/* Keep content in the form even while previewing. */}
             {showPreview && <input type="hidden" name="content" value={content} />}
 
             {uploadError && (
-              <p className="mt-2 text-sm text-red-700">{uploadError}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {uploadError}
+              </p>
             )}
           </div>
         </div>
@@ -213,7 +214,7 @@ export function ArticleForm({
         {/* Sidebar */}
         <div className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-fg-muted">
               Category
             </label>
             <select
@@ -231,11 +232,11 @@ export function ArticleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-fg-muted">
               Cover image
             </label>
             {coverImage && (
-              <div className="relative mt-2 overflow-hidden rounded-md border border-gray-200">
+              <div className="relative mt-2 overflow-hidden rounded-lg border border-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={coverImage}
@@ -252,7 +253,7 @@ export function ArticleForm({
               placeholder="Image URL or upload below"
               className={`${inputClass} mt-2`}
             />
-            <label className="mt-2 inline-block cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+            <label className="mt-2 inline-block cursor-pointer text-sm text-fg-muted transition-colors hover:text-fg">
               {uploading === "cover" ? "Uploading…" : "Upload cover image"}
               <input
                 type="file"
@@ -264,18 +265,19 @@ export function ArticleForm({
           </div>
 
           <div>
-            <span className="block text-sm font-medium text-gray-700">Tags</span>
-            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
+            <span className="block text-sm font-medium text-fg-muted">Tags</span>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
               {tags.length === 0 ? (
-                <p className="text-xs text-gray-400">No tags yet.</p>
+                <p className="text-xs text-fg-faint">No tags yet.</p>
               ) : (
                 tags.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 text-sm">
+                  <label key={t.id} className="flex items-center gap-2 text-sm text-fg">
                     <input
                       type="checkbox"
                       name="tagIds"
                       value={t.id}
                       defaultChecked={checkedTags.has(t.id)}
+                      className="accent-[rgb(var(--accent))]"
                     />
                     {t.name}
                   </label>
