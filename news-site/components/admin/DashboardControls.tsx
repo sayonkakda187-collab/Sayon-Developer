@@ -25,7 +25,7 @@ function rangeLabel(days: number) {
  */
 export function DashboardControls({ days }: { days: number }) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(days);
   const [spinning, setSpinning] = useState(false);
@@ -68,7 +68,7 @@ export function DashboardControls({ days }: { days: number }) {
       startTransition(() => router.replace(`/admin${qs ? `?${qs}` : ""}`, { scroll: false }));
     };
     if (immediate) push();
-    else debounceRef.current = setTimeout(push, 250);
+    else debounceRef.current = setTimeout(push, 150);
   }
 
   function onSlide(next: number) {
@@ -99,14 +99,19 @@ export function DashboardControls({ days }: { days: number }) {
       <div className="adm-daterange" ref={wrapRef}>
         <button
           type="button"
-          className="adm-chip"
+          className={`adm-chip ${isPending ? "adm-loading" : ""}`}
           aria-haspopup="dialog"
           aria-expanded={open}
+          aria-busy={isPending}
           onClick={() => setOpen((o) => !o)}
         >
           <CalendarIcon className="h-4 w-4" />
           <span>{rangeLabel(draft)}</span>
-          <ChevronDownIcon className="h-3 w-3" />
+          {isPending ? (
+            <RefreshIcon className="h-3.5 w-3.5 adm-spinning" />
+          ) : (
+            <ChevronDownIcon className="h-3 w-3" />
+          )}
         </button>
 
         <div className={`adm-rangepop ${open ? "open" : ""}`} role="dialog" aria-label="Filter by date range">
@@ -140,6 +145,7 @@ export function DashboardControls({ days }: { days: number }) {
           />
           <div className="adm-rp-val">
             Showing <b>{draft}</b> day{draft === 1 ? "" : "s"}
+            {isPending && <span className="adm-rp-loading"> · updating…</span>}
           </div>
         </div>
       </div>
