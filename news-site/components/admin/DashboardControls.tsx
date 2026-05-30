@@ -18,44 +18,62 @@ function rangeLabel(days: number) {
 
 /**
  * Dashboard header controls: Refresh + a working date-range filter (1–30 days).
- * The range is the source of truth in the URL (`?days=N`); changing it re-queries
- * the server (real publish-date window). Refresh spins + re-fetches via
- * router.refresh(). Honors prefers-reduced-motion (CSS skips the spin).
+ * `draft` drives the UI immediately; the URL (`?days=N`, the server's source of
+ * truth) is updated debounced so dragging the slider is smooth and doesn't fire
+ * a request per pixel. The server value only re-syncs `draft` when the popover
+ * is closed, so a round-trip can't fight the user's finger mid-drag.
  */
 export function DashboardControls({ days }: { days: number }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(days);
   const [spinning, setSpinning] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => setDraft(days), [days]);
+  // Re-sync from the server only while the popover is closed (never mid-drag).
+  useEffect(() => {
+    if (!open) setDraft(days);
+  }, [days, open]);
 
   // Close the popover on outside click / Escape.
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
+    function onDown(e: PointerEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
-  function applyDays(next: number) {
-    setDraft(next);
-    const params = new URLSearchParams(window.location.search);
-    if (next === 30) params.delete("days");
-    else params.set("days", String(next));
-    const qs = params.toString();
-    startTransition(() => router.replace(`/admin${qs ? `?${qs}` : ""}`, { scroll: false }));
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  // Push ?days=N to the server. `immediate` for presets (snappy), debounced for
+  // the slider drag (one request after the user settles).
+  function commit(next: number, immediate = false) {
+    clearTimeout(debounceRef.current);
+    const push = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (next === 30) params.delete("days");
+      else params.set("days", String(next));
+      const qs = params.toString();
+      startTransition(() => router.replace(`/admin${qs ? `?${qs}` : ""}`, { scroll: false }));
+    };
+    if (immediate) push();
+    else debounceRef.current = setTimeout(push, 250);
+  }
+
+  function onSlide(next: number) {
+    setDraft(next); // instant UI
+    commit(next); // debounced server update
   }
 
   function refresh() {
@@ -74,7 +92,6 @@ export function DashboardControls({ days }: { days: number }) {
         title="Refresh data"
         aria-label="Refresh"
         onClick={refresh}
-        disabled={pending}
       >
         <RefreshIcon className={`h-[18px] w-[18px] ${spinning ? "adm-spinning" : ""}`} />
       </button>
@@ -100,7 +117,10 @@ export function DashboardControls({ days }: { days: number }) {
                 key={p.days}
                 type="button"
                 className={draft === p.days ? "on" : ""}
-                onClick={() => applyDays(p.days)}
+                onClick={() => {
+                  setDraft(p.days);
+                  commit(p.days, true);
+                }}
               >
                 {p.label}
               </button>
@@ -110,14 +130,13 @@ export function DashboardControls({ days }: { days: number }) {
             type="range"
             min={1}
             max={30}
+            step={1}
             value={draft}
             className="adm-rp-slider"
             style={{ ["--pct" as string]: `${pct}%` }}
             aria-label="Days"
-            onChange={(e) => setDraft(Number(e.target.value))}
-            onMouseUp={(e) => applyDays(Number((e.target as HTMLInputElement).value))}
-            onTouchEnd={(e) => applyDays(Number((e.target as HTMLInputElement).value))}
-            onKeyUp={(e) => applyDays(Number((e.target as HTMLInputElement).value))}
+            aria-valuetext={`${draft} day${draft === 1 ? "" : "s"}`}
+            onChange={(e) => onSlide(Number(e.target.value))}
           />
           <div className="adm-rp-val">
             Showing <b>{draft}</b> day{draft === 1 ? "" : "s"}
