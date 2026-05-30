@@ -4,6 +4,18 @@ import { deleteArticle } from "@/app/admin/actions";
 import { DeleteButton } from "@/components/admin/DeleteButton";
 import { formatDate, formatNumber } from "@/lib/site";
 
+function StatusBadge({ status }: { status: string }) {
+  return status === "published" ? (
+    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/15 dark:text-green-300">
+      published
+    </span>
+  ) : (
+    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-fg-muted">
+      draft
+    </span>
+  );
+}
+
 export default async function AdminArticlesPage() {
   const articles = await prisma.article.findMany({
     orderBy: { createdAt: "desc" },
@@ -13,27 +25,29 @@ export default async function AdminArticlesPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl font-bold">Articles</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
+          Articles
+        </h1>
         <Link
           href="/admin/articles/new"
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+          className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:opacity-90"
         >
           + New article
         </Link>
       </div>
 
       {articles.length === 0 ? (
-        <p className="mt-8 text-gray-600">
+        <p className="mt-8 text-fg-muted">
           No articles yet.{" "}
-          <Link href="/admin/articles/new" className="text-red-700 underline">
+          <Link href="/admin/articles/new" className="text-accent-link underline">
             Create the first one
           </Link>
           .
         </p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-border bg-surface">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <thead className="border-b border-border bg-surface-2 text-xs uppercase tracking-wide text-fg-faint">
               <tr>
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Status</th>
@@ -43,28 +57,20 @@ export default async function AdminArticlesPage() {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {articles.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{a.title}</td>
+                <tr key={a.id} className="transition-colors hover:bg-surface-2">
+                  <td className="px-4 py-3 font-medium text-fg">{a.title}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        a.status === "published"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {a.status}
-                    </span>
+                    <StatusBadge status={a.status} />
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 text-fg-muted">
                     {a.category?.name ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-600">
+                  <td className="px-4 py-3 text-right tabular-nums text-fg-muted">
                     {formatNumber(a.views)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-4 py-3 text-fg-faint">
                     {a.publishedAt
                       ? formatDate(a.publishedAt)
                       : formatDate(a.createdAt)}
@@ -75,14 +81,14 @@ export default async function AdminArticlesPage() {
                         <Link
                           href={`/news/${a.slug}`}
                           target="_blank"
-                          className="text-sm text-gray-500 hover:text-gray-900"
+                          className="text-fg-faint transition-colors hover:text-fg"
                         >
                           View
                         </Link>
                       )}
                       <Link
                         href={`/admin/articles/${a.id}/edit`}
-                        className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                        className="font-medium text-fg-muted transition-colors hover:text-fg"
                       >
                         Edit
                       </Link>

@@ -19,7 +19,10 @@ export function NewsletterForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = (await res.json()) as { message?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: string;
+      };
       if (res.ok) {
         setStatus("success");
         setMessage(data.message ?? "You're subscribed!");
@@ -35,7 +38,7 @@ export function NewsletterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-3">
+    <form onSubmit={onSubmit} className="mt-4">
       <div className="flex gap-2">
         <label htmlFor="newsletter-email" className="sr-only">
           Email address
@@ -47,12 +50,12 @@ export function NewsletterForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-900"
+          className="min-w-0 flex-1 rounded-full border border-border bg-bg px-4 py-2.5 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent"
         />
         <button
           type="submit"
           disabled={status === "loading"}
-          className="shrink-0 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60"
+          className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition hover:opacity-90 disabled:opacity-60"
         >
           {status === "loading" ? "…" : "Subscribe"}
         </button>
@@ -61,7 +64,9 @@ export function NewsletterForm() {
         <p
           role="status"
           className={`mt-2 text-sm ${
-            status === "error" ? "text-red-700" : "text-green-700"
+            status === "error"
+              ? "text-red-600 dark:text-red-400"
+              : "text-green-600 dark:text-green-400"
           }`}
         >
           {message}

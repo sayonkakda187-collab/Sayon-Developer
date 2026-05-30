@@ -18,48 +18,47 @@ export default async function AdminCommentsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl font-bold">Comments</h1>
-        <span className="text-sm text-gray-500">{pendingCount} pending</span>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
+          Comments
+        </h1>
+        <span className="text-sm text-fg-faint">{pendingCount} pending</span>
       </div>
 
       {comments.length === 0 ? (
-        <p className="mt-8 text-gray-600">No comments yet.</p>
+        <p className="mt-8 text-fg-muted">No comments yet.</p>
       ) : (
         <ul className="mt-6 space-y-4">
           {comments.map((c) => (
-            <li
-              key={c.id}
-              className="rounded-lg border border-gray-200 bg-white p-4"
-            >
+            <li key={c.id} className="rounded-xl border border-border bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold">{c.authorName}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      c.approved
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {c.approved ? "approved" : "pending"}
-                  </span>
+                  <span className="font-semibold text-fg">{c.authorName}</span>
+                  {c.approved ? (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/15 dark:text-green-300">
+                      approved
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                      pending
+                    </span>
+                  )}
                 </div>
-                <time className="text-xs text-gray-400">
+                <time className="text-xs text-fg-faint">
                   {formatDate(c.createdAt)}
                 </time>
               </div>
 
-              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+              <p className="mt-2 whitespace-pre-wrap text-sm text-fg-muted">
                 {c.content}
               </p>
 
               <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-gray-400">
+                <span className="text-fg-faint">
                   on{" "}
                   <Link
                     href={`/news/${c.article.slug}`}
                     target="_blank"
-                    className="text-gray-600 hover:underline"
+                    className="text-fg-muted hover:underline"
                   >
                     {c.article.title}
                   </Link>
@@ -68,14 +67,14 @@ export default async function AdminCommentsPage() {
                   {c.approved ? (
                     <form action={unapproveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-gray-600 hover:text-gray-900">
+                      <button className="font-medium text-fg-muted transition-colors hover:text-fg">
                         Unapprove
                       </button>
                     </form>
                   ) : (
                     <form action={approveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-green-700 hover:underline">
+                      <button className="font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300">
                         Approve
                       </button>
                     </form>

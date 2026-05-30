@@ -11,7 +11,7 @@ import {
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
-import { formatDate, formatNumber } from "@/lib/site";
+import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
@@ -33,6 +33,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function readingMinutes(content: string) {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / 200));
+}
+
 export default async function ArticlePage({ params }: Props) {
   const article = await getArticleBySlug(params.slug);
   if (!article) notFound();
@@ -47,27 +52,35 @@ export default async function ArticlePage({ params }: Props) {
   ]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:py-16">
       <article>
-        {article.category && (
-          <Link
-            href={`/category/${article.category.slug}`}
-            className="text-sm font-semibold uppercase tracking-wider text-red-700 hover:underline"
-          >
-            {article.category.name}
-          </Link>
-        )}
-        <h1 className="mt-2 font-serif text-3xl font-extrabold leading-tight sm:text-4xl">
-          {article.title}
-        </h1>
-        <p className="mt-4 text-lg text-gray-600">{article.excerpt}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
-          <time dateTime={article.publishedAt?.toISOString()}>
-            {formatDate(article.publishedAt)}
-          </time>
-          <span aria-hidden>·</span>
-          <span>{formatNumber(article.views + 1)} views</span>
-        </div>
+        <header className="mx-auto max-w-prose">
+          {article.category && (
+            <Link
+              href={`/category/${article.category.slug}`}
+              className="text-xs font-semibold uppercase tracking-[0.15em] text-accent"
+            >
+              {article.category.name}
+            </Link>
+          )}
+          <h1 className="mt-3 text-balance font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl">
+            {article.title}
+          </h1>
+          <p className="mt-5 text-pretty text-lg leading-relaxed text-fg-muted sm:text-xl">
+            {article.excerpt}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-faint">
+            <span className="font-medium text-fg">By {siteConfig.name}</span>
+            <span aria-hidden>·</span>
+            <time dateTime={article.publishedAt?.toISOString()}>
+              {formatDate(article.publishedAt)}
+            </time>
+            <span aria-hidden>·</span>
+            <span>{readingMinutes(article.content)} min read</span>
+            <span aria-hidden>·</span>
+            <span>{formatNumber(article.views + 1)} views</span>
+          </div>
+        </header>
 
         {article.coverImage && (
           <Image
@@ -76,56 +89,59 @@ export default async function ArticlePage({ params }: Props) {
             width={1200}
             height={675}
             priority
-            className="mt-6 aspect-[16/9] w-full rounded-xl object-cover"
+            sizes="(max-width: 768px) 100vw, 768px"
+            className="mt-8 aspect-[16/9] w-full rounded-2xl object-cover sm:mt-10"
           />
         )}
 
-        <Markdown content={article.content} />
+        <div className="mx-auto mt-2 max-w-prose">
+          <Markdown content={article.content} />
 
-        {article.tags.length > 0 && (
-          <div className="mt-10 flex flex-wrap gap-2">
-            {article.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
-              >
-                #{tag.name}
-              </span>
-            ))}
-          </div>
-        )}
+          {article.tags.length > 0 && (
+            <div className="mt-12 flex flex-wrap gap-2">
+              {article.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg-muted"
+                >
+                  #{tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </article>
 
       <section
         id="comments"
         aria-label="Comments"
-        className="mt-12 border-t border-gray-200 pt-8"
+        className="mx-auto mt-14 max-w-prose border-t border-border pt-10"
       >
-        <h2 className="font-serif text-2xl font-bold">
-          Comments{" "}
-          <span className="text-gray-400">({comments.length})</span>
+        <h2 className="font-display text-2xl font-bold tracking-tight">
+          Comments <span className="text-fg-faint">({comments.length})</span>
         </h2>
 
         {comments.length === 0 ? (
-          <p className="mt-3 text-gray-500">
+          <p className="mt-4 text-fg-muted">
             No comments yet. Be the first to share your thoughts.
           </p>
         ) : (
-          <ul className="mt-6 space-y-6">
+          <ul className="mt-6 space-y-4">
             {comments.map((c) => (
-              <li key={c.id} className="border-b border-gray-100 pb-6 last:border-0">
+              <li
+                key={c.id}
+                className="rounded-xl border border-border bg-surface p-5"
+              >
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-semibold text-gray-900">
-                    {c.authorName}
-                  </span>
+                  <span className="font-semibold text-fg">{c.authorName}</span>
                   <time
                     dateTime={c.createdAt.toISOString()}
-                    className="text-xs text-gray-400"
+                    className="text-xs text-fg-faint"
                   >
                     {formatDate(c.createdAt)}
                   </time>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-gray-700">
+                <p className="mt-2 whitespace-pre-wrap leading-relaxed text-fg-muted">
                   {c.content}
                 </p>
               </li>
@@ -133,9 +149,9 @@ export default async function ArticlePage({ params }: Props) {
           </ul>
         )}
 
-        <div className="mt-8">
-          <h3 className="font-serif text-lg font-bold">Leave a comment</h3>
-          <p className="mt-1 text-sm text-gray-500">
+        <div className="mt-10">
+          <h3 className="font-display text-lg font-semibold">Leave a comment</h3>
+          <p className="mt-1 text-sm text-fg-faint">
             Comments are reviewed before they appear.
           </p>
           <CommentForm articleId={article.id} />
@@ -143,9 +159,14 @@ export default async function ArticlePage({ params }: Props) {
       </section>
 
       {related.length > 0 && (
-        <section className="mt-12 border-t border-gray-200 pt-8">
-          <h2 className="mb-6 font-serif text-2xl font-bold">Related stories</h2>
-          <div className="grid gap-8 sm:grid-cols-3">
+        <section className="mt-16 border-t border-border pt-10">
+          <div className="mb-8 flex items-center gap-3">
+            <span className="h-7 w-1.5 rounded-full bg-accent" aria-hidden />
+            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              Related stories
+            </h2>
+          </div>
+          <div className="grid gap-x-8 gap-y-12 sm:grid-cols-3">
             {related.map((item) => (
               <ArticleCard key={item.id} article={item} />
             ))}

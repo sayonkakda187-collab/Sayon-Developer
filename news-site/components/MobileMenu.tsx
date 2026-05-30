@@ -16,9 +16,9 @@ export function MobileMenu({ items }: { items: NavItem[] }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={open ? "Close menu" : "Open menu"}
-        className="inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
           {open ? (
             <>
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -35,7 +35,7 @@ export function MobileMenu({ items }: { items: NavItem[] }) {
       </button>
 
       {open && (
-        <div className="absolute inset-x-0 z-20 border-b border-gray-200 bg-white px-4 py-4 shadow-sm">
+        <div className="absolute inset-x-0 top-full z-30 border-b border-border bg-bg px-4 py-4 shadow-lg">
           <SearchForm className="mb-4" />
           <nav className="flex flex-col gap-1">
             {items.map((item) => (
@@ -43,7 +43,7 @@ export function MobileMenu({ items }: { items: NavItem[] }) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-2 py-2 text-base font-medium text-gray-800 hover:bg-gray-100"
+                className="rounded-lg px-3 py-2.5 text-base font-medium text-fg transition-colors hover:bg-surface-2"
               >
                 {item.name}
               </Link>

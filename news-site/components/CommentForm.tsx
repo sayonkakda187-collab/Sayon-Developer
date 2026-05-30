@@ -39,11 +39,11 @@ export function CommentForm({ articleId }: { articleId: string }) {
     }
   }
 
-  const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-900";
+  const fieldClass =
+    "w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-fg outline-none transition-colors placeholder:text-fg-faint focus:border-accent";
 
   return (
-    <form onSubmit={onSubmit} className="mt-4 space-y-3">
+    <form onSubmit={onSubmit} className="mt-5 space-y-3">
       <input
         type="text"
         required
@@ -52,7 +52,7 @@ export function CommentForm({ articleId }: { articleId: string }) {
         onChange={(e) => setAuthorName(e.target.value)}
         placeholder="Your name"
         aria-label="Your name"
-        className={inputClass}
+        className={fieldClass}
       />
       <textarea
         required
@@ -62,13 +62,13 @@ export function CommentForm({ articleId }: { articleId: string }) {
         onChange={(e) => setContent(e.target.value)}
         placeholder="Add to the conversation…"
         aria-label="Your comment"
-        className={inputClass}
+        className={fieldClass}
       />
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
           disabled={status === "loading"}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60"
+          className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition hover:opacity-90 disabled:opacity-60"
         >
           {status === "loading" ? "Posting…" : "Post comment"}
         </button>
@@ -76,7 +76,9 @@ export function CommentForm({ articleId }: { articleId: string }) {
           <p
             role="status"
             className={`text-sm ${
-              status === "error" ? "text-red-700" : "text-green-700"
+              status === "error"
+                ? "text-red-600 dark:text-red-400"
+                : "text-green-600 dark:text-green-400"
             }`}
           >
             {message}
