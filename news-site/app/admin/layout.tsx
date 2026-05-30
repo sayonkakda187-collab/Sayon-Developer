@@ -37,6 +37,12 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Runs before paint (admin pages only): resolves the admin theme from
+// localStorage('admin-theme') or the device setting and stamps
+// data-adm-theme on <html>, so there's no light/dark flash. Independent of the
+// public site's theme — it only sets this one attribute.
+const admThemeInit = `(function(){try{var t=localStorage.getItem('admin-theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t?t==='dark':m;document.documentElement.setAttribute('data-adm-theme',d?'dark':'light');}catch(e){}})();`;
+
 export default function AdminRootLayout({
   children,
 }: {
@@ -47,6 +53,7 @@ export default function AdminRootLayout({
       className={`${newsreader.variable} ${hanken.variable}`}
       style={{ display: "flex", minHeight: "100dvh", flexDirection: "column" }}
     >
+      <script dangerouslySetInnerHTML={{ __html: admThemeInit }} />
       {children}
       <ServiceWorkerRegister />
     </div>
