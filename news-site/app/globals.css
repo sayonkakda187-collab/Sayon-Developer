@@ -469,27 +469,59 @@ body {
 .adm-tab[data-tab="categories"].on svg { background: rgba(168, 85, 247, 0.13); }
 .adm-tab[data-tab="comments"].on svg { background: rgba(37, 99, 235, 0.12); }
 
-/* ── Drawer (nav + View site + Log out) ──────────────────────────────────── */
-.adm-drawer-back { position: absolute; inset: 0; background: rgba(8, 12, 20, 0.45); z-index: 60; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+/* ── Drawer (nav + View site + Log out) ──────────────────────────────────────
+ * Smooth slide + fading, blurred backdrop. GPU-friendly (transform/opacity).
+ * The backdrop fades; the panel slides; links stagger in. Closed state animates
+ * too (no pop), and pointer-events gate so the closed drawer is inert.
+ */
+.adm-drawer-back {
+  position: fixed; inset: 0; z-index: 60; background: rgba(8, 12, 20, 0.5);
+  opacity: 0; pointer-events: none; transition: opacity 0.28s ease;
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
 .adm-drawer-back.open { opacity: 1; pointer-events: auto; }
 .adm-drawer {
-  position: absolute; top: 0; left: 0; bottom: 0; width: 280px; background: var(--adm-navy); z-index: 61;
-  transform: translateX(-100%); transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex; flex-direction: column; padding: calc(28px + env(safe-area-inset-top)) 0 0;
+  position: fixed; top: 0; left: 0; bottom: 0; width: min(86vw, 300px); background: var(--adm-navy); z-index: 61;
+  transform: translateX(-100%); will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.3s ease;
+  display: flex; flex-direction: column; padding: calc(20px + env(safe-area-inset-top)) 0 0;
+  box-shadow: none;
 }
-.adm-drawer.open { transform: none; }
-.adm-dhead { padding: 18px 20px 22px; display: flex; align-items: center; gap: 10px; }
+.adm-drawer.open { transform: none; box-shadow: 0 0 60px rgba(0, 0, 0, 0.5); }
+.adm-dhead { padding: 10px 16px 20px; display: flex; align-items: center; gap: 10px; }
 .adm-dhead .adm-mark { width: 32px; height: 32px; border-radius: 9px; box-shadow: none; }
 .adm-dhead .adm-dname { color: #fff; font-size: 16px; font-weight: 700; }
+.adm-dclose {
+  margin-left: auto; width: 40px; height: 40px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: rgba(255, 255, 255, 0.08); color: #c2cdda; border-radius: 10px; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.adm-dclose:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.adm-dclose:active { transform: scale(0.92); }
 .adm-dnav { padding: 6px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.adm-dlink { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: 11px; color: #c2cdda; font-size: 14.5px; font-weight: 500; cursor: pointer; border: none; background: none; text-align: left; width: 100%; }
-.adm-dlink svg { width: 20px; height: 20px; flex: none; }
+.adm-dlink {
+  display: flex; align-items: center; gap: 13px; min-height: 48px; padding: 12px 14px; border-radius: 12px;
+  color: #c2cdda; font-size: 15px; font-weight: 500; cursor: pointer; border: none; background: none; text-align: left; width: 100%;
+  transition: background 0.15s, color 0.15s, transform 0.08s;
+}
+.adm-dlink svg { width: 20px; height: 20px; flex: none; transition: color 0.15s; }
+.adm-dlink:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.adm-dlink:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.12); }
 .adm-dlink.on { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .adm-dlink[data-tab="dashboard"].on svg { color: #34d27b; }
 .adm-dlink[data-tab="articles"].on svg { color: #fbbf24; }
 .adm-dlink[data-tab="categories"].on svg { color: #c084fc; }
 .adm-dlink[data-tab="comments"].on svg { color: #60a5fa; }
 .adm-dfoot { border-top: 1px solid rgba(255, 255, 255, 0.08); padding: 12px; display: flex; flex-direction: column; gap: 2px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+/* Staggered slide-in of drawer links once the panel is open. */
+.adm-drawer .adm-dlink { opacity: 0; transform: translateX(-10px); }
+.adm-drawer.open .adm-dnav .adm-dlink {
+  animation: adm-dlink-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(0.08s + var(--i, 0) * 0.04s);
+}
+.adm-drawer.open .adm-dfoot .adm-dlink { opacity: 1; transform: none; }
+@keyframes adm-dlink-in { to { opacity: 1; transform: none; } }
 
 /* ── Auth (login) ────────────────────────────────────────────────────────── */
 .adm-auth-card {
@@ -686,4 +718,44 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .adm-bbar, .adm-spinning { animation: none !important; }
+}
+
+/* ── Interaction polish (responsive press/hover; admin-wide) ─────────────────
+ * Short, GPU-friendly feedback on the things you tap. Never adds real delay.
+ */
+.admin-shell .adm-tab { transition: color 0.15s, transform 0.08s; -webkit-tap-highlight-color: transparent; }
+.admin-shell .adm-tab:active { transform: scale(0.94); }
+.admin-shell .adm-iconbtn, .admin-shell .adm-avatar { transition: transform 0.12s, background 0.15s, box-shadow 0.15s; }
+.admin-shell .adm-iconbtn:active { transform: scale(0.9); }
+.admin-shell .adm-btn-primary, .admin-shell .adm-btn-ghost, .admin-shell .adm-iconchip, .admin-shell .adm-chip {
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s, opacity 0.15s;
+}
+.admin-shell .adm-btn-primary:active, .admin-shell .adm-btn-ghost:active,
+.admin-shell .adm-iconchip:active, .admin-shell .adm-chip:active { transform: translateY(0) scale(0.97); }
+.admin-shell .adm-fchip { transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s; }
+.admin-shell .adm-fchip:active { transform: scale(0.96); }
+/* Cards & rows: gentle lift / row highlight (already partly present). */
+.admin-shell .adm-arow { transition: background 0.15s; border-radius: 10px; }
+.admin-shell .adm-arow:hover { background: rgba(15, 23, 42, 0.03); }
+.admin-shell .adm-rowact a, .admin-shell .adm-rowact button { transition: background 0.15s, color 0.15s, transform 0.1s; }
+.admin-shell .adm-rowact a:active, .admin-shell .adm-rowact button:active { transform: scale(0.9); }
+/* Status pills / fills ease when they change. */
+.admin-shell .adm-pill { transition: background 0.2s ease, color 0.2s ease; }
+
+/* Inline saving spinner for the editor Save/Publish buttons. */
+.adm-spinner {
+  display: inline-block; width: 15px; height: 15px; flex: none;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: adm-spin 0.7s linear infinite;
+}
+.admin-shell button[aria-busy="true"] { opacity: 0.85; cursor: progress; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-drawer { transition-duration: 0.001ms !important; }
+  .adm-drawer-back { transition-duration: 0.001ms !important; }
+  .adm-drawer.open .adm-dnav .adm-dlink { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .adm-drawer .adm-dlink { opacity: 1; transform: none; }
+  .adm-spinner { animation-duration: 0.001ms !important; }
+  .admin-shell .adm-tab:active, .admin-shell .adm-iconbtn:active, .admin-shell .adm-btn-primary:active,
+  .admin-shell .adm-btn-ghost:active, .admin-shell .adm-fchip:active { transform: none !important; }
 }

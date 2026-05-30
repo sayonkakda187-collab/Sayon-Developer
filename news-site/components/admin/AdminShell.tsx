@@ -16,6 +16,7 @@ import {
   ExternalLinkIcon,
   LogOutIcon,
   MessageIcon,
+  CloseIcon,
 } from "./icons";
 
 const NAV = [
@@ -50,6 +51,22 @@ export function AdminShell({
     setOpen(false);
     scrollRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
+
+  // While the drawer is open: lock background scroll (no jump behind it) and
+  // close on Escape. Cleanup restores scrolling.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   // ⌘F / Ctrl+F focuses whichever search field is visible.
   useEffect(() => {
@@ -223,15 +240,29 @@ export function AdminShell({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className={`adm-drawer ${open ? "open" : ""}`} aria-hidden={!open}>
+          <aside
+            className={`adm-drawer ${open ? "open" : ""}`}
+            aria-hidden={!open}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Admin menu"
+          >
             <div className="adm-dhead">
               <span className="adm-mark">
                 <BookIcon className="h-[18px] w-[18px]" />
               </span>
               <span className="adm-dname adm-serif">The Daily Ledger</span>
+              <button
+                type="button"
+                className="adm-dclose"
+                aria-label="Close menu"
+                onClick={() => setOpen(false)}
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
             </div>
             <div className="adm-dnav">
-              {NAV.map(({ tab, drawerLabel, href, Icon }) => {
+              {NAV.map(({ tab, drawerLabel, href, Icon }, i) => {
                 const active = isActive(href);
                 return (
                   <Link
@@ -239,7 +270,9 @@ export function AdminShell({
                     href={href}
                     data-tab={tab}
                     className={`adm-dlink ${active ? "on" : ""}`}
+                    style={{ ["--i" as string]: i }}
                     aria-current={active ? "page" : undefined}
+                    tabIndex={open ? 0 : -1}
                   >
                     <Icon />
                     {drawerLabel}
@@ -248,12 +281,12 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
-              <Link href="/" target="_blank" className="adm-dlink">
+              <Link href="/" target="_blank" className="adm-dlink" tabIndex={open ? 0 : -1}>
                 <ExternalLinkIcon />
                 View site
               </Link>
               <form action={logout}>
-                <button type="submit" className="adm-dlink">
+                <button type="submit" className="adm-dlink" tabIndex={open ? 0 : -1}>
                   <LogOutIcon />
                   Log out
                 </button>
