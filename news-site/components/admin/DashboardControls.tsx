@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarIcon, ChevronDownIcon, PlusIcon, RefreshIcon } from "./icons";
 import Link from "next/link";
@@ -33,6 +33,8 @@ export function DashboardControls({
   const [open, setOpen] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const [popStyle, setPopStyle] = useState<React.CSSProperties>({});
 
   // Close the popover on outside click / Escape.
   useEffect(() => {
@@ -50,6 +52,14 @@ export function DashboardControls({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  function handleOpen() {
+    if (chipRef.current) {
+      const r = chipRef.current.getBoundingClientRect();
+      setPopStyle({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    }
+    setOpen((o) => !o);
+  }
 
   function refresh() {
     setSpinning(true);
@@ -73,18 +83,19 @@ export function DashboardControls({
 
       <div className="adm-daterange" ref={wrapRef}>
         <button
+          ref={chipRef}
           type="button"
           className="adm-chip"
           aria-haspopup="dialog"
           aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
+          onClick={handleOpen}
         >
           <CalendarIcon className="h-4 w-4" />
           <span>{rangeLabel(days)}</span>
           <ChevronDownIcon className="h-3 w-3" />
         </button>
 
-        <div className={`adm-rangepop ${open ? "open" : ""}`} role="dialog" aria-label="Filter by date range">
+        <div className={`adm-rangepop ${open ? "open" : ""}`} style={popStyle} role="dialog" aria-label="Filter by date range">
           <div className="adm-rp-title">Filter by date range</div>
           <div className="adm-rp-presets">
             {PRESETS.map((p) => (
