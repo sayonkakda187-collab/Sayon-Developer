@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/actions";
+import { AdminThemeToggle } from "./AdminThemeToggle";
 import {
   BookIcon,
   BellIcon,
@@ -118,6 +119,7 @@ export function AdminShell({
           </form>
         </div>
         <div className="adm-top-actions">
+          <AdminThemeToggle />
           <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
             <BellIcon className="h-5 w-5" />
             <span className="adm-dot" />
@@ -178,6 +180,7 @@ export function AdminShell({
                 </button>
               )}
               {brand}
+              <AdminThemeToggle />
               <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
                 <BellIcon className="h-[19px] w-[19px]" />
                 <span className="adm-dot" />

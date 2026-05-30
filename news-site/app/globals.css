@@ -225,6 +225,75 @@ body {
   font-family: var(--font-hanken), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color: var(--adm-ink);
 }
+
+/* ── Admin DARK theme (independent; set via data-adm-theme="dark" on <html>) ──
+ * Re-maps the admin tokens to a deep-slate palette: translucent dark frosted
+ * cards over a dim gradient, light text, brighter accents for contrast. The
+ * navy chrome (top bar / sidebar / drawer) deepens to stay distinct. The public
+ * site is unaffected — this only triggers under the admin data attribute.
+ */
+[data-adm-theme="dark"] .admin-shell {
+  --bg: 11 18 32;
+  --surface: 22 31 48;
+  --surface-2: 30 41 61;
+  --border: 51 65 90;
+  --fg: 226 232 240;
+  --fg-muted: 148 163 184;
+  --fg-faint: 113 128 150;
+  --accent: 52 211 123;
+  --accent-fg: 6 10 18;
+  --accent-link: 52 211 123;
+
+  --adm-ink: #e7ecf3;
+  --adm-ink-strong: #f1f5f9;
+  --adm-muted: #9aa6b8;
+  --adm-muted-2: #76839a;
+  --adm-navy: #0b1220;
+  --adm-navy-2: #131c2e;
+  --adm-green: #34d27b;
+  --adm-card: rgba(28, 38, 58, 0.72);
+  --adm-bd: rgba(120, 140, 175, 0.18);
+  --adm-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --adm-gradient:
+    radial-gradient(80% 60% at 92% 0%, rgba(80, 110, 150, 0.22) 0%, transparent 46%),
+    radial-gradient(70% 70% at 0% 100%, rgba(60, 90, 130, 0.2) 0%, transparent 52%),
+    radial-gradient(60% 60% at 100% 100%, rgba(110, 90, 150, 0.16) 0%, transparent 55%),
+    linear-gradient(160deg, #0d1626 0%, #0f1830 45%, #101b33 100%);
+
+  color: var(--adm-ink);
+}
+/* Dark-mode surface tweaks where the design hard-codes light values. */
+[data-adm-theme="dark"] .admin-shell .adm-search { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+[data-adm-theme="dark"] .admin-shell .adm-search input { color: var(--adm-ink); }
+[data-adm-theme="dark"] .admin-shell .adm-iconbtn { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.12); color: #cbd5e1; box-shadow: none; }
+[data-adm-theme="dark"] .admin-shell .adm-iconbtn:hover { background: rgba(255, 255, 255, 0.14); }
+[data-adm-theme="dark"] .admin-shell .adm-kbd { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.1); color: #94a3b8; }
+[data-adm-theme="dark"] .admin-shell .adm-ini,
+[data-adm-theme="dark"] .admin-shell .adm-tt .adm-ini { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+[data-adm-theme="dark"] .admin-shell .adm-bar-track { background: rgba(255, 255, 255, 0.08); }
+[data-adm-theme="dark"] .admin-shell .adm-ctrack { background: rgba(255, 255, 255, 0.08); }
+[data-adm-theme="dark"] .admin-shell .adm-tag { background: rgba(255, 255, 255, 0.05); color: #cbd5e1; }
+[data-adm-theme="dark"] .admin-shell .adm-input { background: rgba(255, 255, 255, 0.05); color: var(--adm-ink); }
+[data-adm-theme="dark"] .admin-shell .adm-fchip.on { background: #1e293b; border-color: #334155; }
+[data-adm-theme="dark"] .admin-shell .adm-pill { background: rgba(52, 211, 123, 0.16); color: #4ade80; }
+[data-adm-theme="dark"] .admin-shell .adm-pill.amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+[data-adm-theme="dark"] .admin-shell .adm-btn-ghost { background: rgba(255, 255, 255, 0.06); color: var(--adm-ink); }
+[data-adm-theme="dark"] .admin-shell .adm-btn-ghost:hover { background: rgba(255, 255, 255, 0.12); }
+[data-adm-theme="dark"] .admin-shell .adm-tabbar { background: rgba(15, 23, 42, 0.92); }
+[data-adm-theme="dark"] .admin-shell .adm-empty .adm-ill { color: #475569; }
+[data-adm-theme="dark"] .admin-shell .adm-rangepop { background: #16213a; border-color: rgba(255, 255, 255, 0.12); }
+[data-adm-theme="dark"] .admin-shell .adm-rp-presets button { background: rgba(255, 255, 255, 0.06); color: #cbd5e1; }
+[data-adm-theme="dark"] .admin-shell .adm-rp-presets button.on { background: var(--adm-green); color: #06121f; }
+[data-adm-theme="dark"] .admin-shell .sk { background-color: rgba(255, 255, 255, 0.06); }
+[data-adm-theme="dark"] .admin-shell .adm-stage { background: #060a12; }
+/* Smooth (instant-feel) theme swap; skipped under reduced motion. */
+.admin-shell, .admin-shell .adm-card, .admin-shell .adm-stat, .admin-shell .adm-topbar,
+.admin-shell .adm-canvas { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell, .admin-shell .adm-card, .admin-shell .adm-stat, .admin-shell .adm-topbar,
+  .admin-shell .adm-canvas { transition: none; }
+}
+
 .admin-shell .adm-serif {
   font-family: var(--font-newsreader), Georgia, "Times New Roman", serif;
   letter-spacing: -0.2px;
