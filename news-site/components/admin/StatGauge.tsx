@@ -25,6 +25,7 @@ export function StatGauge({
   c1,
   c2,
   gradId,
+  animKey = 0,
 }: {
   value: number;
   label: string;
@@ -33,10 +34,14 @@ export function StatGauge({
   c1: string;
   c2: string;
   gradId: string;
+  // Changes when the date filter moves; triggers a quick re-count old→new and a
+  // fast arc retween (the long intro sweep is only for the first mount).
+  animKey?: number;
 }) {
   const [offset, setOffset] = useState(L); // start fully hidden
   const [display, setDisplay] = useState(0);
   const displayRef = useRef(0);
+  const mounted = useRef(false);
   const raf = useRef<number>();
 
   // Keep a live ref of what's on screen so a re-run counts from the OLD value
@@ -56,9 +61,16 @@ export function StatGauge({
       return;
     }
 
-    const sweep = setTimeout(() => setOffset(L * (1 - frac)), 280);
+    // First mount = the dramatic intro sweep; subsequent updates (filter drag)
+    // retween quickly so the number tracks the slider without lag.
+    const isFirst = !mounted.current;
+    mounted.current = true;
+    const sweepDelay = isFirst ? 280 : 0;
+    const dur = isFirst ? 1100 : 420;
+    const countDelay = isFirst ? 320 : 0;
 
-    const dur = 1100;
+    const sweep = setTimeout(() => setOffset(L * (1 - frac)), sweepDelay);
+
     let t0: number | null = null;
     const startCount = setTimeout(() => {
       const from = displayRef.current; // 0 on mount, previous value on update
@@ -70,14 +82,15 @@ export function StatGauge({
         if (p < 1) raf.current = requestAnimationFrame(step);
       };
       raf.current = requestAnimationFrame(step);
-    }, 320);
+    }, countDelay);
 
     return () => {
       clearTimeout(sweep);
       clearTimeout(startCount);
       if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [value, frac]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, frac, animKey]);
 
   return (
     <div className="adm-stat">

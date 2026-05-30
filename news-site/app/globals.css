@@ -828,3 +828,14 @@ body {
   .admin-shell .adm-tab:active, .admin-shell .adm-iconbtn:active, .admin-shell .adm-btn-primary:active,
   .admin-shell .adm-btn-ghost:active, .admin-shell .adm-fchip:active { transform: none !important; }
 }
+
+/* ── Live-filter charts: smoothly retween as the date slider drags ───────────
+ * The mount-animated bars (.adm-bbar / .adm-bar-fill) play a one-shot grow on
+ * first paint; the *-live variants additionally transition height/width so the
+ * Article Views chart glides continuously while the range slider moves.
+ */
+.admin-shell .adm-bbar-live { transition: height 0.28s cubic-bezier(0.25, 0.8, 0.3, 1); }
+.admin-shell .adm-bar-fill-live { transition: width 0.28s cubic-bezier(0.25, 0.8, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .adm-bbar-live, .admin-shell .adm-bar-fill-live { transition: none; }
+}
