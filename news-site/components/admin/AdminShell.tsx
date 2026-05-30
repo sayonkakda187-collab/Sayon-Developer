@@ -15,7 +15,6 @@ import {
   Search,
   Bell,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { logout } from "@/app/admin/actions";
 
 const NAV = [
@@ -134,7 +133,7 @@ export function AdminShell({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-bg/90 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur sm:px-6">
           <button
             onClick={() => setOpen(true)}
             aria-label="Open menu"
@@ -166,7 +165,6 @@ export function AdminShell({
             >
               <Bell className="h-5 w-5" />
             </Link>
-            <ThemeToggle />
             <span
               title={userEmail}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-fg"
