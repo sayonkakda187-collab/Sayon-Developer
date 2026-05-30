@@ -86,13 +86,13 @@ export function ArticleForm({
       {article?.id && <input type="hidden" name="id" value={article.id} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">
           {article?.id ? "Edit article" : "New article"}
           {article && (
             <span
               className={`ml-3 align-middle rounded-full px-2 py-0.5 text-xs font-medium ${
                 article.status === "published"
-                  ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300"
+                  ? "bg-green-100 text-green-800"
                   : "bg-surface-2 text-fg-muted"
               }`}
             >
@@ -129,7 +129,7 @@ export function ArticleForm({
               name="title"
               required
               defaultValue={article?.title}
-              className={`${inputClass} mt-1 font-display text-lg`}
+              className={`${inputClass} mt-1 text-lg`}
             />
           </div>
 
@@ -204,7 +204,7 @@ export function ArticleForm({
             {showPreview && <input type="hidden" name="content" value={content} />}
 
             {uploadError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              <p className="mt-2 text-sm text-red-600">
                 {uploadError}
               </p>
             )}

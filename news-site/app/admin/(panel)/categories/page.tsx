@@ -91,7 +91,7 @@ export default async function CategoriesPage() {
                   id={t.id}
                   label="×"
                   confirmText={`Delete tag "${t.name}"?`}
-                  className="font-bold text-fg-faint transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  className="font-bold text-fg-faint transition-colors hover:text-red-600"
                 />
               </span>
             ))}
