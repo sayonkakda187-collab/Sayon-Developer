@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { ArticleWithCategory } from "@/lib/queries";
 import { timeAgo } from "@/lib/site";
+import { MorphLink } from "./MorphLink";
 
 export function ArticleCard({
   article,
@@ -12,8 +12,9 @@ export function ArticleCard({
 }) {
   return (
     <article className="group flex h-full flex-col motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5">
-      <Link
+      <MorphLink
         href={`/news/${article.slug}`}
+        aria-label={article.title}
         className="relative block aspect-[16/10] overflow-hidden rounded-md bg-surface-2 transition-shadow duration-300 group-hover:shadow-lg group-hover:shadow-black/10 dark:group-hover:shadow-black/40"
       >
         {article.coverImage && (
@@ -31,16 +32,16 @@ export function ArticleCard({
             {article.category.name}
           </span>
         )}
-      </Link>
+      </MorphLink>
 
       <div className="mt-2.5 flex flex-1 flex-col">
         <h3 className="font-display text-base font-bold leading-snug tracking-tight">
-          <Link
+          <MorphLink
             href={`/news/${article.slug}`}
             className="transition-colors group-hover:text-accent-link"
           >
             {article.title}
-          </Link>
+          </MorphLink>
         </h3>
         <time
           dateTime={article.publishedAt?.toISOString()}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
+import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-screen flex-col bg-bg font-sans text-fg antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
-        {children}
+        <ViewTransitions>{children}</ViewTransitions>
       </body>
     </html>
   );

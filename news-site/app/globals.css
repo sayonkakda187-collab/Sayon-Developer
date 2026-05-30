@@ -105,17 +105,15 @@ body {
   transform: none;
 }
 
-/* Incoming-page fade for navigations (pure CSS; safe without JS). */
-@keyframes page-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* ── View Transitions (card → article shared-element morph) ───────────────── */
+::view-transition-group(shared-article-image) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
-.page-transition {
-  animation: page-in 0.25s ease-out both;
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -124,7 +122,10 @@ body {
     transform: none !important;
     transition: none !important;
   }
-  .page-transition {
+  /* Skip every view-transition animation. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none !important;
   }
 }
