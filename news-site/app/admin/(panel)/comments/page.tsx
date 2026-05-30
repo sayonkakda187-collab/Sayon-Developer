@@ -70,7 +70,7 @@ export default async function AdminCommentsPage() {
                   ) : (
                     <form action={approveComment}>
                       <input type="hidden" name="id" value={c.id} />
-                      <button className="font-medium text-accent-link hover:underline">
+                      <button className="font-medium text-green-700 transition-colors hover:text-green-800">
                         Approve
                       </button>
                     </form>
