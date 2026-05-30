@@ -523,6 +523,12 @@ body {
 .adm-rp-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.25); }
 .adm-rp-val { font-size: 13px; color: var(--adm-muted); margin-top: 12px; text-align: center; }
 .adm-rp-val b { color: var(--adm-ink-strong); font-weight: 700; font-size: 15px; font-family: var(--font-newsreader), Georgia, serif; }
+.adm-rp-loading { color: var(--adm-green); font-weight: 600; }
+/* Subtle loading affordance while the windowed analytics re-fetch. */
+.adm-chip.adm-loading { color: var(--adm-green); }
+@media (prefers-reduced-motion: reduce) {
+  .adm-chip.adm-loading .adm-spinning { animation: none !important; }
+}
 
 /* Page head + actions (responsive: stacks on mobile, row on desktop). */
 .adm-pagehead { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }

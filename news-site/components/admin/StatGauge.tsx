@@ -36,7 +36,14 @@ export function StatGauge({
 }) {
   const [offset, setOffset] = useState(L); // start fully hidden
   const [display, setDisplay] = useState(0);
+  const displayRef = useRef(0);
   const raf = useRef<number>();
+
+  // Keep a live ref of what's on screen so a re-run counts from the OLD value
+  // (e.g. when the date filter changes Total Views) rather than snapping to 0.
+  useEffect(() => {
+    displayRef.current = display;
+  }, [display]);
 
   // Font size scales down for longer numbers (matches the design spec).
   const digits = String(value).replace(/[^0-9]/g, "").length;
@@ -54,11 +61,12 @@ export function StatGauge({
     const dur = 1100;
     let t0: number | null = null;
     const startCount = setTimeout(() => {
+      const from = displayRef.current; // 0 on mount, previous value on update
       const step = (t: number) => {
         if (t0 === null) t0 = t;
         const p = Math.min((t - t0) / dur, 1);
         const eased = 1 - Math.pow(1 - p, 3);
-        setDisplay(Math.round(value * eased));
+        setDisplay(Math.round(from + (value - from) * eased));
         if (p < 1) raf.current = requestAnimationFrame(step);
       };
       raf.current = requestAnimationFrame(step);
