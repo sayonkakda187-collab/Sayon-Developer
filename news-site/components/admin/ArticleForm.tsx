@@ -1,9 +1,49 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
+import { useFormStatus } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { markdownComponents } from "@/lib/markdownComponents";
+
+// Save draft / Publish buttons with a live saving state. Reads the parent
+// form's pending status (useFormStatus) so the clicked button shows a spinner
+// and both disable while the server action runs — never feels frozen.
+function SubmitButtons() {
+  const { pending } = useFormStatus();
+  const [clicked, setClicked] = useState<"draft" | "published" | null>(null);
+  const busy = (v: "draft" | "published") => pending && clicked === v;
+  return (
+    <div className="flex w-full gap-2 sm:w-auto">
+      <button
+        type="submit"
+        name="status"
+        value="draft"
+        onClick={() => setClicked("draft")}
+        disabled={pending}
+        aria-busy={busy("draft")}
+        className="adm-btn-ghost"
+        style={{ flex: 1, minHeight: 44 }}
+      >
+        {busy("draft") && <span className="adm-spinner" aria-hidden />}
+        {busy("draft") ? "Saving…" : "Save draft"}
+      </button>
+      <button
+        type="submit"
+        name="status"
+        value="published"
+        onClick={() => setClicked("published")}
+        disabled={pending}
+        aria-busy={busy("published")}
+        className="adm-btn-primary"
+        style={{ flex: 1, minHeight: 44 }}
+      >
+        {busy("published") && <span className="adm-spinner" aria-hidden />}
+        {busy("published") ? "Publishing…" : "Publish"}
+      </button>
+    </div>
+  );
+}
 
 type Category = { id: string; name: string };
 type Tag = { id: string; name: string };
@@ -93,26 +133,7 @@ export function ArticleForm({
             </span>
           )}
         </h1>
-        <div className="flex w-full gap-2 sm:w-auto">
-          <button
-            type="submit"
-            name="status"
-            value="draft"
-            className="adm-btn-ghost"
-            style={{ flex: 1, minHeight: 44 }}
-          >
-            Save draft
-          </button>
-          <button
-            type="submit"
-            name="status"
-            value="published"
-            className="adm-btn-primary"
-            style={{ flex: 1, minHeight: 44 }}
-          >
-            Publish
-          </button>
-        </div>
+        <SubmitButtons />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

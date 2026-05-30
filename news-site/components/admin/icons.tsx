@@ -45,6 +45,11 @@ export const HamburgerIcon = (p: P) => (
     <path d="M3 6h18M3 12h18M3 18h18" />
   </svg>
 );
+export const CloseIcon = (p: P) => (
+  <svg {...base} strokeWidth={2} className={p.className} aria-hidden>
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+);
 export const DashboardIcon = (p: P) => (
   <svg {...base} className={p.className} aria-hidden>
     <rect x="3" y="3" width="7" height="9" rx="1.5" />
