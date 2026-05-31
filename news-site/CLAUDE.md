@@ -108,15 +108,16 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
 
 ## Ads (AdsKeeper)
 
-The article reading page (`/news/[slug]`) has AdsKeeper ad placements wired up.
-Everything is config-driven from **one file: `lib/ads.ts`** — that's the only
-file you edit to go live.
+The article reading page (`/news/[slug]`) and the homepage (`/`) have AdsKeeper
+ad placements wired up. Everything is config-driven from **one file:
+`lib/ads.ts`** — that's the only file you edit to go live.
 
 **To go live (3 steps in `lib/ads.ts`):**
 1. Paste your **SITE ID** (the number from your head loader URL
    `https://jsc.adskeeper.com/site/SITE_ID.js`) into `ADSKEEPER_SITE_ID`.
 2. In the AdsKeeper dashboard → **Add Widget**, create one widget per placement
-   and paste each **WIDGET ID** into `ADS.TOP`, `ADS.IN_ARTICLE`, `ADS.SIDEBAR`.
+   and paste each **WIDGET ID** into `ADS.TOP`, `ADS.IN_ARTICLE`, `ADS.SIDEBAR`,
+   `ADS.HOME`.
 3. Set `ADS_ENABLED = true`.
 
 Until all three are done, **real visitors see nothing** (clean page, no empty
@@ -136,6 +137,9 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
 - Placements on `/news/[slug]`: **TOP** (below the lede), **IN_ARTICLE** (split
   into the middle of the body at a paragraph boundary), **SIDEBAR** (above
   "Related Stories"; this layout is single-column).
+- Placement on `/` (homepage): **HOME** (between the featured hero and the first
+  content block / "Latest News"). Each placement needs its **own** widget id —
+  don't reuse `ADS.TOP` here, or it won't fill.
 
 ## Roadmap
 

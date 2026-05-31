@@ -33,7 +33,7 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    from AdsKeeper dashboard → Add Widget.
 //    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
 //    should only appear in a single container per page. So only TOP is live for
-//    now; create a separate widget for each of the other two before enabling
+//    now; create a separate widget for each of the other three before enabling
 //    them (reusing 2019769 here is not supported and would leave them unfilled).
 export const ADS = {
   /** Top of the article, just under the headline/lede. */
@@ -42,6 +42,8 @@ export const ADS = {
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
   /** Sidebar / related area — here, just above "Related Stories". */
   SIDEBAR: "REPLACE_WITH_WIDGET_ID",
+  /** Homepage — between the featured hero and the first content block. */
+  HOME: "REPLACE_WITH_WIDGET_ID",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
