@@ -3,6 +3,8 @@ import { getHomepage, type ArticleWithCategory } from "@/lib/queries";
 import { FeaturedHero } from "@/components/FeaturedHero";
 import { ArticleCard } from "@/components/ArticleCard";
 import { Reveal } from "@/components/Reveal";
+import { AdSlot } from "@/components/AdSlot";
+import { ADS } from "@/lib/ads";
 
 function SectionHeader({ title, href }: { title: string; href?: string }) {
   return (
@@ -62,6 +64,14 @@ export default async function Home() {
     <div>
       <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         <FeaturedHero article={featured} />
+      </section>
+
+      {/* Homepage ad — high-visibility placement between the featured hero and
+          the first content block (Latest News). Uses its own AdsKeeper widget
+          (ADS.HOME): shows a labeled placeholder in dev/preview until its id is
+          set, and nothing on production until then. */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <AdSlot name="HOME" widgetId={ADS.HOME} />
       </section>
 
       {blocks.map((block, idx) => (
