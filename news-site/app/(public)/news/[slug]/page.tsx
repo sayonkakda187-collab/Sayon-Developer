@@ -106,6 +106,13 @@ export default async function ArticlePage({ params }: Props) {
 
   return (
     <main>
+      {/* TOP ad — first thing in view the moment the article opens. Centered
+          and responsive: full width with edge padding on mobile, capped and
+          centered on larger screens. */}
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
+        <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={140} />
+      </div>
+
       {/* Immersive hero */}
       {article.coverImage ? (
         <header className="relative isolate">
@@ -167,9 +174,6 @@ export default async function ArticlePage({ params }: Props) {
           <p className="mb-9 border-l-[3px] border-accent pl-5 text-xl font-medium leading-relaxed text-fg-muted motion-safe:animate-fade-up sm:text-2xl">
             {article.excerpt}
           </p>
-
-          {/* TOP ad — below the headline/lede, above the article body. */}
-          <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={140} />
 
           {midSplit ? (
             <>
