@@ -107,44 +107,6 @@ model User {
   passwordHash String
   role         String   @default("admin")
   createdAt    DateTime @default(now())
-
-  savedIdeas     SavedIdea[]
-  followedTopics FollowedTopic[]
-}
-
-// A trending story bookmarked from the Trending News page so it survives a
-// refresh. Inspiration-only: we store the headline, source link + metadata and
-// the short snippet GNews already returned — never the source's full article
-// text. Scoped per-admin via userId.
-model SavedIdea {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  url       String
-  source    String?
-  image     String?
-  snippet   String? // short description only — NOT the full body
-  status    String   @default("idea") // "idea" | "drafting" | "done"
-  savedAt   DateTime @default(now())
-
-  @@unique([userId, url])
-  @@index([userId, savedAt])
-}
-
-// A topic the admin follows for quick re-search on the Trending page (e.g.
-// "AI", "Bitcoin"), with optional language/country targeting. Scoped per-admin.
-model FollowedTopic {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic     String
-  lang      String   @default("en")
-  country   String   @default("us")
-  createdAt DateTime @default(now())
-
-  @@unique([userId, topic])
-  @@index([userId, createdAt])
 }
 
 // ── Facebook Pages integration ───────────────────────────────────────────────

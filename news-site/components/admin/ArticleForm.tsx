@@ -11,8 +11,6 @@ import { MarkdownToolbar } from "@/components/admin/MarkdownToolbar";
 import { useAutosave, readLocalDraft, type DraftSnapshot } from "@/lib/useAutosave";
 import { countWords, readingTime } from "@/lib/editorUtils";
 import { duplicateArticle } from "@/app/admin/actions";
-import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
-import { SparklesIcon, CloseIcon } from "@/components/admin/icons";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -84,7 +82,6 @@ export function ArticleForm({
   tags,
   article,
   initial,
-  aiHandoff = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   categories: Category[];
@@ -93,9 +90,6 @@ export function ArticleForm({
   // Pre-fill for a brand-new draft (e.g. from Trending News). Only the title and
   // a research note are ever seeded — never copied source text.
   initial?: { title?: string; content?: string };
-  // When arriving from AI Assist (?ai=1), read the one-shot draft handoff stashed
-  // in sessionStorage and pre-fill the editor as an UNSAVED draft. Never published.
-  aiHandoff?: boolean;
 }) {
   const editorId = article?.id ?? "new";
   const router = useRouter();
@@ -131,31 +125,8 @@ export function ArticleForm({
   };
   const { state, dirty, clear } = useAutosave(editorId, snapshot, initialKey);
 
-  const [aiNotice, setAiNotice] = useState(false);
-
-  // On mount: first honor an AI Assist handoff (sessionStorage, one-shot), then
-  // otherwise offer to restore a locally-autosaved draft.
+  // On mount, offer to restore a newer local draft (crash / accidental reload).
   useEffect(() => {
-    if (aiHandoff) {
-      try {
-        const raw = sessionStorage.getItem(AI_HANDOFF_KEY);
-        if (raw) {
-          sessionStorage.removeItem(AI_HANDOFF_KEY); // consume once
-          const data = JSON.parse(raw) as { title?: string; draft?: string };
-          const body = (data.draft ?? "").trim();
-          if (data.title) setTitle(data.title);
-          if (body) {
-            setContent(
-              `> ⚠️ AI draft — review, fact-check, and edit before publishing. Verify all facts and write in your own words.\n\n${body}`,
-            );
-          }
-          setAiNotice(true);
-          return; // don't also pop the recovery banner
-        }
-      } catch {
-        /* sessionStorage may be unavailable — fall through to recovery */
-      }
-    }
     const local = readLocalDraft(editorId);
     if (local && local.content !== content && (local.title || local.content)) {
       setRecovered(local);
@@ -300,19 +271,6 @@ export function ArticleForm({
             <button type="button" className="adm-btn-primary" onClick={applyRecovered}>Restore</button>
             <button type="button" className="adm-btn-ghost" onClick={dismissRecovered}>Discard</button>
           </div>
-        </div>
-      )}
-
-      {aiNotice && (
-        <div className="adm-ai-banner" role="note">
-          <span className="adm-ai-spark"><SparklesIcon className="h-[16px] w-[16px]" /></span>
-          <div>
-            <strong>AI-assisted draft loaded.</strong> Review, fact-check, and edit before
-            publishing — verify all facts and make it your own. Nothing has been saved or published.
-          </div>
-          <button type="button" className="adm-ai-banner-x" aria-label="Dismiss" onClick={() => setAiNotice(false)}>
-            <CloseIcon className="h-4 w-4" />
-          </button>
         </div>
       )}
 
