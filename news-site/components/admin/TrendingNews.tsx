@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { timeAgo } from "@/lib/site";
+import { AiAssistModal } from "@/components/admin/AiAssistModal";
 import {
   SearchIcon,
   CloseIcon,
@@ -10,6 +11,7 @@ import {
   ExternalLinkIcon,
   PencilIcon,
   TrendingIcon,
+  SparklesIcon,
 } from "@/components/admin/icons";
 
 type Option = { id: string; label: string };
@@ -43,13 +45,21 @@ export function TrendingNews({
   languages,
   countries,
   configured,
+  aiConfigured,
 }: {
   categories: Option[];
   languages: Option[];
   countries: Option[];
   configured: boolean;
+  // Whether ANTHROPIC_API_KEY is set (server-decided). When false, the AI Assist
+  // button shows a "Set up AI" state instead of calling the paid API.
+  aiConfigured: boolean;
 }) {
   const [category, setCategory] = useState<string>(categories[0]?.id ?? "general");
+  // The trending story an AI Assist modal is open for (null = closed). Topic is
+  // the active search term or category — sent alongside the headline, never the
+  // source's article text.
+  const [aiTarget, setAiTarget] = useState<{ headline: string; topic?: string } | null>(null);
   const [lang, setLang] = useState<string>("en");
   const [country, setCountry] = useState<string>("us");
   const [searchInput, setSearchInput] = useState("");
@@ -298,7 +308,12 @@ export function TrendingNews({
         <>
           <div className="adm-trend-grid">
             {items.map((item, i) => (
-              <TrendingCard key={`${item.url}-${i}`} item={item} />
+              <TrendingCard
+                key={`${item.url}-${i}`}
+                item={item}
+                aiConfigured={aiConfigured}
+                onAi={() => setAiTarget({ headline: item.title, topic: query || category })}
+              />
             ))}
           </div>
 
@@ -317,11 +332,27 @@ export function TrendingNews({
           </div>
         </>
       )}
+
+      {aiTarget && (
+        <AiAssistModal
+          headline={aiTarget.headline}
+          topic={aiTarget.topic}
+          onClose={() => setAiTarget(null)}
+        />
+      )}
     </div>
   );
 }
 
-function TrendingCard({ item }: { item: Item }) {
+function TrendingCard({
+  item,
+  aiConfigured,
+  onAi,
+}: {
+  item: Item;
+  aiConfigured: boolean;
+  onAi: () => void;
+}) {
   // Reuse the existing create-article flow: link to the new-article editor with
   // the headline + source URL as query params. No separate publishing path, and
   // the source's article text is never carried over — only the title + a
@@ -373,10 +404,32 @@ function TrendingCard({ item }: { item: Item }) {
             Read original
             <ExternalLinkIcon className="h-[14px] w-[14px]" />
           </a>
-          <Link className="adm-trend-write" href={writeHref}>
-            <PencilIcon className="h-[15px] w-[15px]" />
-            Write article
-          </Link>
+          <div className="adm-trend-actions">
+            {aiConfigured ? (
+              <button
+                type="button"
+                className="adm-trend-ai"
+                onClick={onAi}
+                title="Draft help from AI (paid, runs only on click)"
+              >
+                <SparklesIcon className="h-[15px] w-[15px]" />
+                AI Assist
+              </button>
+            ) : (
+              <Link
+                className="adm-trend-ai disabled"
+                href="/admin/trending#ai-setup"
+                title="Set up AI to enable"
+              >
+                <SparklesIcon className="h-[15px] w-[15px]" />
+                Set up AI
+              </Link>
+            )}
+            <Link className="adm-trend-write" href={writeHref}>
+              <PencilIcon className="h-[15px] w-[15px]" />
+              Write
+            </Link>
+          </div>
         </div>
       </div>
     </article>

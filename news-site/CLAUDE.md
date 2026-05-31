@@ -233,7 +233,28 @@ of full content is the writer's job, in their own words.
   note* linking the source (to delete before publishing) — **no source text is
   copied** into the body.
 
-**Env:** `GNEWS_API_KEY` (server-side; add in Vercel for Production + Preview).
+**AI Assist (paid, opt-in)**
+- An **"AI Assist"** button on each trending card (and an AI banner inside the
+  editor when a draft arrives from it) opens a modal that calls
+  `POST /api/admin/ai-assist` (`requireAdmin`) → `lib/aiAssist.ts`, which calls
+  the **Anthropic Messages API** (raw `fetch`, no SDK). It sends only the
+  **headline + topic** — never scraped source text — and returns 5 sections:
+  **brief, suggested headlines, outline, background & angles, original first
+  draft** (each with a copy button). Runs **only on an explicit click** (cost
+  control); never automatic.
+- **Guardrails:** the system prompt forces ORIGINAL writing from general
+  knowledge (no copying/close paraphrase, no fabricated quotes/stats, `[VERIFY:
+  …]` placeholders, neutral news tone). A visible disclaimer sits above the
+  output. **"Use as draft"** stashes the draft in `sessionStorage` and opens the
+  editor (`/admin/articles/new?ai=1`, read by `ArticleForm`'s `aiHandoff`) as an
+  **unsaved** draft — never auto-published. `ANTHROPIC_API_KEY` is **server-side
+  only**; if unset the button shows a "Set up AI" state instead of erroring.
+- Code: `lib/aiAssist.ts` (`generateAiAssist`, `isAiConfigured`),
+  `app/api/admin/ai-assist/route.ts`, `components/admin/AiAssistModal.tsx`.
+
+**Env:** `GNEWS_API_KEY` (free; server-side). `ANTHROPIC_API_KEY` (**paid**,
+pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (defaults to the cheapest
+capable model). Add both in Vercel for Production + Preview. See `.env.example`.
 
 ## Roadmap
 

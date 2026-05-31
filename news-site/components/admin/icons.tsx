@@ -169,3 +169,19 @@ export const CategoryGlyph = ({ name, className }: { name: string; className?: s
     </svg>
   );
 };
+
+// Sparkles — the AI Assist affordance.
+export const SparklesIcon = (p: P) => (
+  <svg {...base} className={p.className} aria-hidden>
+    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z" />
+    <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z" />
+  </svg>
+);
+
+// Copy / clipboard for the AI output copy buttons.
+export const CopyIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.8} className={p.className} aria-hidden>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
