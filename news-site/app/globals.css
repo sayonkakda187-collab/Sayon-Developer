@@ -533,10 +533,12 @@ body {
 .adm-tab[data-tab="articles"].on { color: #f59e0b; }
 .adm-tab[data-tab="categories"].on { color: #a855f7; }
 .adm-tab[data-tab="comments"].on { color: #2563eb; }
+.adm-tab[data-tab="facebook"].on { color: #1877f2; }
 .adm-tab[data-tab="dashboard"].on svg { background: rgba(22, 163, 74, 0.12); }
 .adm-tab[data-tab="articles"].on svg { background: rgba(245, 158, 11, 0.14); }
 .adm-tab[data-tab="categories"].on svg { background: rgba(168, 85, 247, 0.13); }
 .adm-tab[data-tab="comments"].on svg { background: rgba(37, 99, 235, 0.12); }
+.adm-tab[data-tab="facebook"].on svg { background: rgba(24, 119, 242, 0.13); }
 
 /* ── Drawer (nav + View site + Log out) ──────────────────────────────────────
  * Smooth slide + fading, blurred backdrop. GPU-friendly (transform/opacity).
@@ -581,6 +583,7 @@ body {
 .adm-dlink[data-tab="articles"].on svg { color: #fbbf24; }
 .adm-dlink[data-tab="categories"].on svg { color: #c084fc; }
 .adm-dlink[data-tab="comments"].on svg { color: #60a5fa; }
+.adm-dlink[data-tab="facebook"].on svg { color: #60a5fa; }
 .adm-dfoot { border-top: 1px solid rgba(255, 255, 255, 0.08); padding: 12px; display: flex; flex-direction: column; gap: 2px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 
 /* Staggered slide-in of drawer links once the panel is open. */
@@ -746,6 +749,7 @@ body {
   .adm-navitem[data-tab="articles"].on svg { color: var(--adm-amber); }
   .adm-navitem[data-tab="categories"].on svg { color: var(--adm-purple); }
   .adm-navitem[data-tab="comments"].on svg { color: var(--adm-blue); }
+  .adm-navitem[data-tab="facebook"].on svg { color: #1877f2; }
   .adm-navfoot { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 12px; }
   .adm-navfoot .adm-navitem { font-weight: 500; font-size: 14px; color: #64748b; }
 
@@ -839,3 +843,113 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .admin-shell .adm-bbar-live, .admin-shell .adm-bar-fill-live { transition: none; }
 }
+
+/* ── Facebook Pages integration (admin) ─────────────────────────────────────
+ * Reuses the admin design tokens (--adm-*) so it matches light + dark. Covers
+ * the page-head CTA, grouped tables, the connect modal, toasts, and the
+ * article-editor "Publish to Facebook" panel.
+ */
+
+/* Page header with a right-aligned primary action. */
+.adm-pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.adm-head-cta { flex: none; }
+
+/* Group header inside each grouped card. */
+.adm-fb-grouphd { display: flex; align-items: center; gap: 9px; padding: 2px 2px 10px; }
+.adm-fb-groupname { font-size: 13px; font-weight: 700; letter-spacing: 0.3px; color: var(--adm-ink); text-transform: uppercase; }
+.adm-fb-groupcount { font-size: 11px; font-weight: 700; color: var(--adm-muted); background: var(--adm-bd); border-radius: 999px; padding: 1px 8px; }
+
+.adm-fb-table { margin-top: 0; }
+.adm-fb-table th, .adm-fb-table td { white-space: nowrap; }
+.adm-fb-sub { display: block; font-size: 11.5px; color: var(--adm-muted); margin-top: 2px; white-space: nowrap; }
+.adm-fb-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--adm-muted); background: rgba(15, 23, 42, 0.05); padding: 1px 7px; border-radius: 6px; }
+[data-adm-theme="dark"] .admin-shell .adm-fb-code { background: rgba(255, 255, 255, 0.07); }
+
+.adm-fb-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.adm-fb-act { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; font-size: 12.5px; font-weight: 600; }
+.adm-fb-danger { color: #dc2626; }
+[data-adm-theme="dark"] .admin-shell .adm-fb-danger { color: #f87171; }
+.adm-fb-act:disabled { opacity: 0.55; cursor: progress; }
+
+/* On narrow screens the grouped table scrolls horizontally rather than break. */
+@media (max-width: 640px) {
+  .adm-fb-table { display: block; overflow-x: auto; }
+  .adm-fb-actlabel { display: none; }
+}
+
+/* ── Modal ── */
+.adm-modal-back {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 18px; background: rgba(8, 12, 22, 0.55); backdrop-filter: blur(3px);
+  animation: adm-fade 0.18s ease;
+}
+.adm-modal {
+  width: 100%; max-width: 480px; max-height: calc(100dvh - 40px); overflow-y: auto;
+  background: var(--adm-card); border: 1px solid var(--adm-bd); border-radius: var(--adm-radius);
+  box-shadow: var(--adm-shadow); backdrop-filter: blur(20px) saturate(140%);
+  animation: adm-pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+[data-adm-theme="dark"] .admin-shell .adm-modal,
+.admin-shell .adm-modal { background: var(--adm-card); }
+.adm-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--adm-bd); }
+.adm-modal-head h2 { font-size: 17px; font-weight: 700; color: var(--adm-ink); }
+.adm-modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.adm-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
+.adm-field { display: flex; flex-direction: column; gap: 6px; }
+.adm-field > span:first-child { font-size: 12.5px; font-weight: 600; color: var(--adm-muted); }
+.adm-field-hint { font-size: 11.5px; color: var(--adm-muted-2); line-height: 1.45; }
+.adm-check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: var(--adm-ink); cursor: pointer; line-height: 1.4; }
+.adm-check input { margin-top: 2px; accent-color: var(--adm-green); flex: none; }
+.adm-link { color: var(--adm-blue); font-weight: 600; text-decoration: none; }
+.adm-link:hover { text-decoration: underline; }
+[data-adm-theme="dark"] .admin-shell .adm-link { color: #60a5fa; }
+
+/* ── Toasts ── */
+.adm-toasts { position: fixed; z-index: 90; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; max-width: min(92vw, 360px); }
+.adm-toast {
+  display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-radius: 12px; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  animation: adm-toast-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.adm-toast-dot { width: 8px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); flex: none; }
+.adm-toast.success { background: #15803d; }
+.adm-toast.error { background: #b91c1c; }
+.adm-toast.info { background: var(--adm-navy); }
+@keyframes adm-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes adm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes adm-pop { from { opacity: 0; transform: scale(0.97) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .adm-toast, .adm-modal, .adm-modal-back { animation: none !important; }
+}
+
+/* ── Article editor: Publish to Facebook panel ── */
+.adm-fbpanel { display: flex; flex-direction: column; gap: 12px; }
+.adm-fbpanel-hd { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; color: var(--adm-ink); }
+.adm-fbpanel-hd svg { color: #2563eb; }
+[data-adm-theme="dark"] .admin-shell .adm-fbpanel-hd svg { color: #60a5fa; }
+.adm-fbpanel-note { font-size: 12px; color: var(--adm-muted); background: rgba(37, 99, 235, 0.06); border: 1px solid rgba(37, 99, 235, 0.18); border-radius: 9px; padding: 8px 11px; line-height: 1.45; }
+
+.adm-fb-checkgroups { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.adm-fb-checkgroup { border: 1px solid var(--adm-bd); border-radius: 11px; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.adm-fb-checkgroup legend { padding: 0 4px; }
+.adm-fb-grouptoggle { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--adm-muted); background: none; border: none; cursor: pointer; padding: 0; }
+.adm-fb-grouptoggle:hover { color: var(--adm-green); }
+
+.adm-fb-publishrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.adm-fb-schedule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-fb-schedule .adm-input { width: auto; }
+.adm-fb-schedule .adm-btn-ghost { display: inline-flex; align-items: center; gap: 6px; }
+
+.adm-fb-results { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.adm-fb-result { display: flex; align-items: center; gap: 9px; font-size: 12.5px; padding: 8px 11px; border-radius: 9px; border: 1px solid var(--adm-bd); }
+.adm-fb-result.ok { background: rgba(21, 128, 61, 0.07); border-color: rgba(21, 128, 61, 0.25); }
+.adm-fb-result.bad { background: rgba(185, 28, 28, 0.06); border-color: rgba(185, 28, 28, 0.22); }
+.adm-fb-result-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.adm-fb-result.ok .adm-fb-result-dot { background: #16a34a; }
+.adm-fb-result.bad .adm-fb-result-dot { background: #dc2626; }
+.adm-fb-result-msg { color: var(--adm-muted); min-width: 0; }
+
+.adm-fb-history { margin-top: 8px; border-top: 1px solid var(--adm-bd); padding-top: 12px; }
+.adm-fb-history-hd { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--adm-muted); }
+.adm-fb-history .adm-table { display: block; overflow-x: auto; }

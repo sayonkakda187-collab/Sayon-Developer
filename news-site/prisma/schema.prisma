@@ -32,8 +32,9 @@ model Article {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  tags     Tag[]     @relation("ArticleTags")
-  comments Comment[]
+  tags           Tag[]           @relation("ArticleTags")
+  comments       Comment[]
+  scheduledPosts ScheduledPost[]
 
   @@index([status, publishedAt])
   @@index([categoryId])
@@ -86,4 +87,44 @@ model User {
   passwordHash String
   role         String   @default("admin")
   createdAt    DateTime @default(now())
+}
+
+// ── Facebook Pages integration ───────────────────────────────────────────────
+// Official Graph API distribution. Page access tokens are stored ENCRYPTED
+// (AES-256-GCM, see lib/crypto.ts) and only ever decrypted server-side.
+
+model FacebookPage {
+  id            String   @id @default(cuid())
+  pageId        String   @unique // the Facebook Page id
+  pageName      String
+  accessToken   String // ENCRYPTED long-lived Page access token (never plaintext)
+  categoryGroup String // niche/group label, e.g. "US News" | "KH News" | "Entertainment"
+  status        String   @default("Connected") // "Connected" | "Expired"
+  lastSyncedAt  DateTime? // last successful token validation
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  scheduledPosts ScheduledPost[]
+
+  @@index([categoryGroup])
+  @@index([status])
+}
+
+model ScheduledPost {
+  id             String    @id @default(cuid())
+  scheduledFor   DateTime // when it should publish (UTC)
+  status         String    @default("pending") // "pending" | "posting" | "posted" | "failed"
+  postedAt       DateTime?
+  error          String? // failure reason, if status = "failed"
+  graphPostId    String? // the returned Facebook post id ("{page}_{post}")
+  createdAt      DateTime  @default(now())
+
+  articleId      String
+  article        Article      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  facebookPageId String
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([articleId])
+  @@index([facebookPageId])
 }

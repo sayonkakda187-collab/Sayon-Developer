@@ -18,6 +18,7 @@ import {
   LogOutIcon,
   MessageIcon,
   CloseIcon,
+  FacebookIcon,
 } from "./icons";
 
 const NAV = [
@@ -25,6 +26,7 @@ const NAV = [
   { tab: "articles", label: "Articles", drawerLabel: "Articles", href: "/admin/articles", Icon: ArticlesIcon },
   { tab: "categories", label: "Categories", drawerLabel: "Categories & Tags", href: "/admin/categories", Icon: CategoriesIcon },
   { tab: "comments", label: "Comments", drawerLabel: "Comments", href: "/admin/comments", Icon: CommentsIcon },
+  { tab: "facebook", label: "Facebook", drawerLabel: "Facebook Pages", href: "/admin/facebook", Icon: FacebookIcon },
 ] as const;
 
 export function AdminShell({

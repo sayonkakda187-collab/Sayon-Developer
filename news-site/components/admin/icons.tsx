@@ -126,6 +126,11 @@ export const MessageIcon = (p: P) => (
     <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5.2A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
   </svg>
 );
+export const FacebookIcon = (p: P) => (
+  <svg {...base} className={p.className} aria-hidden>
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+  </svg>
+);
 
 // Category tile icons (filled-on-color tiles on the Categories screen).
 export const CategoryGlyph = ({ name, className }: { name: string; className?: string }) => {
