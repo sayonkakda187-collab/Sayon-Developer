@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { formatDate, formatNumber } from "@/lib/site";
 import { useToast } from "@/components/admin/Toast";
 import { duplicateArticle, bulkArticleAction } from "@/app/admin/actions";
-import { PencilIcon, EyeIcon, SearchIcon } from "@/components/admin/icons";
+import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
+import { PencilIcon, EyeIcon, SearchIcon, ShareIcon } from "@/components/admin/icons";
 
 type Item = {
   id: string;
@@ -33,13 +34,34 @@ export function ArticlesList({
   items,
   categories,
   initialQuery = "",
+  initialPublishedId,
 }: {
   items: Item[];
   categories: string[];
   initialQuery?: string;
+  // When present (from ?published={id} after publishing), auto-open the Share
+  // panel with the celebratory header.
+  initialPublishedId?: string;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
+
+  // Share / Promote panel target. `celebrate` shows the post-publish header.
+  const [shareTarget, setShareTarget] = useState<{ id: string; celebrate: boolean } | null>(
+    initialPublishedId ? { id: initialPublishedId, celebrate: true } : null,
+  );
+
+  // Drop the ?published= param from the URL once consumed, so a refresh doesn't
+  // reopen the celebratory panel.
+  useEffect(() => {
+    if (initialPublishedId && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("published")) {
+        url.searchParams.delete("published");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    }
+  }, [initialPublishedId]);
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<string>("All");
   const [category, setCategory] = useState<string>("All");
@@ -272,7 +294,12 @@ export function ArticlesList({
                   <div className="adm-rowact">
                     <Link href={`/admin/articles/${a.id}/edit`} aria-label={`Edit ${a.title}`}><PencilIcon className="h-[18px] w-[18px]" /></Link>
                     {published && (
-                      <Link href={`/news/${a.slug}`} target="_blank" aria-label={`View ${a.title}`}><EyeIcon className="h-[18px] w-[18px]" /></Link>
+                      <>
+                        <Link href={`/news/${a.slug}`} target="_blank" aria-label={`View ${a.title}`}><EyeIcon className="h-[18px] w-[18px]" /></Link>
+                        <button type="button" className="adm-rowact-btn" onClick={() => setShareTarget({ id: a.id, celebrate: false })} aria-label={`Share ${a.title}`} title="Share / promote">
+                          <ShareIcon className="h-[18px] w-[18px]" />
+                        </button>
+                      </>
                     )}
                     <button type="button" className="adm-rowact-btn" disabled={busy} onClick={() => onDuplicate(a.id)} aria-label={`Duplicate ${a.title}`} title="Duplicate as new draft">
                       <CopyGlyph />
@@ -292,6 +319,14 @@ export function ArticlesList({
           </>
         )}
       </div>
+
+      {shareTarget && (
+        <SharePromoteModal
+          articleId={shareTarget.id}
+          celebrate={shareTarget.celebrate}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
     </>
   );
 }

@@ -49,6 +49,7 @@ export async function saveArticle(formData: FormData) {
 
   const slug = await uniqueArticleSlug(title, id || undefined);
 
+  let savedId = id;
   if (id) {
     const existing = await prisma.article.findUnique({
       where: { id },
@@ -72,7 +73,7 @@ export async function saveArticle(formData: FormData) {
     });
   } else {
     const publishedAt = status === "published" ? new Date() : null;
-    await prisma.article.create({
+    const created = await prisma.article.create({
       data: {
         title,
         slug,
@@ -84,9 +85,16 @@ export async function saveArticle(formData: FormData) {
         publishedAt,
         tags: { connect: uniqueTagIds.map((tid) => ({ id: tid })) },
       },
+      select: { id: true },
     });
+    savedId = created.id;
   }
 
+  // On publish, land on the Articles list with the Share panel auto-opened so
+  // the writer can immediately promote the story. Drafts just return to the list.
+  if (status === "published") {
+    redirect(`/admin/articles?published=${savedId}`);
+  }
   redirect("/admin/articles");
 }
 

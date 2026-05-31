@@ -185,3 +185,38 @@ export const CopyIcon = (p: P) => (
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
 );
+
+// Share (nodes + connectors) for the Share / Promote panel.
+export const ShareIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+  </svg>
+);
+
+// Download — save the cover image to attach to a post.
+export const DownloadIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <path d="M12 3v12M7 10l5 5 5-5" />
+    <path d="M5 21h14" />
+  </svg>
+);
+
+// Link — the public article URL.
+export const LinkIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" />
+    <path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" />
+  </svg>
+);
+
+// Image — the cover preview affordance / fallback.
+export const ImageIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-5-5L5 21" />
+  </svg>
+);

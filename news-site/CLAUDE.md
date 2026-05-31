@@ -202,6 +202,34 @@ under a Page-token flow, grant `pages_manage_posts` + `pages_read_engagement`
 the Page ID + token into the Connect dialog. Posting to Pages you don't own (or
 beyond dev mode) requires **App Review** for those permissions.
 
+## Share / Promote panel (manual, no token)
+
+A lightweight, **no-automation** complement to the Graph-API poster above:
+helps the admin hand-share a **published** article to Facebook (and copy assets
+for anywhere). No API/token, no scraping — it just assembles copy-ready text and
+opens Facebook's official **sharer** dialog.
+
+- **Where:** opens (1) **right after publishing** — `saveArticle` redirects to
+  `/admin/articles?published={id}` and the list auto-opens the panel with an
+  "Article published! 🎉" header; (2) **anytime** — a Share row action on every
+  published article in the list, and a **Share** button in the editor action bar
+  for published articles. Drafts have no public URL → the panel shows a "publish
+  first" hint (the list/editor only surface Share for published rows).
+- **What it shows (for the selected published article):** cover image preview
+  with **Copy image** (Clipboard API → PNG via canvas) + **Download**; the
+  **headline**, the **public canonical URL**, and an editable **caption**
+  (headline + hook + link), each with a Copy button + "Copied!" toast; a **Copy
+  everything** (caption + link) and a **Share to Facebook** button that opens
+  `facebook.com/sharer/sharer.php?u={encoded URL}` in a new tab.
+- **Correctness:** a server action `getShareInfo(id)` (`app/admin/share-actions.ts`,
+  `requireAdmin`) is the single source of truth — it reuses `articleUrl(slug)`
+  (the same canonical URL the Graph poster uses) and the saved `coverImage`, so
+  the link/title/image **match the page's Open Graph tags** Facebook scrapes.
+- **Resilience:** clipboard + download degrade gracefully (select-text / open in
+  new tab) when blocked. Fully responsive. Code:
+  `components/admin/SharePromoteModal.tsx`. **Env:** none new — uses
+  `NEXT_PUBLIC_SITE_URL` (already documented) for absolute URLs.
+
 ## Trending News (GNews discovery)
 
 Admin-only tool to discover trending headlines and start an **original** draft

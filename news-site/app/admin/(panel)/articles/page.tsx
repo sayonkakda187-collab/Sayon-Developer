@@ -9,12 +9,20 @@ export const dynamic = "force-dynamic";
 export default async function AdminArticlesPage({
   searchParams,
 }: {
-  searchParams?: { q?: string };
+  searchParams?: { q?: string; published?: string };
 }) {
   const articles = await prisma.article.findMany({
     orderBy: { createdAt: "desc" },
     include: { category: true },
   });
+
+  // After publishing, saveArticle redirects here with ?published={id} so the
+  // Share panel auto-opens. Only honor it for a genuinely published article.
+  const publishedParam = (searchParams?.published ?? "").trim();
+  const initialPublishedId =
+    publishedParam && articles.some((a) => a.id === publishedParam && a.status === "published")
+      ? publishedParam
+      : undefined;
 
   const publishedCount = articles.filter((a) => a.status === "published").length;
   const categories = Array.from(
@@ -69,7 +77,12 @@ export default async function AdminArticlesPage({
         </div>
       ) : (
         <ToastProvider>
-          <ArticlesList items={items} categories={categories} initialQuery={initialQuery} />
+          <ArticlesList
+            items={items}
+            categories={categories}
+            initialQuery={initialQuery}
+            initialPublishedId={initialPublishedId}
+          />
         </ToastProvider>
       )}
     </div>
