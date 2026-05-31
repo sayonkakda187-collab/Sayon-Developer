@@ -65,13 +65,17 @@ export function ArticleForm({
   categories,
   tags,
   article,
+  initial,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   categories: Category[];
   tags: Tag[];
   article?: ArticleInput;
+  // Pre-fill for a brand-new draft (e.g. from Trending News). Only the title and
+  // a research note are ever seeded — never copied source text.
+  initial?: { title?: string; content?: string };
 }) {
-  const [content, setContent] = useState(article?.content ?? "");
+  const [content, setContent] = useState(article?.content ?? initial?.content ?? "");
   const [coverImage, setCoverImage] = useState(article?.coverImage ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [uploading, setUploading] = useState<null | "cover" | "inline">(null);
@@ -144,7 +148,7 @@ export function ArticleForm({
             <input
               name="title"
               required
-              defaultValue={article?.title}
+              defaultValue={article?.title ?? initial?.title}
               className={`${inputClass} mt-1 text-lg`}
             />
           </div>

@@ -131,6 +131,12 @@ export const FacebookIcon = (p: P) => (
     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
   </svg>
 );
+export const TrendingIcon = (p: P) => (
+  <svg {...base} strokeWidth={2} className={p.className} aria-hidden>
+    <path d="m3 17 6-6 4 4 8-8" />
+    <path d="M17 7h4v4" />
+  </svg>
+);
 
 // Category tile icons (filled-on-color tiles on the Categories screen).
 export const CategoryGlyph = ({ name, className }: { name: string; className?: string }) => {
