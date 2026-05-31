@@ -183,12 +183,13 @@ browser.
   checkboxes, Publish Now / Schedule, per-page results + post history).
 
 **Cron / scheduling**
-- `vercel.json` → `crons: [{ path: "/api/cron/facebook-post", schedule: "0 14 * * *" }]`
-  — once daily at 14:00 UTC, which **Vercel Hobby** supports (Hobby allows only
-  daily cron and isn't minute-accurate). Due posts publish at the next daily run.
-- For near-exact timing (e.g. `*/15 * * * *`), upgrade to **Vercel Pro**, or keep
-  Hobby and trigger `/api/cron/facebook-post` from an external scheduler
-  (cron-job.org, a GitHub Action, …) with the `CRON_SECRET` bearer header.
+- `vercel.json` → `crons: [{ path: "/api/cron/facebook-post", schedule: "*/15 * * * *" }]`
+  — every 15 minutes, so scheduled posts publish close to their target time.
+  This cadence **requires Vercel Pro**; the **Hobby** plan only allows daily cron
+  and will fail the deploy at validation.
+- On Hobby instead, either set the schedule to `"0 14 * * *"` (once daily) or
+  trigger `/api/cron/facebook-post` from an external scheduler (cron-job.org, a
+  GitHub Action, …) every 15 min with the `CRON_SECRET` bearer header.
 
 **Env vars** (see `.env.example`): `ENCRYPTION_KEY` (or reuse `AUTH_SECRET`),
 `CRON_SECRET`, optional `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` (only for
