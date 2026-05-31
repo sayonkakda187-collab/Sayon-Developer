@@ -108,9 +108,10 @@ export default async function ArticlePage({ params }: Props) {
     <main>
       {/* TOP ad — first thing in view the moment the article opens. Centered
           and responsive: full width with edge padding on mobile, capped and
-          centered on larger screens. */}
+          centered on larger screens. AdsKeeper reserves min-height 300px for
+          this widget (no layout shift). */}
       <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
-        <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={140} />
+        <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={300} />
       </div>
 
       {/* Immersive hero */}
