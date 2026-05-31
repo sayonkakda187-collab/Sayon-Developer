@@ -8,11 +8,7 @@ const GNEWS_ENDPOINT = "https://gnews.io/api/v4";
 // API returns. See CLAUDE.md → "Trending News / GNews limits".
 export const GNEWS_MAX_PAGE_SIZE = 10;
 
-// Tabs surfaced in the UI. Native GNews top-headlines categories carry just an
-// id; "niche" tabs aren't GNews categories, so they map to a curated search
-// `query` instead (and may pin a country, e.g. Cambodia → kh). Both kinds reuse
-// the same 20-min cache, so clicking between tabs doesn't burn extra quota
-// beyond the first fetch per tab.
+/** Category tabs surfaced in the UI, mapped to GNews top-headlines categories. */
 export const TRENDING_CATEGORIES = [
   { id: "general", label: "Top" },
   { id: "world", label: "World" },
@@ -23,23 +19,8 @@ export const TRENDING_CATEGORIES = [
   { id: "health", label: "Health" },
   { id: "sports", label: "Sports" },
   { id: "entertainment", label: "Entertainment" },
-  // Niches (search-backed). `query` runs through /search; `country` optionally pins region.
-  { id: "politics", label: "Politics", query: "politics OR election OR government OR policy" },
-  { id: "finance", label: "Finance", query: "stock market OR finance OR economy OR inflation OR interest rates" },
-  { id: "ai", label: "AI / Tech", query: "artificial intelligence OR AI OR machine learning OR OpenAI OR chatbot" },
-  { id: "crypto", label: "Crypto", query: "cryptocurrency OR bitcoin OR ethereum OR crypto OR blockchain" },
-  { id: "lifestyle", label: "Lifestyle", query: "lifestyle OR wellness OR travel OR food OR culture" },
-  { id: "cambodia", label: "Cambodia", query: "Cambodia OR Phnom Penh OR Khmer", country: "kh" },
 ] as const;
 export type TrendingCategory = (typeof TRENDING_CATEGORIES)[number]["id"];
-
-/** Niche tab id → curated search query + optional pinned country. */
-const NICHE_QUERIES: Record<string, { query: string; country?: string }> = Object.fromEntries(
-  TRENDING_CATEGORIES.filter((c): c is typeof c & { query: string } => "query" in c).map((c) => [
-    c.id,
-    { query: c.query, country: "country" in c ? (c as { country?: string }).country : undefined },
-  ]),
-);
 
 /** Languages + countries offered in the UI to widen / target coverage. */
 export const TRENDING_LANGUAGES = [
@@ -152,7 +133,7 @@ function nextUtcMidnight(): number {
 }
 
 const LANGS = new Set(["en", "es", "fr", "de", "it", "pt", "nl", "ru", "ar", "zh", "hi", "ja", "uk", "sv", "no", "el", "he", "ro"]);
-const COUNTRIES = new Set(["us", "gb", "ca", "au", "in", "ie", "nz", "fr", "de", "it", "es", "nl", "br", "jp", "sg", "za", "ua", "ru", "cn", "kh"]);
+const COUNTRIES = new Set(["us", "gb", "ca", "au", "in", "ie", "nz", "fr", "de", "it", "es", "nl", "br", "jp", "sg", "za", "ua", "ru", "cn"]);
 const CATEGORIES = new Set(["general", "world", "nation", "business", "technology", "entertainment", "sports", "science", "health"]);
 
 function pick(set: Set<string>, value: string | undefined, fallback: string): string {
@@ -205,18 +186,9 @@ export async function getTrending(opts: {
   page?: number;
 }): Promise<TrendingResult> {
   const lang = pick(LANGS, opts.lang, "en");
-  let country = pick(COUNTRIES, opts.country, "us");
+  const country = pick(COUNTRIES, opts.country, "us");
   const page = Math.min(10, Math.max(1, Math.floor(opts.page ?? 1)));
-
-  // A niche tab (e.g. "ai", "cambodia") isn't a GNews category — resolve it to a
-  // curated search query (and optional pinned country) unless the user typed
-  // their own query, which always wins.
-  let q = (opts.query ?? "").trim().replace(/\s+/g, " ");
-  const niche = !q && opts.category ? NICHE_QUERIES[opts.category] : undefined;
-  if (niche) {
-    q = niche.query;
-    if (niche.country && !opts.country) country = niche.country;
-  }
+  const q = (opts.query ?? "").trim().replace(/\s+/g, " ");
   const isSearch = q.length > 0;
 
   // Free tier can't paginate — short-circuit known-unsupported page>1 requests

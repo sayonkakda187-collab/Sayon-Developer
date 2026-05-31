@@ -5,11 +5,8 @@ import { ArticleForm } from "@/components/admin/ArticleForm";
 export default async function NewArticlePage({
   searchParams,
 }: {
-  searchParams: { title?: string; ref?: string; ai?: string };
+  searchParams: { title?: string; ref?: string };
 }) {
-  // When arriving from AI Assist, the draft is handed off via sessionStorage
-  // (client-only) — the editor reads it on mount. No source text in the URL.
-  const aiHandoff = searchParams.ai === "1";
   const [categories, tags] = await Promise.all([
     prisma.category.findMany({ orderBy: { name: "asc" } }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
@@ -47,7 +44,6 @@ export default async function NewArticlePage({
       categories={categories}
       tags={tags}
       initial={initial}
-      aiHandoff={aiHandoff}
     />
   );
 }
