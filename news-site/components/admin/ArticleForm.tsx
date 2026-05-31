@@ -1,15 +1,21 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type DragEvent } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { markdownComponents } from "@/lib/markdownComponents";
+import { SeoPreview } from "@/components/admin/SeoPreview";
+import { MarkdownToolbar } from "@/components/admin/MarkdownToolbar";
+import { useAutosave, readLocalDraft, type DraftSnapshot } from "@/lib/useAutosave";
+import { countWords, readingTime } from "@/lib/editorUtils";
+import { duplicateArticle } from "@/app/admin/actions";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
 // and both disable while the server action runs — never feels frozen.
-function SubmitButtons() {
+function SubmitButtons({ onSubmitting }: { onSubmitting: () => void }) {
   const { pending } = useFormStatus();
   const [clicked, setClicked] = useState<"draft" | "published" | null>(null);
   const busy = (v: "draft" | "published") => pending && clicked === v;
@@ -19,7 +25,7 @@ function SubmitButtons() {
         type="submit"
         name="status"
         value="draft"
-        onClick={() => setClicked("draft")}
+        onClick={() => { setClicked("draft"); onSubmitting(); }}
         disabled={pending}
         aria-busy={busy("draft")}
         className="adm-btn-ghost"
@@ -32,7 +38,7 @@ function SubmitButtons() {
         type="submit"
         name="status"
         value="published"
-        onClick={() => setClicked("published")}
+        onClick={() => { setClicked("published"); onSubmitting(); }}
         disabled={pending}
         aria-busy={busy("published")}
         className="adm-btn-primary"
@@ -42,6 +48,16 @@ function SubmitButtons() {
         {busy("published") ? "Publishing…" : "Publish"}
       </button>
     </div>
+  );
+}
+
+function AutosavePill({ state, dirty }: { state: "idle" | "saving" | "saved"; dirty: boolean }) {
+  const label = state === "saving" ? "Saving…" : state === "saved" ? "Saved" : dirty ? "Unsaved" : "Up to date";
+  return (
+    <span className={`adm-autosave ${state}`} title="Drafts autosave to this browser as you type">
+      <span className="adm-autosave-dot" aria-hidden />
+      {label}
+    </span>
   );
 }
 
@@ -75,23 +91,72 @@ export function ArticleForm({
   // a research note are ever seeded — never copied source text.
   initial?: { title?: string; content?: string };
 }) {
+  const editorId = article?.id ?? "new";
+  const router = useRouter();
+
+  const [title, setTitle] = useState(article?.title ?? initial?.title ?? "");
+  const [excerpt, setExcerpt] = useState(article?.excerpt ?? "");
   const [content, setContent] = useState(article?.content ?? initial?.content ?? "");
   const [coverImage, setCoverImage] = useState(article?.coverImage ?? "");
+  const [categoryId, setCategoryId] = useState(article?.categoryId ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [uploading, setUploading] = useState<null | "cover" | "inline">(null);
   const [uploadError, setUploadError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [recovered, setRecovered] = useState<DraftSnapshot | null>(null);
+  const [dupPending, startDup] = useTransition();
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const checkedTags = new Set(article?.tagIds ?? []);
+
+  // Snapshot of the values the form started with — used to detect "dirty".
+  const initialKey = useRef(
+    JSON.stringify({
+      title: article?.title ?? initial?.title ?? "",
+      excerpt: article?.excerpt ?? "",
+      content: article?.content ?? initial?.content ?? "",
+      coverImage: article?.coverImage ?? "",
+      categoryId: article?.categoryId ?? "",
+    }),
+  ).current;
+
+  const snapshot: DraftSnapshot = {
+    title, excerpt, content, coverImage, categoryId, savedAt: 0,
+  };
+  const { state, dirty, clear } = useAutosave(editorId, snapshot, initialKey);
+
+  // On mount, offer to restore a newer local draft (crash / accidental reload).
+  useEffect(() => {
+    const local = readLocalDraft(editorId);
+    if (local && local.content !== content && (local.title || local.content)) {
+      setRecovered(local);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function applyRecovered() {
+    if (!recovered) return;
+    setTitle(recovered.title);
+    setExcerpt(recovered.excerpt);
+    setContent(recovered.content);
+    setCoverImage(recovered.coverImage);
+    setCategoryId(recovered.categoryId);
+    setRecovered(null);
+  }
+  function dismissRecovered() {
+    clear();
+    setRecovered(null);
+  }
+
+  const words = countWords(content);
+  const mins = readingTime(words);
 
   async function uploadFile(file: File): Promise<string | null> {
     setUploadError("");
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-    const data = (await res.json().catch(() => ({}))) as {
-      url?: string;
-      error?: string;
-    };
+    const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
     if (!res.ok || !data.url) {
       setUploadError(data.error ?? "Upload failed.");
       return null;
@@ -109,6 +174,10 @@ export function ArticleForm({
     if (url) setCoverImage(url);
   }
 
+  function insertImageMarkdown(name: string, url: string) {
+    setContent((c) => `${c}${c && !c.endsWith("\n") ? "\n\n" : ""}![${name}](${url})\n`);
+  }
+
   async function onInlineSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -116,29 +185,94 @@ export function ArticleForm({
     setUploading("inline");
     const url = await uploadFile(file);
     setUploading(null);
-    if (url) {
-      setContent(
-        (c) =>
-          `${c}${c && !c.endsWith("\n") ? "\n\n" : ""}![${file.name}](${url})\n`,
-      );
-    }
+    if (url) insertImageMarkdown(file.name, url);
+  }
+
+  async function onDrop(e: DragEvent<HTMLTextAreaElement>) {
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    e.preventDefault();
+    setDragOver(false);
+    setUploading("inline");
+    const url = await uploadFile(file);
+    setUploading(null);
+    if (url) insertImageMarkdown(file.name, url);
+  }
+
+  // ⌘B / ⌘I shortcuts in the textarea.
+  function onContentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k !== "b" && k !== "i") return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const [s, en] = [el.selectionStart, el.selectionEnd];
+    const sel = content.slice(s, en);
+    const mark = k === "b" ? "**" : "_";
+    const next = content.slice(0, s) + mark + sel + mark + content.slice(en);
+    setContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(s + mark.length, en + mark.length);
+    });
+  }
+
+  function onDuplicate() {
+    if (!article?.id) return;
+    startDup(async () => {
+      const res = await duplicateArticle(article.id);
+      if (res.ok) router.push(`/admin/articles/${res.id}/edit`);
+    });
   }
 
   return (
-    <form action={action} className="space-y-6">
+    <form action={action} className="space-y-6" onSubmit={() => clear()}>
       {article?.id && <input type="hidden" name="id" value={article.id} />}
+      {/* Controlled values mirrored into hidden inputs are unnecessary because
+          each field below carries its own name; FormData reads them directly. */}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="adm-serif text-2xl font-bold text-fg">
-          {article?.id ? "Edit article" : "New article"}
+      <div className="adm-editor-head">
+        <div className="flex items-center gap-3">
+          <h1 className="adm-serif text-2xl font-bold text-fg" style={{ margin: 0 }}>
+            {article?.id ? "Edit article" : "New article"}
+          </h1>
           {article && (
-            <span className={`adm-pill ${article.status === "published" ? "" : "amber"}`} style={{ marginLeft: 12, verticalAlign: "middle" }}>
+            <span className={`adm-pill ${article.status === "published" ? "" : "amber"}`}>
               {article.status}
             </span>
           )}
-        </h1>
-        <SubmitButtons />
+          <AutosavePill state={state} dirty={dirty} />
+        </div>
+        <div className="flex items-center gap-2">
+          {article?.id && (
+            <button
+              type="button"
+              className="adm-btn-ghost"
+              onClick={onDuplicate}
+              disabled={dupPending}
+              style={{ minHeight: 44 }}
+              title="Create a new draft from this article"
+            >
+              {dupPending && <span className="adm-spinner" aria-hidden />}
+              {dupPending ? "Duplicating…" : "Duplicate"}
+            </button>
+          )}
+          <SubmitButtons onSubmitting={() => clear()} />
+        </div>
       </div>
+
+      {recovered && (
+        <div className="adm-recover" role="alert">
+          <div>
+            <strong>Unsaved changes found.</strong> We recovered a draft autosaved in this
+            browser{recovered.savedAt ? ` (${new Date(recovered.savedAt).toLocaleString()})` : ""}.
+          </div>
+          <div className="adm-recover-actions">
+            <button type="button" className="adm-btn-primary" onClick={applyRecovered}>Restore</button>
+            <button type="button" className="adm-btn-ghost" onClick={dismissRecovered}>Discard</button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main column */}
@@ -148,30 +282,31 @@ export function ArticleForm({
             <input
               name="title"
               required
-              defaultValue={article?.title ?? initial?.title}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               className={`${inputClass} mt-1 text-lg`}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-fg-muted">
-              Excerpt
-            </label>
+            <label className="block text-sm font-medium text-fg-muted">Excerpt</label>
             <textarea
               name="excerpt"
               required
               rows={2}
-              defaultValue={article?.excerpt}
+              value={excerpt}
+              onChange={(e) => setExcerpt(e.target.value)}
               className={`${inputClass} mt-1`}
             />
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-fg-muted">
-                Content (Markdown)
-              </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-fg-muted">Content (Markdown)</label>
               <div className="flex items-center gap-3 text-sm">
+                <span className="adm-wordcount" aria-live="polite">
+                  {words.toLocaleString()} word{words === 1 ? "" : "s"} · {mins} min read
+                </span>
                 <button
                   type="button"
                   onClick={() => inlineInputRef.current?.click()}
@@ -179,13 +314,7 @@ export function ArticleForm({
                 >
                   {uploading === "inline" ? "Uploading…" : "Insert image"}
                 </button>
-                <input
-                  ref={inlineInputRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={onInlineSelected}
-                />
+                <input ref={inlineInputRef} type="file" accept="image/*" hidden onChange={onInlineSelected} />
                 <button
                   type="button"
                   onClick={() => setShowPreview((p) => !p)}
@@ -196,14 +325,13 @@ export function ArticleForm({
               </div>
             </div>
 
+            {!showPreview && <MarkdownToolbar textareaRef={contentRef} onChange={setContent} />}
+
             {showPreview ? (
               <div className="mt-1 min-h-[20rem] rounded-lg border border-border bg-surface px-4 py-3">
                 {content.trim() ? (
                   <div className="text-fg-muted">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={markdownComponents}
-                    >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {content}
                     </ReactMarkdown>
                   </div>
@@ -213,56 +341,55 @@ export function ArticleForm({
               </div>
             ) : (
               <textarea
+                ref={contentRef}
                 name="content"
                 rows={18}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Write your story in Markdown…"
-                className={`${inputClass} mt-1 font-mono text-sm leading-6`}
+                onKeyDown={onContentKeyDown}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                placeholder="Write your story in Markdown… (drag an image here to upload)"
+                className={`${inputClass} mt-1 font-mono text-sm leading-6 ${dragOver ? "adm-dragover" : ""}`}
               />
             )}
-            {showPreview && <input type="hidden" name="content" value={content} />}
 
-            {uploadError && (
-              <p className="mt-2 text-sm text-red-600">
-                {uploadError}
-              </p>
-            )}
+            {uploadError && <p className="mt-2 text-sm text-red-600">{uploadError}</p>}
+          </div>
+
+          {/* SEO preview */}
+          <div>
+            <label className="block text-sm font-medium text-fg-muted">Search &amp; share preview</label>
+            <div className="mt-1">
+              <SeoPreview title={title} slug="" excerpt={excerpt} coverImage={coverImage} />
+            </div>
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-fg-muted">
-              Category
-            </label>
+            <label className="block text-sm font-medium text-fg-muted">Category</label>
             <select
               name="categoryId"
-              defaultValue={article?.categoryId ?? ""}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
               className={`${inputClass} mt-1`}
             >
               <option value="">— None —</option>
               {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-fg-muted">
-              Cover image
-            </label>
+            <label className="block text-sm font-medium text-fg-muted">Cover image</label>
             {coverImage && (
               <div className="relative mt-2 overflow-hidden rounded-lg border border-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={coverImage}
-                  alt="Cover preview"
-                  className="aspect-[16/9] w-full object-cover"
-                />
+                <img src={coverImage} alt="Cover preview" className="aspect-[16/9] w-full object-cover" />
               </div>
             )}
             <input
@@ -275,12 +402,7 @@ export function ArticleForm({
             />
             <label className="mt-2 inline-block cursor-pointer text-sm text-fg-muted transition-colors hover:text-fg">
               {uploading === "cover" ? "Uploading…" : "Upload cover image"}
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={onCoverSelected}
-              />
+              <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
             </label>
           </div>
 

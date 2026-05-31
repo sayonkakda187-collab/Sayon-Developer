@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, clearSessionCookie } from "@/lib/auth";
 import { slugify, uniqueArticleSlug } from "@/lib/slug";
@@ -94,6 +95,90 @@ export async function deleteArticle(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (id) await prisma.article.delete({ where: { id } });
   redirect("/admin/articles");
+}
+
+/**
+ * Duplicate an article as a fresh DRAFT template: copies excerpt, body, cover,
+ * category and tags, prefixes the title with "Copy of", generates a new unique
+ * slug, and resets views/publishedAt. Returns the new id so the caller can open
+ * it in the editor.
+ */
+export async function duplicateArticle(id: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  await requireAdmin();
+  if (!id) return { ok: false, error: "Missing article id." };
+  const source = await prisma.article.findUnique({
+    where: { id },
+    include: { tags: { select: { id: true } } },
+  });
+  if (!source) return { ok: false, error: "Article not found." };
+
+  const title = `Copy of ${source.title}`.slice(0, 200);
+  const slug = await uniqueArticleSlug(title);
+  const copy = await prisma.article.create({
+    data: {
+      title,
+      slug,
+      excerpt: source.excerpt,
+      content: source.content,
+      coverImage: source.coverImage,
+      categoryId: source.categoryId,
+      status: "draft",
+      tags: { connect: source.tags.map((t) => ({ id: t.id })) },
+    },
+    select: { id: true },
+  });
+  revalidatePath("/admin/articles");
+  return { ok: true, id: copy.id };
+}
+
+/**
+ * Bulk operation over selected articles: publish, unpublish, or delete. Each
+ * re-checks admin. Publish sets publishedAt when first published; unpublish
+ * flips status to draft (keeps the row). Returns a count for the toast.
+ */
+export async function bulkArticleAction(
+  ids: string[],
+  action: "publish" | "unpublish" | "delete",
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  await requireAdmin();
+  const clean = [...new Set(ids.filter(Boolean))];
+  if (clean.length === 0) return { ok: false, error: "No articles selected." };
+
+  try {
+    if (action === "delete") {
+      const res = await prisma.article.deleteMany({ where: { id: { in: clean } } });
+      revalidatePath("/admin/articles");
+      return { ok: true, count: res.count };
+    }
+
+    if (action === "unpublish") {
+      const res = await prisma.article.updateMany({
+        where: { id: { in: clean } },
+        data: { status: "draft", publishedAt: null },
+      });
+      revalidatePath("/admin/articles");
+      return { ok: true, count: res.count };
+    }
+
+    // publish: only flip drafts, and stamp publishedAt for those missing one.
+    const toPublish = await prisma.article.findMany({
+      where: { id: { in: clean } },
+      select: { id: true, publishedAt: true },
+    });
+    const now = new Date();
+    await prisma.$transaction(
+      toPublish.map((a) =>
+        prisma.article.update({
+          where: { id: a.id },
+          data: { status: "published", publishedAt: a.publishedAt ?? now },
+        }),
+      ),
+    );
+    revalidatePath("/admin/articles");
+    return { ok: true, count: toPublish.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Bulk action failed." };
+  }
 }
 
 export async function createCategory(formData: FormData) {

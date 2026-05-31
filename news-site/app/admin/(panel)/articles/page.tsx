@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { deleteArticle } from "@/app/admin/actions";
 import { ArticlesList } from "@/components/admin/ArticlesList";
+import { ToastProvider } from "@/components/admin/Toast";
 import { PlusIcon } from "@/components/admin/icons";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminArticlesPage() {
   const articles = await prisma.article.findMany({
@@ -60,7 +62,9 @@ export default async function AdminArticlesPage() {
           </p>
         </div>
       ) : (
-        <ArticlesList items={items} categories={categories} deleteAction={deleteArticle} />
+        <ToastProvider>
+          <ArticlesList items={items} categories={categories} />
+        </ToastProvider>
       )}
     </div>
   );

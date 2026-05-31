@@ -6,6 +6,9 @@ import { formatDate, formatNumber } from "@/lib/site";
 import { StatGauge } from "./StatGauge";
 import { ArticleRow, categoryColor } from "./ArticleRow";
 import { DashboardControls } from "./DashboardControls";
+import { ViewsChart } from "./ViewsChart";
+import { timeAgo } from "@/lib/site";
+import { PlusIcon, CommentsIcon, PencilIcon } from "./icons";
 
 type Article = {
   id: string;
@@ -18,6 +21,14 @@ type Article = {
   createdAt: string;
 };
 type Cat = { id: string; name: string; count: number };
+type RecentComment = {
+  id: string;
+  authorName: string;
+  approved: boolean;
+  createdAt: string;
+  articleTitle: string;
+  articleId: string | null;
+};
 
 export type DashboardProps = {
   totalArticles: number;
@@ -29,6 +40,8 @@ export type DashboardProps = {
   totalViews: number;
   cats: Cat[];
   articles: Article[];
+  viewsSeries: { date: string; views: number }[];
+  recentComments: RecentComment[];
 };
 
 function frac(value: number, ref: number) {
@@ -94,53 +107,75 @@ export function DashboardCharts(props: DashboardProps) {
         ))}
       </div>
 
-      {/* Row 1 — Article views + Top categories */}
+      {/* Quick actions */}
+      <div className="adm-quickactions adm-rise" style={{ animationDelay: "0.09s" }}>
+        <Link href="/admin/articles/new" className="adm-qa">
+          <span className="adm-qa-ic" style={{ background: "rgba(22,163,74,.12)", color: "#16a34a" }}><PlusIcon className="h-[18px] w-[18px]" /></span>
+          <span><b>New article</b><s>Start writing</s></span>
+        </Link>
+        <Link href="/admin/comments" className="adm-qa">
+          <span className="adm-qa-ic" style={{ background: "rgba(37,99,235,.12)", color: "#2563eb" }}><CommentsIcon className="h-[18px] w-[18px]" /></span>
+          <span><b>Review comments</b><s>{props.pendingComments} pending</s></span>
+        </Link>
+        <Link href="/admin/articles" className="adm-qa">
+          <span className="adm-qa-ic" style={{ background: "rgba(245,158,11,.14)", color: "#f59e0b" }}><PencilIcon className="h-[18px] w-[18px]" /></span>
+          <span><b>Manage articles</b><s>{props.draftArticles} draft{props.draftArticles === 1 ? "" : "s"}</s></span>
+        </Link>
+      </div>
+
+      {/* Row 1 — Real views-over-time chart + Top articles by views */}
       <div className="adm-grid-2 adm-rise" style={{ animationDelay: "0.12s" }}>
+        <ViewsChart series={props.viewsSeries} days={days} />
+
         <div className="adm-card adm-card-pad">
-          <div className="adm-card-title">Article views</div>
-          <div className="adm-card-sub">Top published articles by total views</div>
+          <div className="adm-card-title">Top articles by views</div>
+          <div className="adm-card-sub">All-time leaders</div>
           {noWindowArticles ? (
-            <p className="adm-card-sub" style={{ marginTop: 16 }}>No views in this range.</p>
+            <p className="adm-card-sub" style={{ marginTop: 16 }}>No views yet.</p>
           ) : (
-            <>
-              <div className="adm-vbars adm-only-desktop">
-                {topByViews.map((a) => {
-                  const color = categoryColor(a.category?.name);
-                  return (
-                    <div key={a.id} className="adm-bcol" title={`${a.title} — ${formatNumber(a.sv)} views`}>
-                      <div className="adm-bval">{formatNumber(a.sv)}</div>
-                      <div
-                        className="adm-bbar adm-bbar-live"
-                        style={{
-                          height: `${Math.max(2, Math.round((a.sv / maxViews) * 160))}px`,
-                          background: `linear-gradient(180deg, ${color}, rgba(0,0,0,.04)), ${color}`,
-                        }}
-                      />
-                      <div className="adm-bname">{a.title.split(" ").slice(0, 2).join(" ")}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="adm-bars adm-only-mobile">
-                {topByViews.map((a) => (
-                  <div key={a.id} className="adm-bar-row">
-                    <span className="adm-bl">{a.title.split(" ").slice(0, 2).join(" ")}</span>
-                    <div className="adm-bar-track">
-                      <div
-                        className="adm-bar-fill adm-bar-fill-live"
-                        style={{ width: `${Math.round((a.sv / maxViews) * 100)}%`, background: categoryColor(a.category?.name) }}
-                      />
-                    </div>
-                    <span className="adm-bv">{formatNumber(a.sv)}</span>
+            <div className="adm-bars" style={{ marginTop: 12 }}>
+              {topByViews.map((a) => (
+                <div key={a.id} className="adm-bar-row">
+                  <span className="adm-bl" title={a.title}>{a.title.split(" ").slice(0, 3).join(" ")}</span>
+                  <div className="adm-bar-track">
+                    <div className="adm-bar-fill adm-bar-fill-live" style={{ width: `${Math.round((a.sv / maxViews) * 100)}%`, background: categoryColor(a.category?.name) }} />
                   </div>
-                ))}
-              </div>
-              <div className="adm-legend-mini adm-mini-legend">
-                <span><i style={{ background: "#16a34a" }} />Business</span>
-                <span><i style={{ background: "#f59e0b" }} />Technology</span>
-                <span><i style={{ background: "#a855f7" }} />World</span>
-              </div>
-            </>
+                  <span className="adm-bv">{formatNumber(a.sv)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Row 1.5 — Recent activity (pending comments) + Top categories */}
+      <div className="adm-grid-2 adm-rise" style={{ animationDelay: "0.15s" }}>
+        <div className="adm-card adm-card-pad">
+          <div className="adm-list-head">
+            <div className="adm-card-title">Recent activity</div>
+            <Link href="/admin/comments" className="adm-link">Moderate</Link>
+          </div>
+          {props.recentComments.length === 0 ? (
+            <p className="adm-card-sub" style={{ marginTop: 12 }}>No comments yet.</p>
+          ) : (
+            <div className="adm-activity">
+              {props.recentComments.map((c) => (
+                <div key={c.id} className="adm-activity-row">
+                  <span className={`adm-activity-dot ${c.approved ? "ok" : "pending"}`} aria-hidden />
+                  <div className="adm-activity-body">
+                    <div className="adm-activity-top">
+                      <b>{c.authorName}</b>
+                      <span className={`adm-pill ${c.approved ? "" : "amber"}`} style={{ marginLeft: 6 }}>
+                        {c.approved ? "approved" : "pending"}
+                      </span>
+                    </div>
+                    <div className="adm-activity-sub">
+                      on “{c.articleTitle}” · {timeAgo(c.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
