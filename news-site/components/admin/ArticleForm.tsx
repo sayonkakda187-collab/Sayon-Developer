@@ -13,7 +13,8 @@ import { countWords, readingTime } from "@/lib/editorUtils";
 import { duplicateArticle } from "@/app/admin/actions";
 import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
 import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
-import { SparklesIcon, CloseIcon, ShareIcon } from "@/components/admin/icons";
+import { CoverCropModal } from "@/components/admin/CoverCropModal";
+import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon } from "@/components/admin/icons";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -110,6 +111,12 @@ export function ArticleForm({
   const [uploading, setUploading] = useState<null | "cover" | "inline">(null);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  // Cover cropper: `cropSrc` is the image being adjusted (object URL for a fresh
+  // file, or the existing cover URL when re-adjusting). `cropUploading` disables
+  // Apply while the cropped blob uploads.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const cropObjectUrl = useRef<string | null>(null);
+  const [cropUploading, setCropUploading] = useState(false);
   const [recovered, setRecovered] = useState<DraftSnapshot | null>(null);
   const [dupPending, startDup] = useTransition();
   const inlineInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +173,13 @@ export function ArticleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Release any object URL created for the cropper when unmounting.
+  useEffect(() => {
+    return () => {
+      if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
+    };
+  }, []);
+
   function applyRecovered() {
     if (!recovered) return;
     setTitle(recovered.title);
@@ -196,14 +210,66 @@ export function ArticleForm({
     return data.url;
   }
 
-  async function onCoverSelected(e: ChangeEvent<HTMLInputElement>) {
+  // Open the crop/adjust modal for a freshly-picked local file (don't upload the
+  // raw file — we upload the cropped result on Apply).
+  function openCropperForFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please choose an image file.");
+      return;
+    }
+    setUploadError("");
+    if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
+    const url = URL.createObjectURL(file);
+    cropObjectUrl.current = url;
+    setCropSrc(url);
+  }
+
+  function onCoverSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    setUploading("cover");
+    if (file) openCropperForFile(file);
+  }
+
+  function onCoverDrop(e: DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) openCropperForFile(file);
+  }
+
+  // Re-adjust the cover that's already set (crops the existing image).
+  function adjustExistingCover() {
+    if (!coverImage) return;
+    if (cropObjectUrl.current) {
+      URL.revokeObjectURL(cropObjectUrl.current);
+      cropObjectUrl.current = null;
+    }
+    setUploadError("");
+    setCropSrc(coverImage);
+  }
+
+  function closeCropper() {
+    if (cropObjectUrl.current) {
+      URL.revokeObjectURL(cropObjectUrl.current);
+      cropObjectUrl.current = null;
+    }
+    setCropSrc(null);
+  }
+
+  // Apply: upload the canvas-cropped JPEG through the existing endpoint and set
+  // it as the cover. On failure we keep the previous cover and show the error.
+  async function onCropApply(blob: Blob) {
+    setCropUploading(true);
+    setUploadError("");
+    const file = new File([blob], `cover-${Date.now()}.jpg`, { type: "image/jpeg" });
     const url = await uploadFile(file);
-    setUploading(null);
-    if (url) setCoverImage(url);
+    setCropUploading(false);
+    if (url) {
+      setCoverImage(url);
+      closeCropper();
+    }
+    // If upload failed, uploadFile already set uploadError; keep the modal open
+    // so the user can retry or cancel without losing their framing.
   }
 
   function insertImageMarkdown(name: string, url: string) {
@@ -444,24 +510,50 @@ export function ArticleForm({
 
           <div>
             <label className="block text-sm font-medium text-fg-muted">Cover image</label>
-            {coverImage && (
-              <div className="relative mt-2 overflow-hidden rounded-lg border border-border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={coverImage} alt="Cover preview" className="aspect-[16/9] w-full object-cover" />
+            {coverImage ? (
+              <div className="adm-cover-box">
+                <div className="adm-cover-preview">
+                  {/* 1.91:1 mirrors the OG/share crop the cropper produces. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={coverImage} alt="Cover preview" className="adm-cover-img" />
+                </div>
+                <div className="adm-cover-acts">
+                  <button type="button" className="adm-btn-ghost adm-cover-btn" onClick={adjustExistingCover}>
+                    Adjust / reframe
+                  </button>
+                  <label className="adm-btn-ghost adm-cover-btn" style={{ cursor: "pointer" }}>
+                    Replace
+                    <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
+                  </label>
+                  <button type="button" className="adm-cover-remove" onClick={() => setCoverImage("")}>
+                    Remove
+                  </button>
+                </div>
               </div>
+            ) : (
+              <label
+                className={`adm-cover-drop ${dragOver ? "drag" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onCoverDrop}
+              >
+                <span className="adm-cover-drop-ic" aria-hidden>
+                  <ImageIcon className="h-6 w-6" />
+                </span>
+                <strong>{uploading === "cover" ? "Uploading…" : "Upload or drop a cover image"}</strong>
+                <span className="adm-cover-drop-sub">You’ll crop &amp; reframe it before it’s saved</span>
+                <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
+              </label>
             )}
             <input
               type="text"
               name="coverImage"
               value={coverImage}
               onChange={(e) => setCoverImage(e.target.value)}
-              placeholder="Image URL or upload below"
+              placeholder="…or paste an image URL"
               className={`${inputClass} mt-2`}
             />
-            <label className="mt-2 inline-block cursor-pointer text-sm text-fg-muted transition-colors hover:text-fg">
-              {uploading === "cover" ? "Uploading…" : "Upload cover image"}
-              <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
-            </label>
+            {uploadError && <p className="adm-cover-err">{uploadError}</p>}
           </div>
 
           <div>
@@ -497,6 +589,16 @@ export function ArticleForm({
 
     {shareOpen && article?.id && (
       <SharePromoteModal articleId={article.id} onClose={() => setShareOpen(false)} />
+    )}
+
+    {cropSrc && (
+      <CoverCropModal
+        src={cropSrc}
+        busy={cropUploading}
+        onApply={onCropApply}
+        onCancel={closeCropper}
+        onExportError={(msg) => { setUploadError(msg); closeCropper(); }}
+      />
     )}
     </>
   );

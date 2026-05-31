@@ -105,6 +105,15 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
 - **Route protection:** `app/admin/(panel)/layout.tsx` calls `requireAdmin()`; the login page lives outside that group so it isn't gated. Admin API routes check `getSessionUser()` directly.
 - **Mutations:** Server Actions in `app/admin/actions.ts` (each re-checks `requireAdmin`).
 - **Image uploads:** **Vercel Blob** when `BLOB_READ_WRITE_TOKEN` is set (required on Vercel — read-only filesystem); otherwise a `/public/uploads` fallback for local dev. Blob public URLs are allow-listed in `next.config.mjs`.
+- **Cover image cropper:** selecting/dropping a cover (or **Adjust / reframe** on an
+  existing one) opens `components/admin/CoverCropModal.tsx` — a **dependency-free**
+  cropper (Pointer Events: drag to reposition, pinch / wheel / slider to zoom;
+  fully touch-capable). On **Apply** it canvas-crops to a **1200px-wide JPEG**
+  (q≈0.9) and uploads that via the **existing `/api/admin/upload`** flow, setting
+  it as `coverImage`. Default aspect is **1.91:1 (1200×630)** — the OG / Facebook
+  share-card ratio — with **16:9** and **4:3** presets; so the chosen framing is
+  exactly what the article hero and the shared link show. Cancel keeps the prior
+  cover; a tainted-canvas / upload failure shows a clear error and keeps it too.
 
 ## Ads (AdsKeeper)
 
