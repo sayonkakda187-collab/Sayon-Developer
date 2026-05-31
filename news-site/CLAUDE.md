@@ -202,6 +202,39 @@ under a Page-token flow, grant `pages_manage_posts` + `pages_read_engagement`
 the Page ID + token into the Connect dialog. Posting to Pages you don't own (or
 beyond dev mode) requires **App Review** for those permissions.
 
+## Trending News (GNews discovery)
+
+Admin-only tool to discover trending headlines and start an **original** draft
+from one. **Inspiration only** — it surfaces headlines + short snippets + the
+source link; it never copies article text into posts (copyright). Distribution
+of full content is the writer's job, in their own words.
+
+**Security / quota**
+- `GNEWS_API_KEY` is read **server-side only** (`lib/gnews.ts`) and never sent to
+  the browser. Get a free key at **gnews.io** (free tier: **100 requests/day**).
+- Results are **cached in-memory ~20 min** per category/query so browsing and
+  tab-switching reuse one upstream call instead of spending the daily quota.
+- Rate-limit (429/403), bad-key (401), and network errors map to friendly
+  messages; the page degrades to an "add your key" note when unset.
+
+**Code map**
+- `lib/gnews.ts` — server-only GNews client: `fetchTrending({category, query})`
+  → `top-headlines` (category tabs) or `/search` (keyword). Returns a clean,
+  typed `TrendingItem[]` (title, snippet, source, url, image, publishedAt) —
+  deliberately **not** GNews's full `content` field.
+- `app/api/admin/trending/route.ts` — admin-only (reuses `getSessionUser()`),
+  returns clean JSON; the key stays on the server.
+- `app/admin/(panel)/trending/page.tsx` + `components/admin/TrendingNews.tsx` —
+  category chips + search, responsive card grid, loading skeletons, empty/error
+  states, and an always-visible "write original content" note.
+- **"Write article about this"** links to `/admin/articles/new?title=…&ref=…`,
+  **reusing the existing editor/`saveArticle` flow** (no separate publish path).
+  The new draft is seeded with the headline as a working title and a *research
+  note* linking the source (to delete before publishing) — **no source text is
+  copied** into the body.
+
+**Env:** `GNEWS_API_KEY` (server-side; add in Vercel for Production + Preview).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
