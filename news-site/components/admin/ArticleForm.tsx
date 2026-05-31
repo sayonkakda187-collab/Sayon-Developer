@@ -12,7 +12,8 @@ import { useAutosave, readLocalDraft, type DraftSnapshot } from "@/lib/useAutosa
 import { countWords, readingTime } from "@/lib/editorUtils";
 import { duplicateArticle } from "@/app/admin/actions";
 import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
-import { SparklesIcon, CloseIcon } from "@/components/admin/icons";
+import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
+import { SparklesIcon, CloseIcon, ShareIcon } from "@/components/admin/icons";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -132,6 +133,8 @@ export function ArticleForm({
   const { state, dirty, clear } = useAutosave(editorId, snapshot, initialKey);
 
   const [aiNotice, setAiNotice] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const isPublished = article?.status === "published";
 
   // On mount: first honor an AI Assist handoff (sessionStorage, one-shot), then
   // otherwise offer to restore a locally-autosaved draft.
@@ -255,6 +258,7 @@ export function ArticleForm({
   }
 
   return (
+    <>
     <form action={action} className="space-y-6" onSubmit={() => clear()}>
       {article?.id && <input type="hidden" name="id" value={article.id} />}
       {/* Controlled values mirrored into hidden inputs are unnecessary because
@@ -273,6 +277,18 @@ export function ArticleForm({
           <AutosavePill state={state} dirty={dirty} />
         </div>
         <div className="flex items-center gap-2">
+          {isPublished && article?.id && (
+            <button
+              type="button"
+              className="adm-btn-ghost"
+              onClick={() => setShareOpen(true)}
+              style={{ minHeight: 44 }}
+              title="Share / promote this published article"
+            >
+              <ShareIcon className="h-[16px] w-[16px]" />
+              Share
+            </button>
+          )}
           {article?.id && (
             <button
               type="button"
@@ -478,5 +494,10 @@ export function ArticleForm({
         </div>
       </div>
     </form>
+
+    {shareOpen && article?.id && (
+      <SharePromoteModal articleId={article.id} onClose={() => setShareOpen(false)} />
+    )}
+    </>
   );
 }

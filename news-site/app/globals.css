@@ -1285,3 +1285,58 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   .adm-ai-headline { flex-direction: column; align-items: stretch; }
   .adm-ai-headline-acts { justify-content: flex-end; }
 }
+
+/* ── Share / Promote panel ───────────────────────────────────────────────────
+ * Post-publish + anytime modal: cover preview, copy/download image, headline,
+ * link, editable caption, "Copy everything" + "Share to Facebook". */
+.adm-share-modal { max-width: 540px; display: flex; flex-direction: column; padding: 0; }
+.adm-share-modal .adm-modal-head { position: sticky; top: 0; background: var(--adm-card); z-index: 2; border-radius: var(--adm-radius) var(--adm-radius) 0 0; }
+.adm-share-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.adm-share-spark { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none; border-radius: 10px; background: linear-gradient(135deg, #1877f2, #0a56c2); color: #fff; }
+.adm-share-sub { font-size: 12.5px; color: var(--adm-muted); margin: 2px 0 0; }
+.adm-share-body { gap: 16px; }
+
+/* Cover preview — 1.91:1 to mirror Facebook's link-share crop. */
+.adm-share-cover { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--adm-bd); background: var(--adm-soft, rgba(0,0,0,0.03)); }
+.adm-share-cover-img { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; }
+.adm-share-cover-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; aspect-ratio: 1.91 / 1; color: var(--adm-muted-2); font-size: 12.5px; }
+.adm-share-cover-acts { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.adm-share-imgbtn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 9px; cursor: pointer;
+  font-size: 12px; font-weight: 600; border: none; color: #fff; background: rgba(8,12,22,0.6); backdrop-filter: blur(4px);
+}
+.adm-share-imgbtn:hover { background: rgba(8,12,22,0.8); }
+.adm-share-imgbtn:disabled { opacity: 0.7; cursor: default; }
+
+.adm-share-field { display: flex; flex-direction: column; gap: 7px; }
+.adm-share-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--adm-muted-2); text-transform: uppercase; letter-spacing: 0.3px; }
+.adm-share-readout {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--adm-bd);
+  border-radius: 10px; background: var(--adm-soft, rgba(0,0,0,0.02)); min-width: 0;
+}
+.adm-share-headline { font-size: 14px; font-weight: 600; color: var(--adm-ink); line-height: 1.4; flex: 1; min-width: 0; }
+.adm-share-url { font-size: 13px; color: var(--adm-green); text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-share-url:hover { text-decoration: underline; }
+.adm-share-copy {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 8px; flex: none; cursor: pointer;
+  font-size: 12px; font-weight: 600; border: 1px solid var(--adm-bd); background: var(--adm-card); color: var(--adm-muted);
+  transition: color 0.15s, border-color 0.15s;
+}
+.adm-share-copy:hover { color: var(--adm-ink); border-color: var(--adm-muted-2); }
+
+.adm-share-caption { position: relative; }
+.adm-share-textarea { width: 100%; resize: vertical; min-height: 110px; line-height: 1.5; font-size: 13.5px; padding-bottom: 40px; }
+.adm-share-caption-copy { position: absolute; right: 8px; bottom: 8px; background: var(--adm-card); }
+.adm-share-note { font-size: 12px; color: var(--adm-muted); line-height: 1.5; margin: 0; }
+.adm-share-hint { text-align: center; padding: 14px; color: var(--adm-muted); }
+
+.adm-share-modal .adm-modal-foot { position: sticky; bottom: 0; background: var(--adm-card); padding: 14px 18px; border-top: 1px solid var(--adm-bd); margin: 0; border-radius: 0 0 var(--adm-radius) var(--adm-radius); }
+.adm-share-foot { gap: 10px; }
+.adm-share-fb { background: #1877f2; }
+.adm-share-fb:hover { background: #0a56c2; }
+[data-adm-theme="dark"] .admin-shell .adm-share-fb { background: #1877f2; color: #fff; }
+
+@media (max-width: 560px) {
+  .adm-share-foot { flex-direction: column-reverse; align-items: stretch; }
+  .adm-share-foot .adm-btn-ghost, .adm-share-foot .adm-btn-primary { width: 100%; justify-content: center; }
+}
