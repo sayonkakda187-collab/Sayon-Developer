@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDate, formatNumber } from "@/lib/site";
@@ -18,60 +18,106 @@ type Item = {
   publishedAt: string | null;
   createdAt: string;
 };
+type Row = Item & { snippet?: string };
 
 const STATUS_FILTERS = ["All", "Published", "Drafts"] as const;
-const SORTS = [
+const BASE_SORTS = [
   { id: "newest", label: "Newest" },
   { id: "views", label: "Most views" },
   { id: "title", label: "Title A–Z" },
 ] as const;
-type SortId = (typeof SORTS)[number]["id"];
+type SortId = "relevance" | (typeof BASE_SORTS)[number]["id"];
 const PER_PAGE = 15;
 
 export function ArticlesList({
   items,
   categories,
+  initialQuery = "",
 }: {
   items: Item[];
   categories: string[];
+  initialQuery?: string;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<string>("All");
   const [category, setCategory] = useState<string>("All");
-  const [sort, setSort] = useState<SortId>("newest");
+  const [sort, setSort] = useState<SortId>(initialQuery.trim() ? "relevance" : "newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, startTransition] = useTransition();
 
+  // Server-side search: when a query is present we hit the full multi-field
+  // search (title/excerpt/content/category/tags, ranked) instead of filtering
+  // the preloaded list — so body-content matches and snippets are covered.
+  const [serverResults, setServerResults] = useState<Row[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqId = useRef(0);
+
+  const isSearch = query.trim().length >= 2;
+
+  // Debounced fetch when the query changes.
+  useEffect(() => {
+    const term = query.trim();
+    if (debounce.current) clearTimeout(debounce.current);
+    if (term.length < 2) {
+      setServerResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounce.current = setTimeout(async () => {
+      const id = ++reqId.current;
+      try {
+        const res = await fetch(`/api/admin/articles/search?q=${encodeURIComponent(term)}&limit=100`);
+        const data = await res.json();
+        if (id === reqId.current) {
+          setServerResults(Array.isArray(data.results) ? (data.results as Row[]) : []);
+        }
+      } catch {
+        if (id === reqId.current) setServerResults([]);
+      } finally {
+        if (id === reqId.current) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [query]);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let rows = items.filter((a) => {
+    const source: Row[] = isSearch ? serverResults ?? [] : items;
+    const rows = source.filter((a) => {
       if (status === "Published" && a.status !== "published") return false;
       if (status === "Drafts" && a.status !== "draft") return false;
       if (category !== "All" && a.category?.name !== category) return false;
-      if (q && !a.title.toLowerCase().includes(q)) return false;
       return true;
     });
-    rows = [...rows].sort((a, b) => {
+    // Relevance order (server-ranked) is preserved unless an explicit sort wins.
+    if (sort === "relevance") return rows;
+    return [...rows].sort((a, b) => {
       if (sort === "views") return b.views - a.views;
       if (sort === "title") return a.title.localeCompare(b.title);
       return (Date.parse(b.publishedAt ?? b.createdAt) || 0) - (Date.parse(a.publishedAt ?? a.createdAt) || 0);
     });
-    return rows;
-  }, [items, query, status, category, sort]);
+  }, [items, serverResults, isSearch, status, category, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const safePage = Math.min(page, pageCount);
   const shown = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
 
-  // Reset to page 1 whenever filters change the result set meaningfully.
-  function resetTo(fn: () => void) {
-    fn();
+  // Reset page + selection whenever the inputs change the result set.
+  useEffect(() => {
     setPage(1);
     setSelected(new Set());
-  }
+  }, [query, status, category, sort]);
+
+  // Default to "Best match" when a search begins; back to "Newest" when cleared.
+  useEffect(() => {
+    setSort((s) => (isSearch ? (s === "newest" ? "relevance" : s) : s === "relevance" ? "newest" : s));
+  }, [isSearch]);
 
   const shownIds = shown.map((a) => a.id);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
@@ -121,6 +167,10 @@ export function ArticlesList({
     });
   }
 
+  const sortOptions = isSearch
+    ? [{ id: "relevance" as const, label: "Best match" }, ...BASE_SORTS]
+    : BASE_SORTS;
+
   return (
     <>
       {/* Search + sort */}
@@ -131,25 +181,28 @@ export function ArticlesList({
             className="adm-input"
             type="search"
             value={query}
-            onChange={(e) => resetTo(() => setQuery(e.target.value))}
-            placeholder="Search by title…"
-            aria-label="Search articles by title"
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search title, excerpt, body, category, tags…"
+            aria-label="Search articles"
           />
+          {searching && <span className="adm-am-spin" aria-hidden />}
         </div>
         <select className="adm-input adm-am-sort" value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Sort">
-          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {sortOptions.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
         </select>
       </div>
 
       {/* Status + category filter chips */}
       <div className="adm-filterbar">
         {STATUS_FILTERS.map((c) => (
-          <button key={c} type="button" className={`adm-fchip ${status === c ? "on" : ""}`} onClick={() => resetTo(() => setStatus(c))}>{c}</button>
+          <button key={c} type="button" className={`adm-fchip ${status === c ? "on" : ""}`} onClick={() => setStatus(c)}>{c}</button>
         ))}
         {categories.length > 0 && <span className="adm-am-sep" aria-hidden />}
-        <button type="button" className={`adm-fchip ${category === "All" ? "on" : ""}`} onClick={() => resetTo(() => setCategory("All"))}>All categories</button>
+        <button type="button" className={`adm-fchip ${category === "All" ? "on" : ""}`} onClick={() => setCategory("All")}>All categories</button>
         {categories.map((c) => (
-          <button key={c} type="button" className={`adm-fchip ${category === c ? "on" : ""}`} onClick={() => resetTo(() => setCategory(c))}>{c}</button>
+          <button key={c} type="button" className={`adm-fchip ${category === c ? "on" : ""}`} onClick={() => setCategory(c)}>{c}</button>
         ))}
       </div>
 
@@ -167,8 +220,22 @@ export function ArticlesList({
       )}
 
       <div className="adm-card adm-card-pad">
-        {shown.length === 0 ? (
-          <p className="adm-card-sub" style={{ padding: "8px 0" }}>No articles match your filters.</p>
+        {isSearch && searching && shown.length === 0 ? (
+          <div className="adm-am-skel">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="adm-arow">
+                <div className="sk h-9 w-9 rounded-lg" style={{ flex: "none" }} />
+                <div style={{ flex: 1 }}>
+                  <div className="sk h-4 w-2/3 rounded" />
+                  <div className="sk mt-2 h-3 w-1/3 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : shown.length === 0 ? (
+          <p className="adm-card-sub" style={{ padding: "8px 0" }}>
+            {isSearch ? `No articles match “${query.trim()}”. Try fewer or different words.` : "No articles match your filters."}
+          </p>
         ) : (
           <>
             <div className="adm-am-selhead">
@@ -176,7 +243,9 @@ export function ArticlesList({
                 <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown} aria-label="Select all on this page" />
                 Select page
               </label>
-              <span className="adm-card-sub">{filtered.length} result{filtered.length === 1 ? "" : "s"}</span>
+              <span className="adm-card-sub">
+                {filtered.length} result{filtered.length === 1 ? "" : "s"}{isSearch && sort === "relevance" ? " · by relevance" : ""}
+              </span>
             </div>
 
             {shown.map((a) => {
@@ -190,6 +259,7 @@ export function ArticlesList({
                   <span className="adm-ini">{a.title.slice(0, 1).toUpperCase()}</span>
                   <div className="adm-abody">
                     <Link href={`/admin/articles/${a.id}/edit`} className="adm-ati" style={{ display: "block" }}>{a.title}</Link>
+                    {a.snippet && <div className="adm-asnip">{renderSnippet(a.snippet)}</div>}
                     <div className="adm-amr">
                       <span className={`adm-pill ${published ? "" : "amber"}`}>{published ? "Published" : "Draft"}</span>
                       {a.category && (<><span className="adm-dotsep" /><span className="adm-amt">{a.category.name}</span></>)}
@@ -224,6 +294,12 @@ export function ArticlesList({
       </div>
     </>
   );
+}
+
+// Render a snippet where matches are wrapped in « » as <mark>.
+function renderSnippet(snippet: string) {
+  const parts = snippet.split(/«([^»]*)»/g);
+  return parts.map((p, i) => (i % 2 === 1 ? <mark key={i}>{p}</mark> : <span key={i}>{p}</span>));
 }
 
 function CopyGlyph() {

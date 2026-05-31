@@ -1,18 +1,12 @@
-// Server-side GNews API client for the admin "Trending News" discovery tool.
-//
-// The API key (GNEWS_API_KEY) is read from the server environment and is NEVER
-// sent to the browser — only this module, imported by the protected API route
-// (`/api/admin/trending`) and the admin server component, ever touches it.
-//
-// Results are cached in-memory (20 min) so browsing the page / switching tabs
-// reuses a single upstream call rather than burning through the free tier's
-// 100-requests/day quota. The cache is best-effort per server instance, which
-// is exactly the right scope for "don't re-fetch on every click".
+import "server-only";
 
-const GNEWS_BASE = "https://gnews.io/api/v4";
-const CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — within the 15–30 min target
-const MAX_ARTICLES = 10;
-const REQUEST_TIMEOUT_MS = 10_000;
+const GNEWS_ENDPOINT = "https://gnews.io/api/v4";
+
+// GNews free tier: ~100 requests/day and a HARD cap of 10 articles per request
+// (the `max` param can't exceed 10, and the `page` parameter + larger `max` are
+// paid-only). We request the maximum allowed and never promise more than the
+// API returns. See CLAUDE.md → "Trending News / GNews limits".
+export const GNEWS_MAX_PAGE_SIZE = 10;
 
 /** Category tabs surfaced in the UI, mapped to GNews top-headlines categories. */
 export const TRENDING_CATEGORIES = [
@@ -26,161 +20,222 @@ export const TRENDING_CATEGORIES = [
   { id: "sports", label: "Sports" },
   { id: "entertainment", label: "Entertainment" },
 ] as const;
-
 export type TrendingCategory = (typeof TRENDING_CATEGORIES)[number]["id"];
 
-const VALID_CATEGORIES = new Set<string>(TRENDING_CATEGORIES.map((c) => c.id));
+/** Languages + countries offered in the UI to widen / target coverage. */
+export const TRENDING_LANGUAGES = [
+  { id: "en", label: "English" },
+  { id: "es", label: "Spanish" },
+  { id: "fr", label: "French" },
+  { id: "de", label: "German" },
+  { id: "it", label: "Italian" },
+  { id: "pt", label: "Portuguese" },
+  { id: "nl", label: "Dutch" },
+  { id: "hi", label: "Hindi" },
+  { id: "ar", label: "Arabic" },
+  { id: "ru", label: "Russian" },
+  { id: "zh", label: "Chinese" },
+  { id: "ja", label: "Japanese" },
+] as const;
+export const TRENDING_COUNTRIES = [
+  { id: "us", label: "United States" },
+  { id: "gb", label: "United Kingdom" },
+  { id: "ca", label: "Canada" },
+  { id: "au", label: "Australia" },
+  { id: "in", label: "India" },
+  { id: "ie", label: "Ireland" },
+  { id: "nz", label: "New Zealand" },
+  { id: "fr", label: "France" },
+  { id: "de", label: "Germany" },
+  { id: "es", label: "Spain" },
+  { id: "it", label: "Italy" },
+  { id: "nl", label: "Netherlands" },
+  { id: "br", label: "Brazil" },
+  { id: "jp", label: "Japan" },
+  { id: "sg", label: "Singapore" },
+  { id: "za", label: "South Africa" },
+] as const;
 
-/** Clean, browser-safe shape returned to the client (no secrets, no raw body). */
+/** Clean, browser-safe item: headline + snippet + source link, NEVER the full
+ *  article body (`content`) — keeps the tool inspiration-only (no copy/paste). */
 export type TrendingItem = {
   title: string;
-  description: string; // short snippet — NOT the full article body
+  description: string;
   source: string;
   url: string;
   image: string | null;
   publishedAt: string | null;
 };
 
-// Raw GNews response shapes (only the fields we read).
-type GNewsArticle = {
-  title?: string;
-  description?: string;
-  url?: string;
-  image?: string | null;
-  publishedAt?: string;
-  source?: { name?: string };
-};
-type GNewsResponse = { totalArticles?: number; articles?: GNewsArticle[]; errors?: string[] };
-
-export type TrendingResult =
-  | { ok: true; items: TrendingItem[]; cached: boolean }
-  | { ok: false; error: string; status: number };
-
-type CacheEntry = { at: number; items: TrendingItem[] };
-const cache = new Map<string, CacheEntry>();
-
-function cacheKey(scope: string, query: string): string {
-  return `${scope}::${query.toLowerCase()}`;
-}
-
-/**
- * Reduce a raw GNews article to the inspiration-only fields we expose. We keep
- * the headline, the short `description` snippet, the source link and metadata —
- * deliberately NOT GNews's `content` field — so nothing here invites copying a
- * source's article text into a post.
- */
-function clean(article: GNewsArticle): TrendingItem | null {
-  const title = article.title?.trim();
-  const url = article.url?.trim();
+/** Reduce a raw GNews article to the inspiration-only fields we expose. */
+export function toTrendingItem(a: GNewsArticle): TrendingItem | null {
+  const title = a.title?.trim();
+  const url = a.url?.trim();
   if (!title || !url) return null;
   return {
     title,
-    description: article.description?.trim() ?? "",
-    source: article.source?.name?.trim() || "Unknown source",
+    description: a.description?.trim() ?? "",
+    source: a.source?.name?.trim() || "Unknown source",
     url,
-    image: article.image?.trim() || null,
-    publishedAt: article.publishedAt ?? null,
+    image: a.image?.trim() || null,
+    publishedAt: a.publishedAt ?? null,
   };
 }
 
-/**
- * Fetch trending headlines from GNews. A non-empty `query` runs a keyword
- * search (`/search`); otherwise it returns top headlines for `category`
- * (`/top-headlines`). Always resolves to a typed result — callers never need a
- * try/catch and the UI can show a friendly message for every failure mode.
- */
-export async function fetchTrending(opts: {
-  category?: string;
-  query?: string;
-}): Promise<TrendingResult> {
-  const apiKey = process.env.GNEWS_API_KEY;
-  if (!apiKey) {
-    return {
-      ok: false,
-      status: 503,
-      error:
-        "Trending News isn’t configured yet. Add a free GNEWS_API_KEY (from gnews.io) to your environment to enable it.",
-    };
+export type GNewsArticle = {
+  title: string;
+  description: string;
+  content: string;
+  url: string;
+  image: string;
+  publishedAt: string;
+  source: { name: string; url: string };
+};
+
+type GNewsResponse = { totalArticles: number; articles: GNewsArticle[] };
+
+export type TrendingResult = {
+  articles: GNewsArticle[];
+  totalArticles: number;
+  cached: boolean; // served from cache
+  stale: boolean; // served from cache because a live fetch failed
+};
+
+export type GNewsErrorCode = "quota" | "auth" | "network" | "unknown";
+export class GNewsError extends Error {
+  code: GNewsErrorCode;
+  status?: number;
+  constructor(code: GNewsErrorCode, message: string, status?: number) {
+    super(message);
+    this.name = "GNewsError";
+    this.code = code;
+    this.status = status;
   }
+}
 
-  const query = (opts.query ?? "").trim().slice(0, 120);
-  const category =
-    opts.category && VALID_CATEGORIES.has(opts.category) ? opts.category : "general";
+// In-memory cache (per server instance). Trending data changes slowly, so a
+// generous TTL keeps repeat/common searches instant and protects the daily
+// quota. On serverless, cache lives for the life of a warm instance.
+const TTL = 20 * 60 * 1000; // 20 minutes
+const cache = new Map<string, { at: number; data: GNewsArticle[]; total: number }>();
 
-  // Serve from cache when fresh (search results keyed by query, headlines by
-  // category) so repeated browsing doesn't spend the daily quota.
-  const key = query ? cacheKey("search", query) : cacheKey(category, "");
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
-    return { ok: true, items: hit.items, cached: true };
-  }
+// When GNews signals the daily limit, back off until UTC midnight and serve
+// cache instead of burning more requests.
+let quotaBlockedUntil = 0;
+// Discovered once: whether this key's plan supports the `page` param. Starts
+// null (unknown); set false the first time a page>1 request is rejected so we
+// never waste quota retrying pagination on the free tier.
+let pagingSupported: boolean | null = null;
 
-  const params = new URLSearchParams({
-    lang: "en",
-    max: String(MAX_ARTICLES),
-    apikey: apiKey,
-  });
-  let endpoint: string;
-  if (query) {
-    endpoint = "search";
-    params.set("q", query);
-  } else {
-    endpoint = "top-headlines";
-    params.set("category", category);
-  }
+function nextUtcMidnight(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+}
 
-  // Manual timeout (AbortController) — universally typed, no reliance on a
-  // specific @types/node version for AbortSignal.timeout.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+const LANGS = new Set(["en", "es", "fr", "de", "it", "pt", "nl", "ru", "ar", "zh", "hi", "ja", "uk", "sv", "no", "el", "he", "ro"]);
+const COUNTRIES = new Set(["us", "gb", "ca", "au", "in", "ie", "nz", "fr", "de", "it", "es", "nl", "br", "jp", "sg", "za", "ua", "ru", "cn"]);
+const CATEGORIES = new Set(["general", "world", "nation", "business", "technology", "entertainment", "sports", "science", "health"]);
+
+function pick(set: Set<string>, value: string | undefined, fallback: string): string {
+  const v = (value ?? "").toLowerCase().trim();
+  return set.has(v) ? v : fallback;
+}
+
+function cacheKey(path: string, params: Record<string, string>): string {
+  return `${path}?${JSON.stringify(params)}`;
+}
+
+async function gnewsFetch(
+  path: "search" | "top-headlines",
+  params: Record<string, string>,
+): Promise<{ articles: GNewsArticle[]; total: number }> {
+  const key = process.env.GNEWS_API_KEY;
+  if (!key) throw new GNewsError("auth", "GNEWS_API_KEY is not configured.");
+
+  const url = new URL(`${GNEWS_ENDPOINT}/${path}`);
+  url.searchParams.set("apikey", key);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
   let res: Response;
   try {
-    res = await fetch(`${GNEWS_BASE}/${endpoint}?${params.toString()}`, {
-      cache: "no-store", // we do our own in-memory caching
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
+    res = await fetch(url.toString(), { cache: "no-store" });
   } catch {
-    return {
-      ok: false,
-      status: 504,
-      error: "Couldn’t reach the GNews service. Check your connection and try again.",
-    };
-  } finally {
-    clearTimeout(timer);
+    throw new GNewsError("network", "Could not reach GNews.");
   }
 
   if (!res.ok) {
-    // GNews: 429 rate-limited, 403 over-quota / forbidden, 401 bad key.
-    if (res.status === 429 || res.status === 403) {
-      return {
-        ok: false,
-        status: 429,
-        error:
-          "GNews daily request limit reached (free tier: 100 requests/day). It refreshes when your quota resets — try again later.",
-      };
-    }
-    if (res.status === 401) {
-      return {
-        ok: false,
-        status: 502,
-        error: "GNews rejected the API key. Double-check GNEWS_API_KEY.",
-      };
-    }
-    return { ok: false, status: 502, error: `GNews request failed (HTTP ${res.status}).` };
+    if (res.status === 429) throw new GNewsError("quota", "GNews daily request limit reached.", 429);
+    if (res.status === 401 || res.status === 403) throw new GNewsError("auth", "GNews rejected the request (plan/limit).", res.status);
+    throw new GNewsError("unknown", `GNews API error: ${res.status}`, res.status);
   }
 
-  let data: GNewsResponse;
+  const data = (await res.json()) as GNewsResponse;
+  return { articles: data.articles ?? [], total: data.totalArticles ?? 0 };
+}
+
+/**
+ * Fetch trending stories. Cleaned query, relevance-sorted searches, optional
+ * language/country targeting, and defensive pagination. Returns cache-aware
+ * metadata; serves stale cache when a live fetch fails so the UI never breaks.
+ */
+export async function getTrending(opts: {
+  category?: string;
+  query?: string;
+  lang?: string;
+  country?: string;
+  page?: number;
+}): Promise<TrendingResult> {
+  const lang = pick(LANGS, opts.lang, "en");
+  const country = pick(COUNTRIES, opts.country, "us");
+  const page = Math.min(10, Math.max(1, Math.floor(opts.page ?? 1)));
+  const q = (opts.query ?? "").trim().replace(/\s+/g, " ");
+  const isSearch = q.length > 0;
+
+  // Free tier can't paginate — short-circuit known-unsupported page>1 requests
+  // so we don't waste quota; the caller treats an empty page as "the end".
+  if (page > 1 && pagingSupported === false) {
+    return { articles: [], totalArticles: 0, cached: false, stale: false };
+  }
+
+  const path: "search" | "top-headlines" = isSearch ? "search" : "top-headlines";
+  const params: Record<string, string> = { lang, country, max: String(GNEWS_MAX_PAGE_SIZE) };
+  if (isSearch) {
+    params.q = q;
+    params.sortby = "relevance"; // best matches first (vs. default publishedAt)
+    params.in = "title,description"; // match where it counts → higher relevance
+  } else {
+    params.category = pick(CATEGORIES, opts.category, "general");
+  }
+  if (page > 1) params.page = String(page);
+
+  const ckey = cacheKey(path, params);
+  const cached = cache.get(ckey);
+  if (cached && Date.now() - cached.at < TTL) {
+    return { articles: cached.data, totalArticles: cached.total, cached: true, stale: false };
+  }
+
+  // Inside a quota backoff window: serve stale cache or signal quota.
+  if (Date.now() < quotaBlockedUntil) {
+    if (cached) return { articles: cached.data, totalArticles: cached.total, cached: true, stale: true };
+    if (page > 1) return { articles: [], totalArticles: 0, cached: false, stale: false };
+    throw new GNewsError("quota", "GNews daily request limit reached.");
+  }
+
   try {
-    data = (await res.json()) as GNewsResponse;
-  } catch {
-    return { ok: false, status: 502, error: "GNews returned an unreadable response." };
+    const { articles, total } = await gnewsFetch(path, params);
+    if (page > 1) pagingSupported = true; // a page>1 call succeeded
+    cache.set(ckey, { at: Date.now(), data: articles, total });
+    return { articles, totalArticles: total, cached: false, stale: false };
+  } catch (e) {
+    // A failed "load more" on the free tier just means "no more results".
+    if (page > 1) {
+      if (e instanceof GNewsError && (e.code === "auth" || e.code === "unknown")) pagingSupported = false;
+      if (e instanceof GNewsError && e.code === "quota") quotaBlockedUntil = nextUtcMidnight();
+      return { articles: [], totalArticles: 0, cached: false, stale: false };
+    }
+    if (e instanceof GNewsError && e.code === "quota") quotaBlockedUntil = nextUtcMidnight();
+    // Stale-while-error: better to show slightly old results than nothing.
+    if (cached) return { articles: cached.data, totalArticles: cached.total, cached: true, stale: true };
+    throw e;
   }
-
-  const items = (data.articles ?? [])
-    .map(clean)
-    .filter((x): x is TrendingItem => x !== null);
-
-  cache.set(key, { at: Date.now(), items });
-  return { ok: true, items, cached: false };
 }
