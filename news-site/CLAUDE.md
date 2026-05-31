@@ -141,6 +141,65 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   content block / "Latest News"). Each placement needs its **own** widget id —
   don't reuse `ADS.TOP` here, or it won't fill.
 
+## Facebook Pages integration (Graph API)
+
+Distribute published articles to Facebook Pages from the admin panel using the
+**official Graph API only** — no scraping, headless browsers, or login
+simulation anywhere. All Graph calls are server-side; tokens never touch the
+browser.
+
+**Security model**
+- Page access tokens are **encrypted at rest** (AES-256-GCM, `lib/crypto.ts`).
+  The key derives from `ENCRYPTION_KEY` (falls back to `AUTH_SECRET`); in
+  production one of them is **required** or encryption throws. Tokens are only
+  decrypted server-side at post/validate time.
+- The Facebook App secret and tokens are **never** exposed to the client.
+- All routes/actions are **admin-only** (reuse `requireAdmin()`).
+- The cron route is secured by `CRON_SECRET` (Bearer header); if unset in
+  production it refuses to run (fail closed).
+
+**Data model** (`prisma/schema.prisma`)
+- `FacebookPage`: pageId, pageName, **encrypted** accessToken, categoryGroup
+  (niche), status (`Connected`|`Expired`), lastSyncedAt.
+- `ScheduledPost`: links Article ↔ FacebookPage with scheduledFor, status
+  (`pending`|`posting`|`posted`|`failed`), postedAt, error, graphPostId. Doubles
+  as post history.
+
+**Code map**
+- `lib/crypto.ts` — AES-256-GCM encrypt/decrypt for secrets.
+- `lib/facebook.ts` — Graph API wrapper: `validatePageToken`, `postToPage`
+  (`POST /{pageId}/feed` with message+link), `exchangeForLongLivedUserToken`,
+  `permalinkForPost`. Categorizes expired/invalid tokens (codes 190/102/…).
+- `lib/facebookPublish.ts` — single publish chokepoint (decrypt → post → update
+  page status) shared by "Publish now" and the cron.
+- `lib/facebookGroups.ts` — niche group list + sort helper.
+- `app/admin/facebook-actions.ts` — server actions (connect/refresh/disconnect/
+  publishNow/schedule/cancel), all `requireAdmin()`.
+- `app/api/cron/facebook-post/route.ts` — Vercel Cron runner. Atomically claims
+  due rows (`updateMany pending→posting`) for **idempotency** (no double-posts),
+  posts via Graph, records status/postedAt/error, never crashes on one failure.
+- UI: `/admin/facebook` (grouped table + Connect modal + toasts) and the
+  "Publish to Facebook Pages" panel on the article edit page (per-niche
+  checkboxes, Publish Now / Schedule, per-page results + post history).
+
+**Cron / scheduling**
+- `vercel.json` → `crons: [{ path: "/api/cron/facebook-post", schedule: "*/15 * * * *" }]`.
+- **Vercel Hobby** allows cron **once per day** and isn't guaranteed to the
+  minute; the `*/15` cadence needs a **Pro** plan. On Hobby, change the schedule
+  to e.g. `"0 14 * * *"` (daily) or trigger the route from an external scheduler
+  with the `CRON_SECRET` header.
+
+**Env vars** (see `.env.example`): `ENCRYPTION_KEY` (or reuse `AUTH_SECRET`),
+`CRON_SECRET`, optional `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` (only for
+short→long-lived token exchange), optional `FACEBOOK_GRAPH_VERSION`,
+`NEXT_PUBLIC_SITE_URL` (canonical links in posts).
+
+**Facebook setup (one time):** create a Facebook App (Business), add the page(s)
+under a Page-token flow, grant `pages_manage_posts` + `pages_read_engagement`
+(and `pages_show_list`), generate a **long-lived Page access token**, then paste
+the Page ID + token into the Connect dialog. Posting to Pages you don't own (or
+beyond dev mode) requires **App Review** for those permissions.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

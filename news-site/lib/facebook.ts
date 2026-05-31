@@ -1,0 +1,181 @@
+/**
+ * Facebook Graph API wrapper — OFFICIAL API ONLY.
+ *
+ * Every function here makes plain HTTPS calls to graph.facebook.com using a
+ * Page access token. There is no scraping, headless browser, or login
+ * simulation anywhere in this module (or this codebase). All calls are made
+ * server-side; tokens are decrypted by the caller and never sent to the browser.
+ *
+ * Docs: https://developers.facebook.com/docs/pages-api/posts
+ */
+
+// Pin a Graph API version (override via env if you upgrade). Facebook versions
+// are stable for ~2 years; pinning avoids surprise breaking changes.
+const GRAPH_VERSION = process.env.FACEBOOK_GRAPH_VERSION || "v21.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+/** Shape of a Graph API error envelope (the bits we care about). */
+type GraphError = {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+  fbtrace_id?: string;
+};
+
+/** A categorized failure from a Graph call — `expired` drives status updates. */
+export class FacebookApiError extends Error {
+  /** True when the token is invalid/expired/revoked (Graph codes 190/102/463…). */
+  readonly expired: boolean;
+  readonly code?: number;
+  readonly subcode?: number;
+
+  constructor(message: string, opts: { expired?: boolean; code?: number; subcode?: number } = {}) {
+    super(message);
+    this.name = "FacebookApiError";
+    this.expired = opts.expired ?? false;
+    this.code = opts.code;
+    this.subcode = opts.subcode;
+  }
+}
+
+/** Graph error codes that mean "this token can no longer be used." */
+const TOKEN_INVALID_CODES = new Set([190, 102, 463, 467, 2500]);
+
+function toFriendlyError(err: GraphError | undefined, fallback: string): FacebookApiError {
+  const code = err?.code;
+  const expired = code != null && TOKEN_INVALID_CODES.has(code);
+  const base = err?.message?.trim() || fallback;
+  const message = expired
+    ? `${base} (the Page access token is invalid or expired — reconnect the page).`
+    : base;
+  return new FacebookApiError(message, { expired, code, subcode: err?.error_subcode });
+}
+
+/** Parse a Graph response, throwing a categorized error on failure. */
+async function parseGraph<T>(res: Response, fallback: string): Promise<T> {
+  let json: unknown = null;
+  try {
+    json = await res.json();
+  } catch {
+    // Non-JSON body (rare) — fall through to a generic error.
+  }
+  if (!res.ok || (json as { error?: GraphError })?.error) {
+    const err = (json as { error?: GraphError })?.error;
+    throw toFriendlyError(err, `${fallback} (HTTP ${res.status}).`);
+  }
+  return json as T;
+}
+
+// A short timeout so a hung Graph call can't wedge a request/cron run.
+async function graphFetch(url: string, init: RequestInit, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new FacebookApiError("Facebook did not respond in time. Try again.");
+    }
+    throw new FacebookApiError("Could not reach Facebook. Check your connection and try again.");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Validate a Page access token and confirm it controls the given page id.
+ * Calls GET /{pageId}?fields=id,name and checks the returned id matches.
+ * Returns the page's current name on success; throws FacebookApiError otherwise.
+ */
+export async function validatePageToken(
+  pageId: string,
+  accessToken: string,
+): Promise<{ id: string; name: string }> {
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}?fields=id,name&access_token=${encodeURIComponent(accessToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{ id?: string; name?: string }>(res, "Could not validate the page");
+  if (!data.id) {
+    throw new FacebookApiError("Facebook did not return a page id for this token.");
+  }
+  if (data.id !== pageId) {
+    throw new FacebookApiError(
+      `This token controls page ${data.id}, not ${pageId}. Check the Page ID.`,
+    );
+  }
+  return { id: data.id, name: data.name || pageId };
+}
+
+/**
+ * Publish a post to a Page feed. Uses the official POST /{pageId}/feed endpoint
+ * with `message` + `link` (Facebook renders the link's Open Graph preview, which
+ * pulls the article's cover image and title from our page metadata).
+ *
+ * Returns the created post id (e.g. "{pageId}_{postId}") for building a
+ * facebook.com permalink and for idempotency tracking.
+ */
+export async function postToPage(args: {
+  pageId: string;
+  accessToken: string;
+  message: string;
+  link?: string;
+}): Promise<{ postId: string }> {
+  const body = new URLSearchParams();
+  body.set("message", args.message);
+  if (args.link) body.set("link", args.link);
+  body.set("access_token", args.accessToken);
+
+  const res = await graphFetch(`${GRAPH_BASE}/${encodeURIComponent(args.pageId)}/feed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+    cache: "no-store",
+  });
+  const data = await parseGraph<{ id?: string }>(res, "Facebook rejected the post");
+  if (!data.id) {
+    throw new FacebookApiError("Facebook accepted the request but returned no post id.");
+  }
+  return { postId: data.id };
+}
+
+/**
+ * Exchange a short-lived USER token for a long-lived one (~60 days), then the
+ * caller can read the page tokens from /me/accounts (those page tokens are
+ * effectively non-expiring once derived from a long-lived user token).
+ *
+ * Requires FACEBOOK_APP_ID + FACEBOOK_APP_SECRET. Optional helper — if you paste
+ * long-lived Page tokens directly in the UI you don't need this path at all.
+ */
+export async function exchangeForLongLivedUserToken(
+  shortLivedToken: string,
+): Promise<{ accessToken: string; expiresInSeconds?: number }> {
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appId || !appSecret) {
+    throw new FacebookApiError(
+      "Long-lived token exchange needs FACEBOOK_APP_ID and FACEBOOK_APP_SECRET. " +
+        "Alternatively, paste a long-lived Page token directly.",
+    );
+  }
+  const url =
+    `${GRAPH_BASE}/oauth/access_token?grant_type=fb_exchange_token` +
+    `&client_id=${encodeURIComponent(appId)}` +
+    `&client_secret=${encodeURIComponent(appSecret)}` +
+    `&fb_exchange_token=${encodeURIComponent(shortLivedToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{ access_token?: string; expires_in?: number }>(
+    res,
+    "Token exchange failed",
+  );
+  if (!data.access_token) {
+    throw new FacebookApiError("Facebook did not return a long-lived token.");
+  }
+  return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
+}
+
+/** Build a facebook.com permalink from a returned post id ("{page}_{post}"). */
+export function permalinkForPost(postId: string): string {
+  const [page, post] = postId.split("_");
+  if (page && post) return `https://www.facebook.com/${page}/posts/${post}`;
+  return `https://www.facebook.com/${postId}`;
+}
