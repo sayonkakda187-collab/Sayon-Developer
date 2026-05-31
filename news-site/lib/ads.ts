@@ -34,10 +34,10 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
 //    should only appear in a single container per page. So only TOP is live for
 //    now; create a separate widget for each of the other three before enabling
-//    them (reusing 2019769 here is not supported and would leave them unfilled).
+//    them (reusing 2019813 here is not supported and would leave them unfilled).
 export const ADS = {
   /** Top of the article, just under the headline/lede. */
-  TOP: "2019769",
+  TOP: "2019813",
   /** Injected into the middle of the article body, between paragraphs. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
   /** Sidebar / related area — here, just above "Related Stories". */
