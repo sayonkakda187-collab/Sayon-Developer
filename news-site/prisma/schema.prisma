@@ -39,6 +39,11 @@ model Article {
 
   @@index([status, publishedAt])
   @@index([categoryId])
+  // Trigram GIN indexes accelerate case-insensitive substring search (ILIKE)
+  // used by the admin article search across these fields.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_title_trgm_idx")
+  @@index([excerpt(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_excerpt_trgm_idx")
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_content_trgm_idx")
 }
 
 model Category {

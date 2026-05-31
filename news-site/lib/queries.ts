@@ -251,3 +251,168 @@ export async function getDashboardData() {
 }
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
+
+// ── Admin article search ────────────────────────────────────────────────────
+// Multi-field, case-insensitive, substring + word-order-tolerant search across
+// title / excerpt / content / category / tags. Backed by pg_trgm GIN indexes
+// (see migration 20260531140000_article_search_trgm) so the underlying ILIKE
+// scans stay fast as the library grows. Correctness does not depend on the
+// index — it only makes it faster.
+
+export type ArticleSearchHit = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  views: number;
+  category: { name: string } | null;
+  tags: string[];
+  publishedAt: string | null;
+  createdAt: string;
+  /** Plain-text snippet around the best match (no markdown), match wrapped in «…». */
+  snippet: string;
+  /** Where the strongest match landed, for ranking + UI hinting. */
+  matchedIn: "title" | "excerpt" | "category" | "tag" | "content";
+};
+
+/** Split a raw query into distinct lowercased terms (drops tiny noise tokens). */
+function searchTerms(q: string): string[] {
+  return Array.from(
+    new Set(
+      q
+        .toLowerCase()
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2),
+    ),
+  ).slice(0, 8); // cap terms to keep the query bounded
+}
+
+/** Strip the common Markdown so snippets read as prose. Mirrors editorUtils. */
+function plain(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_~`]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Build a ~160-char snippet centered on the first term hit, term wrapped in «». */
+function makeSnippet(text: string, terms: string[]): string {
+  const clean = plain(text);
+  if (!clean) return "";
+  const lower = clean.toLowerCase();
+  let at = -1;
+  let hit = "";
+  for (const t of terms) {
+    const i = lower.indexOf(t);
+    if (i !== -1 && (at === -1 || i < at)) {
+      at = i;
+      hit = t;
+    }
+  }
+  const radius = 80;
+  if (at === -1) return clean.slice(0, 160) + (clean.length > 160 ? "…" : "");
+  const start = Math.max(0, at - radius);
+  const end = Math.min(clean.length, at + hit.length + radius);
+  const core = clean.slice(start, end);
+  const highlighted = core.replace(
+    new RegExp(`(${hit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"),
+    "«$1»",
+  );
+  return (start > 0 ? "…" : "") + highlighted + (end < clean.length ? "…" : "");
+}
+
+/**
+ * Admin multi-field article search. Returns relevance-ranked hits: title matches
+ * rank highest, then excerpt/category/tag, then content-only — recency breaks
+ * ties. `limit` caps the returned set (the DB fetch is bounded too). Distinct
+ * from the public `searchArticles` (title/excerpt/content over published only).
+ */
+export async function searchArticlesAdmin(
+  rawQuery: string,
+  opts?: { limit?: number },
+): Promise<ArticleSearchHit[]> {
+  const terms = searchTerms(rawQuery);
+  if (terms.length === 0) return [];
+  const limit = Math.min(100, Math.max(1, opts?.limit ?? 50));
+
+  // AND across terms; each term may match ANY field (word-order tolerant).
+  const AND = terms.map((t) => ({
+    OR: [
+      { title: { contains: t, mode: "insensitive" as const } },
+      { excerpt: { contains: t, mode: "insensitive" as const } },
+      { content: { contains: t, mode: "insensitive" as const } },
+      { category: { name: { contains: t, mode: "insensitive" as const } } },
+      { tags: { some: { name: { contains: t, mode: "insensitive" as const } } } },
+    ],
+  }));
+
+  const rows = await prisma.article.findMany({
+    where: { AND },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      excerpt: true,
+      content: true,
+      status: true,
+      views: true,
+      publishedAt: true,
+      createdAt: true,
+      category: { select: { name: true } },
+      tags: { select: { name: true } },
+    },
+    take: limit * 3, // over-fetch a little, then rank + trim in JS
+  });
+
+  const scored = rows.map((a) => {
+    const title = a.title.toLowerCase();
+    const excerpt = a.excerpt.toLowerCase();
+    const body = a.content.toLowerCase();
+    const catName = a.category?.name.toLowerCase() ?? "";
+    const tagNames = a.tags.map((t) => t.name.toLowerCase());
+
+    let score = 0;
+    let matchedIn: ArticleSearchHit["matchedIn"] = "content";
+    let bestField = 4; // lower = stronger field
+    for (const t of terms) {
+      if (title.includes(t)) { score += 100; if (bestField > 0) { bestField = 0; matchedIn = "title"; } }
+      else if (excerpt.includes(t)) { score += 40; if (bestField > 1) { bestField = 1; matchedIn = "excerpt"; } }
+      else if (catName.includes(t)) { score += 30; if (bestField > 2) { bestField = 2; matchedIn = "category"; } }
+      else if (tagNames.some((n) => n.includes(t))) { score += 25; if (bestField > 3) { bestField = 3; matchedIn = "tag"; } }
+      else if (body.includes(t)) { score += 10; }
+    }
+    // Whole-phrase title hit gets a strong boost (best possible match).
+    if (title.includes(rawQuery.trim().toLowerCase())) score += 60;
+    // Title that starts with the query ranks even higher.
+    if (title.startsWith(terms[0])) score += 15;
+
+    const snippetSource =
+      matchedIn === "title" || matchedIn === "excerpt" ? a.excerpt || a.content : a.content || a.excerpt;
+
+    return {
+      hit: {
+        id: a.id,
+        title: a.title,
+        slug: a.slug,
+        status: a.status,
+        views: a.views,
+        category: a.category,
+        tags: a.tags.map((t) => t.name),
+        publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
+        createdAt: a.createdAt.toISOString(),
+        snippet: makeSnippet(snippetSource, terms),
+        matchedIn,
+      } satisfies ArticleSearchHit,
+      score,
+      recency: Date.parse(a.publishedAt?.toISOString() ?? a.createdAt.toISOString()) || 0,
+    };
+  });
+
+  scored.sort((x, y) => (y.score - x.score) || (y.recency - x.recency));
+  return scored.slice(0, limit).map((s) => s.hit);
+}

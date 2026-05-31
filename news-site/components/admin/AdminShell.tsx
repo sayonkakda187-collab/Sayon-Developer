@@ -5,10 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/actions";
 import { AdminThemeToggle } from "./AdminThemeToggle";
+import { GlobalSearch } from "./GlobalSearch";
 import {
   BookIcon,
   BellIcon,
-  SearchIcon,
   HamburgerIcon,
   DashboardIcon,
   ArticlesIcon,
@@ -110,17 +110,7 @@ export function AdminShell({
       <header className="adm-topbar adm-only-desktop">
         {brand}
         <div className="adm-search-wrap">
-          <form action="/search" role="search" className="adm-search">
-            <SearchIcon className="h-[17px] w-[17px]" />
-            <input
-              ref={deskSearchRef}
-              name="q"
-              type="search"
-              placeholder="Search articles…"
-              aria-label="Search articles"
-            />
-            <span className="adm-kbd">⌘F</span>
-          </form>
+          <GlobalSearch inputRef={deskSearchRef} showKbd />
         </div>
         <div className="adm-top-actions">
           <AdminThemeToggle />
@@ -200,17 +190,7 @@ export function AdminShell({
               </button>
             </div>
 
-            <form action="/search" role="search" className="adm-search">
-              <SearchIcon className="h-4 w-4" />
-              <input
-                ref={searchRef}
-                name="q"
-                type="search"
-                placeholder="Search articles…"
-                aria-label="Search articles"
-              />
-              <span className="adm-kbd">⌘F</span>
-            </form>
+            <GlobalSearch inputRef={searchRef} onNavigate={() => setOpen(false)} />
           </header>
 
           {/* ── Scroll content (the active screen) ── */}

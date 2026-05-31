@@ -6,7 +6,11 @@ import { PlusIcon } from "@/components/admin/icons";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminArticlesPage() {
+export default async function AdminArticlesPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string };
+}) {
   const articles = await prisma.article.findMany({
     orderBy: { createdAt: "desc" },
     include: { category: true },
@@ -16,6 +20,8 @@ export default async function AdminArticlesPage() {
   const categories = Array.from(
     new Set(articles.map((a) => a.category?.name).filter((n): n is string => !!n)),
   ).sort();
+
+  const initialQuery = (searchParams?.q ?? "").trim();
 
   // Serialize Dates → strings for the client list component.
   const items = articles.map((a) => ({
@@ -63,7 +69,7 @@ export default async function AdminArticlesPage() {
         </div>
       ) : (
         <ToastProvider>
-          <ArticlesList items={items} categories={categories} />
+          <ArticlesList items={items} categories={categories} initialQuery={initialQuery} />
         </ToastProvider>
       )}
     </div>
