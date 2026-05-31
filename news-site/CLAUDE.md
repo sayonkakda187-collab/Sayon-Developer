@@ -202,38 +202,84 @@ under a Page-token flow, grant `pages_manage_posts` + `pages_read_engagement`
 the Page ID + token into the Connect dialog. Posting to Pages you don't own (or
 beyond dev mode) requires **App Review** for those permissions.
 
-## Trending News (GNews discovery)
+## Admin article search (my-articles)
 
-Admin-only tool to discover trending headlines and start an **original** draft
-from one. **Inspiration only** — it surfaces headlines + short snippets + the
-source link; it never copies article text into posts (copyright). Distribution
-of full content is the writer's job, in their own words.
+Powerful in-house search over the admin's own articles — no external limits.
+`searchArticlesAdmin(query, { limit })` in `lib/queries.ts`, exposed via
+`app/api/admin/articles/search/route.ts` (`requireAdmin()`-gated). Matches across
+**title, excerpt, content, category name, and tag names**, case-insensitive,
+substring, word-order tolerant; **relevance-ranked** (title > excerpt > category
+> tag > body) with recency tiebreak and highlighted snippets (`«…»` → `<mark>`).
+Debounced input; backed by **pg_trgm GIN indexes** (migration
+`20260531140000_article_search_trgm`; schema enables `previewFeatures =
+["postgresqlExtensions"]` + `extensions = [pg_trgm]`). Surfaced in the admin
+top/app bar (`components/admin/GlobalSearch.tsx`, ⌘F) and the Articles list
+filter. Distinct from the **public** `/search` (`searchArticles`, published-only).
 
-**Security / quota**
-- `GNEWS_API_KEY` is read **server-side only** (`lib/gnews.ts`) and never sent to
-  the browser. Get a free key at **gnews.io** (free tier: **100 requests/day**).
-- Results are **cached in-memory ~20 min** per category/query so browsing and
-  tab-switching reuse one upstream call instead of spending the daily quota.
-- Rate-limit (429/403), bad-key (401), and network errors map to friendly
-  messages; the page degrades to an "add your key" note when unset.
+## Trending News (GNews discovery + planning + AI Assist)
+
+Admin-only tool to discover trending headlines, **plan coverage**, and start an
+**original** draft from one. **Inspiration only** — it surfaces headlines + short
+snippets + the source link; it never copies article text into posts (copyright).
+The page has a **Discover | Saved ideas** switch to keep things uncluttered.
+
+**GNews security / quota**
+- `GNEWS_API_KEY` is read **server-side only** (`lib/gnews.ts`, `import
+  "server-only"`) and never sent to the browser. Free tier: **100 requests/day**,
+  **≤10 articles/request**, no pagination. We request `max=10` and never promise
+  more. Keyword search uses `sortby=relevance` + `in=title,description`.
+- Results are **cached in-memory ~20 min** per query/category/lang/country/page;
+  **stale-while-error** serves cache on a failed fetch; a 429/quota signal backs
+  off until UTC midnight. The ceiling is the data source — *more* results/sources
+  need a **paid GNews plan**, not code.
+
+**Part A — content planning (all client-side over already-fetched data → zero
+extra GNews calls, except where noted):**
+- **Save for later** — bookmark a story (per-admin `SavedIdea` table) that
+  survives refresh; a "Saved ideas" view manages them (status idea→drafting→done,
+  delete) and "Turn into draft" reuses the Write-article prefill.
+- **Already-covered badge** — fuzzy-matches a headline against existing article
+  titles (`lib/trendingClient.ts`, Jaccard + substring); informs, never blocks.
+- **Trending keywords panel** — top terms across loaded headlines; click to search.
+- **Sort + source filter** — reorder / hide sources on the loaded results.
+- **More niches** — Politics, Finance, AI/Tech, Crypto, Lifestyle, **Cambodia**
+  (search-backed tabs in `TRENDING_CATEGORIES`; reuse the 20-min cache).
+- **Follow topics** — per-admin `FollowedTopic` table for quick re-search chips.
+- Server actions: `app/admin/trending-actions.ts` (all `requireAdmin()`,
+  per-admin via `userId`). *(Phase 2: a date/time recency filter.)*
+
+**Part B — AI Assist (PAID, opt-in):**
+- An **"AI Assist"** button on each card (and saved idea) opens a modal that
+  calls `POST /api/admin/ai-assist` (`requireAdmin()`) → `lib/aiAssist.ts`, which
+  calls the **Anthropic Messages API** (raw fetch, no SDK). It sends only the
+  **headline + topic** — never scraped source text — and returns 5 sections:
+  **brief, suggested headlines, outline, background & angles, original first
+  draft**. Runs **only on click** (cost control); never automatic.
+- **Guardrails:** the system prompt forces ORIGINAL writing from general
+  knowledge (no copying/close paraphrase, no fabricated quotes/stats, `[VERIFY:
+  …]` placeholders, neutral tone). A visible disclaimer sits above the output.
+  **"Use as draft"** stashes the draft in `sessionStorage` and opens the editor
+  (`/admin/articles/new?ai=1`) as an **unsaved** draft (with an AI banner) —
+  never auto-published. `ANTHROPIC_API_KEY` is **server-side only**; if unset the
+  button shows a "Set up AI" state instead of erroring.
 
 **Code map**
-- `lib/gnews.ts` — server-only GNews client: `fetchTrending({category, query})`
-  → `top-headlines` (category tabs) or `/search` (keyword). Returns a clean,
-  typed `TrendingItem[]` (title, snippet, source, url, image, publishedAt) —
-  deliberately **not** GNews's full `content` field.
-- `app/api/admin/trending/route.ts` — admin-only (reuses `getSessionUser()`),
-  returns clean JSON; the key stays on the server.
-- `app/admin/(panel)/trending/page.tsx` + `components/admin/TrendingNews.tsx` —
-  category chips + search, responsive card grid, loading skeletons, empty/error
-  states, and an always-visible "write original content" note.
-- **"Write article about this"** links to `/admin/articles/new?title=…&ref=…`,
-  **reusing the existing editor/`saveArticle` flow** (no separate publish path).
-  The new draft is seeded with the headline as a working title and a *research
-  note* linking the source (to delete before publishing) — **no source text is
-  copied** into the body.
+- `lib/gnews.ts` — server-only GNews client: `getTrending({category, query, lang,
+  country, page})` + `toTrendingItem()`; niche tabs resolve to curated search
+  queries. Clean `TrendingItem` (no full `content` field).
+- `lib/trendingClient.ts` — client-safe `trendingKeywords()` + `isAlreadyCovered()`.
+- `lib/aiAssist.ts` — server-only Anthropic client (`generateAiAssist`,
+  `isAiConfigured`); `app/api/admin/ai-assist/route.ts` — admin-only route.
+- `app/admin/trending-actions.ts` — per-admin saved ideas + followed topics.
+- `app/admin/(panel)/trending/page.tsx` + `components/admin/TrendingNews.tsx` +
+  `components/admin/AiAssistModal.tsx`.
+- **"Write article"** → `/admin/articles/new?title=…&ref=…`, reusing the editor /
+  `saveArticle` flow; the draft is seeded with a working title + a research note
+  linking the source — **no source text is copied**.
 
-**Env:** `GNEWS_API_KEY` (server-side; add in Vercel for Production + Preview).
+**Env:** `GNEWS_API_KEY` (free; server-side). `ANTHROPIC_API_KEY` (**paid**,
+pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (defaults to the cheapest
+capable model). Add both in Vercel for Production + Preview. See `.env.example`.
 
 ## Roadmap
 
