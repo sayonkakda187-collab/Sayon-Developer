@@ -11,7 +11,7 @@ export default async function EditArticlePage({
 }: {
   params: { id: string };
 }) {
-  const [article, categories, tags, pages, history] = await Promise.all([
+  const [article, categories, tags, pages, history, sessions] = await Promise.all([
     prisma.article.findUnique({
       where: { id: params.id },
       include: { tags: { select: { id: true } } },
@@ -27,6 +27,11 @@ export default async function EditArticlePage({
       orderBy: { createdAt: "desc" },
       take: 25,
       include: { facebookPage: { select: { pageName: true } } },
+    }),
+    // Saved browser sessions to offer when posting via the runner (metadata only).
+    prisma.facebookSession.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, label: true, accountName: true, status: true },
     }),
   ]);
 
@@ -58,6 +63,7 @@ export default async function EditArticlePage({
           articleStatus={article.status}
           pages={pages}
           runnerConfigured={isRunnerConfigured()}
+          runnerSessions={sessions}
           history={history.map((h) => ({
             id: h.id,
             pageName: h.facebookPage?.pageName ?? "(deleted page)",

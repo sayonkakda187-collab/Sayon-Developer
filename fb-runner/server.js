@@ -15,6 +15,8 @@ import {
   ensureBrowser,
   isLoggedIn,
   openForLogin,
+  exportSession,
+  validateSession,
   listPages,
   postToPage,
   ManualActionError,
@@ -44,7 +46,8 @@ async function readJson(req) {
 /** Map a thrown error to { status, code, error }. */
 function errorResponse(e) {
   if (e instanceof ManualActionError) {
-    const status = e.code === "not_logged_in" ? 409 : e.code === "bad_request" ? 400 : 502;
+    const conflict = ["not_logged_in", "session_expired", "no_login"];
+    const status = conflict.includes(e.code) ? 409 : e.code === "bad_request" ? 400 : 502;
     return { status, body: { ok: false, code: e.code, error: e.message } };
   }
   return { status: 500, body: { ok: false, code: "unknown", error: e?.message || "Runner error." } };
@@ -74,6 +77,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, ...r });
     }
 
+    // Export the live login session (storageState JSON) so the app can back it up.
+    if (req.method === "GET" && url.pathname === "/session/export") {
+      const r = await exportSession();
+      return send(res, 200, { ok: true, ...r });
+    }
+
+    // Re-check a saved session in an ephemeral context: still logged in?
+    if (req.method === "POST" && url.pathname === "/session/validate") {
+      const body = await readJson(req);
+      if (!body || !body.state) return send(res, 400, { ok: false, code: "bad_request", error: "Missing session state." });
+      const r = await validateSession(body.state);
+      return send(res, 200, { ok: true, ...r });
+    }
+
     if (req.method === "GET" && url.pathname === "/pages") {
       return send(res, 200, { ok: true, pages: await listPages() });
     }
@@ -97,6 +114,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const result = await postToPage({
+        state: body.state, // optional saved storageState → ephemeral authed context
         pageUrl: body.pageUrl,
         pageName: body.pageName,
         message: body.message,

@@ -20,6 +20,13 @@ type PageOption = {
   status: string;
 };
 
+type SessionOption = {
+  id: string;
+  label: string;
+  accountName: string | null;
+  status: string;
+};
+
 type HistoryItem = {
   id: string;
   pageName: string;
@@ -41,6 +48,7 @@ export function ArticleFacebookPanel({
   pages,
   history,
   runnerConfigured = false,
+  runnerSessions = [],
 }: {
   articleId: string;
   articleStatus: string;
@@ -49,6 +57,8 @@ export function ArticleFacebookPanel({
   // When the self-hosted browser runner is configured, offer it as a posting
   // method alongside the default Graph API.
   runnerConfigured?: boolean;
+  // Saved browser sessions to choose from when posting via the runner.
+  runnerSessions?: SessionOption[];
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -66,6 +76,9 @@ export function ArticleFacebookPanel({
   // Posting method for the quick "post to one page" action: official Graph API
   // (default) or the self-hosted persistent-browser runner (when configured).
   const [via, setVia] = useState<"graph" | "runner">("graph");
+  // Saved browser session to post with (runner only). "" = runner's live login.
+  const activeSessions = useMemo(() => runnerSessions.filter((s) => s.status === "Active"), [runnerSessions]);
+  const [sessionId, setSessionId] = useState<string>("");
 
   const grouped = useMemo(() => {
     const map = new Map<string, PageOption[]>();
@@ -108,7 +121,12 @@ export function ArticleFacebookPanel({
     if (targetPage.status !== "Connected") return error(`“${targetPage.pageName}” needs reconnecting before posting.`);
     setBusy("quick");
     setResults(null);
-    const res = await publishArticleNow({ articleId, pageDbIds: [targetPage.id], via });
+    const res = await publishArticleNow({
+      articleId,
+      pageDbIds: [targetPage.id],
+      via,
+      sessionId: via === "runner" && sessionId ? sessionId : undefined,
+    });
     setBusy(null);
     if (!res.ok) return error(res.error);
     setResults(res.data);
@@ -204,6 +222,26 @@ export function ArticleFacebookPanel({
                 <select className="adm-input" value={via} onChange={(e) => setVia(e.target.value as "graph" | "runner")} aria-label="Posting method">
                   <option value="graph">Graph API (official, recommended)</option>
                   <option value="runner">Browser runner (self-hosted)</option>
+                </select>
+              </label>
+            )}
+
+            {runnerConfigured && via === "runner" && (
+              <label className="adm-fb-quick-field">
+                <span className="adm-fb-quick-lbl">Browser session</span>
+                <select
+                  className="adm-input"
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value)}
+                  aria-label="Saved browser session to post with"
+                >
+                  <option value="">Runner’s live login</option>
+                  {activeSessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                      {s.accountName ? ` · ${s.accountName}` : ""}
+                    </option>
+                  ))}
                 </select>
               </label>
             )}

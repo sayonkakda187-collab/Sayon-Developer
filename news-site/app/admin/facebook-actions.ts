@@ -10,7 +10,16 @@ import {
   validatePageToken,
 } from "@/lib/facebook";
 import { publishArticleToPage, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
-import { isRunnerConfigured, runnerStatus, runnerPost, RunnerError } from "@/lib/fbRunner";
+import {
+  isRunnerConfigured,
+  runnerStatus,
+  runnerLogin,
+  runnerExportSession,
+  runnerValidateSession,
+  runnerPost,
+  RunnerError,
+  type SessionState,
+} from "@/lib/fbRunner";
 
 /** Standard action result for client toasts. `data` is present on success when
  *  the action returns a payload (typed via the generic), omitted otherwise. */
@@ -31,6 +40,99 @@ export async function getRunnerStatus(): Promise<{ configured: boolean; reachabl
   if (!isRunnerConfigured()) return { configured: false, reachable: false, loggedIn: false };
   const s = await runnerStatus();
   return { configured: true, ...s };
+}
+
+// ── Browser sessions (capture once, reuse to post) ───────────────────────────
+
+/** Open the runner's browser for a manual login (step 1 of capturing a session). */
+export async function startRunnerLogin(): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return fail("Browser runner isn’t configured.");
+  try {
+    await runnerLogin();
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail(e instanceof RunnerError ? e.message : "Couldn’t reach the browser runner.");
+  }
+}
+
+/**
+ * Capture the runner's current logged-in session and store it ENCRYPTED in the DB
+ * (step 2). The session blob never touches the client — it's exported server-side
+ * and encrypted with AES-256-GCM before the insert.
+ */
+export async function captureRunnerSession(label: string): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return fail("Browser runner isn’t configured.");
+  const name = label.trim();
+  if (!name) return fail("Give the session a label first.");
+  try {
+    const { state, accountName } = await runnerExportSession();
+    await prisma.facebookSession.create({
+      data: {
+        label: name,
+        accountName: accountName ?? null,
+        encryptedState: encryptSecret(JSON.stringify(state)),
+        status: "Active",
+        lastValidatedAt: new Date(),
+      },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    if (e instanceof RunnerError) {
+      return fail(
+        e.code === "not_logged_in"
+          ? "Finish logging in in the browser window first, then capture."
+          : e.message,
+      );
+    }
+    return fail("Couldn’t capture the session.");
+  }
+}
+
+/** Re-check a saved session against the runner and update its status. */
+export async function validateFacebookSession(
+  id: string,
+): Promise<ActionResult<{ loggedIn: boolean }>> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return fail("Browser runner isn’t configured.");
+  const session = await prisma.facebookSession.findUnique({ where: { id } });
+  if (!session) return fail("Session not found.");
+  let state: SessionState;
+  try {
+    state = JSON.parse(decryptSecret(session.encryptedState)) as SessionState;
+  } catch {
+    await prisma.facebookSession.update({ where: { id }, data: { status: "Expired" } });
+    return fail("Stored session couldn’t be decrypted.");
+  }
+  try {
+    const r = await runnerValidateSession(state);
+    await prisma.facebookSession.update({
+      where: { id },
+      data: {
+        status: r.loggedIn ? "Active" : "Expired",
+        lastValidatedAt: new Date(),
+        accountName: r.accountName ?? session.accountName,
+      },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: { loggedIn: r.loggedIn } };
+  } catch (e) {
+    return fail(e instanceof RunnerError ? e.message : "Validation failed.");
+  }
+}
+
+/** Delete a saved session (also wipes the encrypted blob). */
+export async function deleteFacebookSession(id: string): Promise<ActionResult> {
+  await requireAdmin();
+  try {
+    await prisma.facebookSession.delete({ where: { id } });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch {
+    return fail("Couldn’t delete the session.");
+  }
 }
 
 // ── Connect / save a page ────────────────────────────────────────────────────
@@ -165,19 +267,20 @@ export async function disconnectFacebookPage(id: string): Promise<ActionResult> 
 async function publishViaRunner(
   article: { title: string; slug: string; excerpt: string | null },
   page: { id: string; pageId: string; pageName: string },
+  state?: SessionState,
 ): Promise<PublishResult> {
   const base = { pageDbId: page.id, pageName: page.pageName };
   // The runner switches pages by navigating to the page's public URL.
   const pageUrl = `https://www.facebook.com/${encodeURIComponent(page.pageId)}`;
   const message = `${buildMessage(article)}\n${articleUrl(article.slug)}`;
   try {
-    await runnerPost({ pageUrl, pageName: page.pageName, message });
+    await runnerPost({ pageUrl, pageName: page.pageName, message, state });
     return { ...base, ok: true };
   } catch (e) {
     const msg =
       e instanceof RunnerError
-        ? e.code === "not_logged_in"
-          ? "Browser runner isn’t logged in to Facebook — open its login first."
+        ? e.code === "not_logged_in" || e.code === "session_expired"
+          ? "Saved session isn’t logged in — re-capture it, or open the runner login."
           : e.message
         : "Browser runner failed to post.";
     return { ...base, ok: false, error: msg };
@@ -189,6 +292,9 @@ export async function publishArticleNow(input: {
   pageDbIds: string[];
   // "graph" (default, official API) or "runner" (self-hosted persistent browser).
   via?: "graph" | "runner";
+  // When via="runner", optionally post using a saved (encrypted) browser session
+  // instead of the runner's live login.
+  sessionId?: string;
 }): Promise<ActionResult<PublishResult[]>> {
   await requireAdmin();
 
@@ -211,10 +317,26 @@ export async function publishArticleNow(input: {
     return fail("Browser runner isn’t configured. Set FB_RUNNER_URL + FB_RUNNER_TOKEN, or use the Graph API option.");
   }
 
+  // If a saved session is chosen, decrypt it once here (server-side only).
+  let sessionState: SessionState | undefined;
+  if (useRunner && input.sessionId) {
+    const session = await prisma.facebookSession.findUnique({ where: { id: input.sessionId } });
+    if (!session) return fail("Selected session not found.");
+    try {
+      sessionState = JSON.parse(decryptSecret(session.encryptedState)) as SessionState;
+    } catch {
+      await prisma.facebookSession.update({ where: { id: session.id }, data: { status: "Expired" } }).catch(() => {});
+      return fail("Stored session couldn’t be decrypted. Re-capture it.");
+    }
+    await prisma.facebookSession
+      .update({ where: { id: session.id }, data: { lastUsedAt: new Date() } })
+      .catch(() => {});
+  }
+
   const results: PublishResult[] = [];
   for (const page of pages) {
     const result = useRunner
-      ? await publishViaRunner(article, page)
+      ? await publishViaRunner(article, page, sessionState)
       : await publishArticleToPage(article, page);
     results.push(result);
     // Record history (best-effort; never let logging break the response).

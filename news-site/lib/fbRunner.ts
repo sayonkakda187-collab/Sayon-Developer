@@ -20,6 +20,10 @@ export function isRunnerConfigured(): boolean {
 
 export type RunnerPage = { id: string; name: string; url: string };
 
+// A Playwright storageState (cookies + localStorage). Treated as opaque here —
+// captured from the runner, encrypted by the caller, and passed back to post.
+export type SessionState = { cookies: unknown[]; origins: unknown[] };
+
 export class RunnerError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -65,12 +69,34 @@ export async function runnerStatus(): Promise<{ reachable: boolean; loggedIn: bo
   }
 }
 
-/** Post a message (optionally with an image) to a target Page via the runner. */
+/** Open a visible browser on the runner for a manual login. */
+export async function runnerLogin(): Promise<{ loggedIn: boolean }> {
+  const r = await call<{ loggedIn?: boolean }>("POST", "/login");
+  return { loggedIn: Boolean(r.loggedIn) };
+}
+
+/** Capture the live login session (storageState) + best-effort account name. */
+export async function runnerExportSession(): Promise<{ state: SessionState; accountName: string | null }> {
+  const r = await call<{ state: SessionState; accountName: string | null }>("GET", "/session/export");
+  return { state: r.state, accountName: r.accountName ?? null };
+}
+
+/** Re-check a saved session: is it still logged in? */
+export async function runnerValidateSession(
+  state: SessionState,
+): Promise<{ loggedIn: boolean; accountName: string | null }> {
+  const r = await call<{ loggedIn?: boolean; accountName?: string | null }>("POST", "/session/validate", { state });
+  return { loggedIn: Boolean(r.loggedIn), accountName: r.accountName ?? null };
+}
+
+/** Post a message (optionally with an image) to a target Page via the runner. When
+ *  `state` is given, the runner posts using that saved session (no manual login). */
 export async function runnerPost(input: {
   pageUrl: string;
   pageName: string;
   message: string;
   imageBase64?: string;
+  state?: SessionState;
 }): Promise<{ ok: true }> {
   await call("POST", "/post", input);
   return { ok: true };
