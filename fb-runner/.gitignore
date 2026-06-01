@@ -1,0 +1,3 @@
+node_modules/
+# Persistent browser profile = your live Facebook session. NEVER commit it.
+profile/

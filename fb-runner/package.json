@@ -1,0 +1,15 @@
+{
+  "name": "fb-runner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted persistent-browser runner for manual Facebook Page posting. Runs OUTSIDE the Vercel/Next app (serverless can't host a long-lived browser). The admin panel sends it commands over HTTP.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

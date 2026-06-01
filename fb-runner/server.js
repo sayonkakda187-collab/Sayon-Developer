@@ -1,0 +1,121 @@
+// HTTP control surface for the persistent-browser runner. The admin panel (or a
+// curl/CLI) sends commands here; this process keeps ONE logged-in browser alive
+// and drives it. Plain Node http (no framework) to keep deps to just Playwright.
+//
+// Auth: every request must send `x-runner-token: <FB_RUNNER_TOKEN>` matching this
+// process's env. Bind to localhost by default; if you expose it, put it behind a
+// tunnel/VPN + keep the token secret. This runner must NOT run on Vercel — it
+// needs a long-lived process + real filesystem (see README).
+
+import http from "node:http";
+import { writeFile, mkdir } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  ensureBrowser,
+  isLoggedIn,
+  openForLogin,
+  listPages,
+  postToPage,
+  ManualActionError,
+} from "./browser.js";
+
+const PORT = Number(process.env.FB_RUNNER_PORT || 4350);
+const HOST = process.env.FB_RUNNER_HOST || "127.0.0.1";
+const TOKEN = process.env.FB_RUNNER_TOKEN || "";
+
+function send(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(payload) });
+  res.end(payload);
+}
+
+async function readJson(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  if (!chunks.length) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return null; // signal malformed body
+  }
+}
+
+/** Map a thrown error to { status, code, error }. */
+function errorResponse(e) {
+  if (e instanceof ManualActionError) {
+    const status = e.code === "not_logged_in" ? 409 : e.code === "bad_request" ? 400 : 502;
+    return { status, body: { ok: false, code: e.code, error: e.message } };
+  }
+  return { status: 500, body: { ok: false, code: "unknown", error: e?.message || "Runner error." } };
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // Health check is unauthenticated so the admin panel can probe reachability.
+  if (req.method === "GET" && url.pathname === "/health") {
+    return send(res, 200, { ok: true, service: "fb-runner", version: 1 });
+  }
+
+  // Everything else requires the shared token.
+  if (!TOKEN || req.headers["x-runner-token"] !== TOKEN) {
+    return send(res, 401, { ok: false, code: "unauthorized", error: "Bad or missing x-runner-token." });
+  }
+
+  try {
+    if (req.method === "GET" && url.pathname === "/status") {
+      await ensureBrowser();
+      return send(res, 200, { ok: true, loggedIn: await isLoggedIn() });
+    }
+
+    if (req.method === "POST" && url.pathname === "/login") {
+      const r = await openForLogin();
+      return send(res, 200, { ok: true, ...r });
+    }
+
+    if (req.method === "GET" && url.pathname === "/pages") {
+      return send(res, 200, { ok: true, pages: await listPages() });
+    }
+
+    if (req.method === "POST" && url.pathname === "/post") {
+      const body = await readJson(req);
+      if (!body) return send(res, 400, { ok: false, code: "bad_request", error: "Invalid JSON body." });
+
+      // Optional image: accept a base64 data payload, write to a temp file the
+      // browser can attach (avoids the admin app needing shared disk).
+      let imagePath;
+      if (body.imageBase64) {
+        try {
+          const dir = await mkdir(path.join(os.tmpdir(), "fb-runner"), { recursive: true });
+          const file = path.join(dir || path.join(os.tmpdir(), "fb-runner"), `img-${Date.now()}.jpg`);
+          await writeFile(file, Buffer.from(body.imageBase64, "base64"));
+          imagePath = file;
+        } catch {
+          return send(res, 500, { ok: false, code: "media_write_failed", error: "Couldn't stage the image on the runner." });
+        }
+      }
+
+      const result = await postToPage({
+        pageUrl: body.pageUrl,
+        pageName: body.pageName,
+        message: body.message,
+        imagePath,
+      });
+      return send(res, 200, { ok: true, ...result });
+    }
+
+    return send(res, 404, { ok: false, code: "not_found", error: "Unknown endpoint." });
+  } catch (e) {
+    const { status, body } = errorResponse(e);
+    return send(res, status, body);
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  if (!TOKEN) {
+    console.warn("⚠️  FB_RUNNER_TOKEN is not set — all authed endpoints will reject. Set it before use.");
+  }
+  console.log(`fb-runner listening on http://${HOST}:${PORT}  (health: /health)`);
+  console.log("Tip: POST /login, finish login in the window, then GET /pages and POST /post.");
+});

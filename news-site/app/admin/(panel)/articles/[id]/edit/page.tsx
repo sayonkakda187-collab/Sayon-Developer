@@ -4,6 +4,7 @@ import { saveArticle } from "@/app/admin/actions";
 import { ArticleForm } from "@/components/admin/ArticleForm";
 import { ToastProvider } from "@/components/admin/Toast";
 import { ArticleFacebookPanel } from "@/components/admin/ArticleFacebookPanel";
+import { isRunnerConfigured } from "@/lib/fbRunner";
 
 export default async function EditArticlePage({
   params,
@@ -56,6 +57,7 @@ export default async function EditArticlePage({
           articleId={article.id}
           articleStatus={article.status}
           pages={pages}
+          runnerConfigured={isRunnerConfigured()}
           history={history.map((h) => ({
             id: h.id,
             pageName: h.facebookPage?.pageName ?? "(deleted page)",
