@@ -1,3 +1,6 @@
 node_modules/
 # Persistent browser profile = your live Facebook session. NEVER commit it.
 profile/
+# Local env with your real token. Commit only .env.example.
+.env
+.env.local
