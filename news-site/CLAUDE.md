@@ -188,6 +188,16 @@ Distribute published articles to Facebook Pages from the admin panel using the
 simulation anywhere. All Graph calls are server-side; tokens never touch the
 browser.
 
+**Architecture decision (do NOT replace with browser automation):** posting goes
+directly to `/{pageId}/feed` with that Page's own access token, so the target
+Page is **exact by construction** — there is no shared "logged-in session" or
+"current page" to switch. A Playwright/Puppeteer bot driving a logged-in
+facebook.com session was explicitly rejected because (1) it violates Facebook's
+ToS and risks the **personal account being disabled** (taking all Pages with it),
+and (2) a persistent browser process can't run on this **Vercel serverless**
+host. The **Page Selector** dropdown + "Currently posting to: [Page]" label give
+the same UX (choose a page, confirm the target) on the safe Graph API path.
+
 **Security model**
 - Page access tokens are **encrypted at rest** (AES-256-GCM, `lib/crypto.ts`).
   The key derives from `ENCRYPTION_KEY` (falls back to `AUTH_SECRET`); in
