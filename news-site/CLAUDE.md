@@ -114,6 +114,14 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   share-card ratio — with **16:9** and **4:3** presets; so the chosen framing is
   exactly what the article hero and the shared link show. Cancel keeps the prior
   cover; a tainted-canvas / upload failure shows a clear error and keeps it too.
+- **Mobile (admin):** the admin is **mobile-first** — base styles target phones,
+  and desktop layout lives behind a single `@media (min-width: 1024px)` block in
+  `app/globals.css`. The shell uses a **bottom tab bar** (or `?nav=drawer`), a
+  frosted app bar, and a slide-in drawer. A consolidated **`@media (max-width:
+  1023px)` hardening block** guarantees ≥44px tap targets, no horizontal
+  overflow (long URLs/IDs wrap, media capped at 100%), modals become **bottom
+  sheets**, and the editor gets a **sticky Save/Publish bar** (`.adm-editbar`).
+  Keep new admin UI working at 320–414px; respect `prefers-reduced-motion`.
 
 ## Ads (AdsKeeper)
 
