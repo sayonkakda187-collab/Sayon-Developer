@@ -65,6 +65,32 @@ Errors return `{ ok:false, code, error }` with a specific `code`
 | `FB_RUNNER_HOST` | `127.0.0.1` | Bind address. Keep localhost unless tunneled/VPN'd. |
 | `FB_PROFILE_DIR` | `./profile` | Persistent browser profile (your session). Keep private; gitignored. |
 | `FB_HEADLESS` | _(headed)_ | `1` to run hidden once login works. |
+| `FB_SESSION_FILE` | `./session.json` | Path to an exported storageState. If present, the runner runs **headless off this file** (server mode) — no manual login. Keep private; gitignored. |
+
+## Headless server mode (e.g. EC2) — no screen needed
+
+A server has no display for the manual Facebook login. Instead, run the runner off
+a **session file** exported from a machine where you *did* log in (your PC):
+
+1. **On your PC** (runner logged in), export the session to a file:
+   ```bash
+   TOKEN=$FB_RUNNER_TOKEN
+   curl -s localhost:4350/session/export -H "x-runner-token: $TOKEN" \
+     | npx --yes node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(d).state)))' > session.json
+   ```
+2. **Copy `session.json` to the server** (scp), or push it over HTTP once the server
+   is reachable:
+   ```bash
+   curl -s -XPOST https://your-server/session/import -H "x-runner-token: $TOKEN" \
+     -H 'content-type: application/json' -d "{\"state\": $(cat session.json)}"
+   ```
+3. **On the server**, just run the runner (headless). It auto-detects `session.json`
+   (or `FB_SESSION_FILE`) and uses it — `/status`, `/post`, `/session/export` all work
+   with no login window. `storageState` is decrypted + portable, so it moves cleanly
+   from Windows → Linux (a raw `profile/` dir does not).
+
+When a session file is present, the runner ignores the headed-login path entirely.
+Re-export + re-import when Facebook expires the session.
 
 ## Connecting the admin panel
 

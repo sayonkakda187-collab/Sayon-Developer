@@ -12,10 +12,10 @@ import { writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  ensureBrowser,
   isLoggedIn,
   openForLogin,
   exportSession,
+  importSession,
   validateSession,
   listPages,
   postToPage,
@@ -68,7 +68,9 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && url.pathname === "/status") {
-      await ensureBrowser();
+      // Don't force the headed persistent browser here — isLoggedIn() launches it
+      // only when needed (no session file). This keeps /status working on a
+      // headless server that posts off a session file.
       return send(res, 200, { ok: true, loggedIn: await isLoggedIn() });
     }
 
@@ -88,6 +90,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       if (!body || !body.state) return send(res, 400, { ok: false, code: "bad_request", error: "Missing session state." });
       const r = await validateSession(body.state);
+      return send(res, 200, { ok: true, ...r });
+    }
+
+    // Install a session FILE so a headless server can post without a manual login.
+    if (req.method === "POST" && url.pathname === "/session/import") {
+      const body = await readJson(req);
+      if (!body || !body.state) return send(res, 400, { ok: false, code: "bad_request", error: "Missing session state." });
+      const r = await importSession(body.state);
       return send(res, 200, { ok: true, ...r });
     }
 
