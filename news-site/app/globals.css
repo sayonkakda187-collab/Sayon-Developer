@@ -1042,6 +1042,9 @@ body {
 .adm-editor-head {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
 }
+/* The sticky mobile Save/Publish bar is phone-only; the mobile block (≤1023px)
+   reveals it. On desktop the inline buttons in the header are used instead. */
+.adm-editbar { display: none; }
 .adm-autosave {
   display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
   color: var(--adm-muted); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--adm-bd);
@@ -1398,4 +1401,98 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 @media (max-width: 560px) {
   .adm-crop-modal .adm-modal-foot { flex-direction: column-reverse; align-items: stretch; }
   .adm-crop-modal .adm-modal-foot .adm-btn-ghost, .adm-crop-modal .adm-modal-foot .adm-btn-primary { width: 100%; justify-content: center; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE HARDENING (≤1023px = phone/tablet; desktop styles live behind the
+   min-width:1024px block above, so these never touch the desktop layout).
+   Goals: ≥44px tap targets, no horizontal overflow, comfortable spacing, and a
+   genuinely usable editor on a phone. Keeps the light/dark + on-brand look.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+  /* Hard guarantee: nothing scrolls the page sideways. */
+  .admin-shell, .adm-canvas, .adm-scroll, .adm-screen { max-width: 100%; }
+  .adm-scroll { overflow-x: hidden; }
+  .adm-screen { min-width: 0; }
+  /* Long unbroken strings (URLs, page IDs, tokens) wrap instead of pushing width. */
+  .adm-screen :is(p, h1, h2, h3, code, .adm-ati, .adm-fb-sub, .adm-bl, .adm-eyebrow) { overflow-wrap: anywhere; }
+  /* Media never exceeds its container. */
+  .adm-screen :is(img, canvas, svg, video) { max-width: 100%; }
+
+  /* ── Tap targets: lift everything interactive to ~44px ── */
+  .adm-mdbtn { min-width: 42px; height: 42px; font-size: 14px; }
+  .adm-mdtoolbar { gap: 6px; }
+  .adm-fchip { min-height: 42px; padding: 9px 15px; font-size: 13px; }
+  .adm-iconbtn { width: 44px; height: 44px; }
+  .adm-rowact a, .adm-rowact button { width: 44px; height: 44px; }
+  .adm-rowact-btn { width: 44px; height: 44px; justify-content: center; }
+  .admin-shell .adm-catcard .adm-del { width: 44px; height: 44px; }
+  .adm-btn-ghost { min-height: 44px; }
+  .adm-link { padding: 4px 2px; display: inline-flex; align-items: center; min-height: 32px; }
+  /* Tag chips: bigger remove target. */
+  .admin-shell .adm-tag { padding: 9px 13px; font-size: 13px; }
+  .admin-shell .adm-tag .adm-del { font-size: 18px; padding: 0 4px; min-width: 24px; }
+  /* Checkboxes (article select, comment toggles) easier to hit. */
+  .adm-am-rowcheck input, .adm-am-check input, .adm-srcfilter-row input { width: 20px; height: 20px; }
+
+  /* ── Page headers / CTAs: stack cleanly, full-width primary action ── */
+  .adm-pagehead .adm-head-cta { width: 100%; justify-content: center; }
+
+  /* ── Articles list: comfortable rows + readable controls ── */
+  .adm-arow { gap: 12px; padding: 13px 2px; align-items: flex-start; }
+  .adm-am-controls { gap: 8px; }
+  .adm-am-search { min-width: 0; flex: 1 1 100%; }
+  .adm-am-sort { width: 100%; min-width: 0; }
+  .adm-rowact { gap: 2px; }
+  /* Keep the 3 row actions on one line without crowding the title. */
+  .adm-abody { min-width: 0; }
+
+  /* ── Bulk action bar: wrap, full-width buttons, thumb-friendly ── */
+  .adm-bulkbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .adm-bulkbar-actions { width: 100%; }
+  .adm-bulkbar-actions .adm-btn-ghost { flex: 1; min-height: 42px; }
+
+  /* ── Editor: comfortable, mobile-first ── */
+  .adm-editor-head { gap: 10px; }
+  /* The header's action buttons (Share/Duplicate/Save/Publish) move to a sticky
+     bottom bar on phones (rendered separately); hide the inline duplicates. */
+  .adm-editor-head .adm-editor-headacts { display: none; }
+  .adm-mdbtn { flex: 1 0 auto; } /* toolbar buttons grow to fill, easy to hit */
+
+  /* Hide the inline Save/Publish in the header; show the sticky bar instead. */
+  .adm-submit-inline { display: none; }
+  /* Sticky Save/Publish bar so actions are always reachable while writing. It
+     sits just above the bottom tab bar. */
+  .adm-editbar {
+    display: flex; position: sticky; bottom: 0; z-index: 20; margin: 16px -14px -22px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); gap: 10px;
+    background: var(--adm-card); border-top: 1px solid var(--adm-bd);
+    box-shadow: 0 -6px 20px rgba(8, 12, 22, 0.08);
+  }
+  .adm-editbar .adm-btn-ghost, .adm-editbar .adm-btn-primary { flex: 1; min-height: 46px; }
+
+  /* ── Modals → bottom sheets on phones: full-width, rounded top, slide up ── */
+  .adm-modal-back { padding: 0; align-items: flex-end; }
+  .adm-modal {
+    max-width: 100%; max-height: 92dvh;
+    border-radius: var(--adm-radius) var(--adm-radius) 0 0;
+    border-left: none; border-right: none; border-bottom: none;
+    animation: adm-sheet-up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  /* Wider custom modals collapse to the full sheet width. */
+  .adm-ai-modal, .adm-share-modal, .adm-crop-modal { max-width: 100%; }
+  /* Sticky modal footers get safe-area padding so buttons clear the home bar. */
+  .adm-modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+
+  /* ── Facebook page table: scrolls within its card (never the page) ── */
+  .adm-fb-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .adm-fb-act { min-height: 42px; }
+
+  /* ── Trending cards / AI modal headlines: keep actions tappable ── */
+  .adm-trend-ai, .adm-trend-write, .adm-trend-read { min-height: 42px; }
+}
+
+@keyframes adm-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .adm-modal { animation: none !important; }
 }

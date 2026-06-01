@@ -342,7 +342,7 @@ export function ArticleForm({
           )}
           <AutosavePill state={state} dirty={dirty} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isPublished && article?.id && (
             <button
               type="button"
@@ -368,8 +368,16 @@ export function ArticleForm({
               {dupPending ? "Duplicating…" : "Duplicate"}
             </button>
           )}
-          <SubmitButtons onSubmitting={() => clear()} />
+          {/* Inline Save/Publish — hidden on phones (replaced by the sticky bar). */}
+          <span className="adm-submit-inline">
+            <SubmitButtons onSubmitting={() => clear()} />
+          </span>
         </div>
+      </div>
+
+      {/* Sticky Save/Publish bar — phones only, always reachable while writing. */}
+      <div className="adm-editbar">
+        <SubmitButtons onSubmitting={() => clear()} />
       </div>
 
       {recovered && (
