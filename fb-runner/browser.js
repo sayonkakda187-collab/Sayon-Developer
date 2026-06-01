@@ -19,9 +19,14 @@
 import { chromium } from "playwright";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROFILE_DIR = process.env.FB_PROFILE_DIR || path.join(__dirname, "profile");
+// Optional session FILE (a Playwright storageState exported elsewhere). When set,
+// the runner is "logged in" via this portable file instead of a headed login —
+// this is what makes HEADLESS SERVER deployment (e.g. EC2) work without a screen.
+const SESSION_FILE = process.env.FB_SESSION_FILE || path.join(__dirname, "session.json");
 const NAV_TIMEOUT = 45_000;
 const ACTION_TIMEOUT = 20_000;
 
@@ -97,6 +102,22 @@ function filterFacebook(state) {
   };
 }
 
+/** Read the on-disk session file (storageState), or null if absent/invalid. */
+function fileSessionState() {
+  try {
+    if (!existsSync(SESSION_FILE)) return null;
+    const s = JSON.parse(readFileSync(SESSION_FILE, "utf8"));
+    return Array.isArray(s?.cookies) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when running off a session FILE (headless server mode) vs a headed login. */
+export function hasFileSession() {
+  return Boolean(fileSessionState());
+}
+
 /** The actual post steps, run against a given page `p` (login OR ephemeral). */
 async function doPost(p, { pageUrl, pageName, message, imagePath }) {
   // 1) Switch to the page (navigate to its profile, where the composer lives).
@@ -168,8 +189,11 @@ async function doPost(p, { pageUrl, pageName, message, imagePath }) {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** True when the interactive-login context has an authenticated session. */
+/** True when authenticated — via the session FILE (server mode) or the headed
+ *  interactive-login context (PC mode). */
 export async function isLoggedIn() {
+  const fileState = fileSessionState();
+  if (fileState) return (await validateSession(fileState)).loggedIn;
   const p = await getPage();
   return (await readLoginState(p)).loggedIn;
 }
@@ -181,15 +205,31 @@ export async function openForLogin() {
   return { ok: true, loggedIn: await isLoggedIn() };
 }
 
-/** Export the current interactive-login session as a (facebook-only) storageState
- *  JSON so the app can back it up. Throws if not logged in yet. */
+/** Export the current session as a (facebook-only) storageState JSON so the app
+ *  can back it up. Uses the session FILE if present, else the live login context. */
 export async function exportSession() {
+  const fileState = fileSessionState();
+  if (fileState) {
+    const { accountName } = await validateSession(fileState);
+    return { state: filterFacebook(fileState), accountName };
+  }
   if (!context) throw new ManualActionError("no_login", "No active login. Click “Start login” first.");
   const p = await getPage();
   const { loggedIn, accountName } = await readLoginState(p);
   if (!loggedIn) throw new ManualActionError("not_logged_in", "Not logged in yet — finish login in the browser window, then capture.");
   const full = await context.storageState();
   return { state: filterFacebook(full), accountName };
+}
+
+/** Save a storageState to the session FILE (so a headless server can post with it
+ *  without a manual login). Returns whether the imported session is logged in. */
+export async function importSession(state) {
+  if (!state || !Array.isArray(state.cookies)) {
+    throw new ManualActionError("bad_request", "Invalid session state (need a storageState with cookies).");
+  }
+  writeFileSync(SESSION_FILE, JSON.stringify(filterFacebook(state)));
+  const { loggedIn, accountName } = await validateSession(filterFacebook(state));
+  return { ok: true, loggedIn, accountName };
 }
 
 /** Validate a saved storageState in an ephemeral headless context: is it still
@@ -231,20 +271,22 @@ export async function listPages() {
 }
 
 /**
- * Create a post on a target Page. If `state` (a saved storageState) is given, use
- * an EPHEMERAL authenticated context (no manual login). Otherwise fall back to the
- * live interactive-login context. Throws ManualActionError with a specific code.
+ * Create a post on a target Page. Posts via an EPHEMERAL authenticated context
+ * when a session is available — either the per-call `state` (a DB-stored session)
+ * or the on-disk session FILE (headless server mode). Falls back to the live
+ * headed login context only when neither exists (PC mode). Throws ManualActionError.
  */
 export async function postToPage({ state, pageUrl, pageName, message, imagePath }) {
   if (!pageUrl) throw new ManualActionError("bad_request", "Missing target page URL.");
   if (!message || !message.trim()) throw new ManualActionError("bad_request", "Post message is empty.");
 
-  if (state) {
+  const effectiveState = state || fileSessionState();
+  if (effectiveState) {
     // Reuse a saved session in a throwaway context. Headless by default; set
     // FB_HEADLESS=0 to watch it for debugging.
     const browser = await chromium.launch({ headless: process.env.FB_HEADLESS !== "0" });
     try {
-      const ctx = await browser.newContext({ storageState: state, viewport: { width: 1280, height: 900 } });
+      const ctx = await browser.newContext({ storageState: effectiveState, viewport: { width: 1280, height: 900 } });
       ctx.setDefaultTimeout(ACTION_TIMEOUT);
       ctx.setDefaultNavigationTimeout(NAV_TIMEOUT);
       const p = await ctx.newPage();
@@ -256,7 +298,7 @@ export async function postToPage({ state, pageUrl, pageName, message, imagePath 
     }
   }
 
-  // No saved session: use the live login context (original behavior).
+  // No session anywhere: use the live headed login context (PC mode).
   if (!(await isLoggedIn())) throw new ManualActionError("not_logged_in", "Not logged in to Facebook.");
   const p = await getPage();
   return await doPost(p, { pageUrl, pageName, message, imagePath });
