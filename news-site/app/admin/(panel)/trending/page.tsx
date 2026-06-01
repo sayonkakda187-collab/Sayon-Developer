@@ -3,11 +3,12 @@ import { TRENDING_CATEGORIES, TRENDING_LANGUAGES, TRENDING_COUNTRIES } from "@/l
 import { isAiConfigured } from "@/lib/aiAssist";
 import { NEWS_SOURCES } from "@/lib/news/sources";
 import { sourceConfigMap } from "@/lib/news/aggregate";
+import { getActiveProvider, getProviderStatuses } from "@/lib/newsSearch/settings";
 
 // Live feed + env-dependent; never statically cache this screen.
 export const dynamic = "force-dynamic";
 
-export default function AdminTrendingPage() {
+export default async function AdminTrendingPage() {
   // Pass only plain data to the client. The configured map flags which news
   // sources have a key set — without spending a request and without ever
   // serializing a key to the browser.
@@ -25,6 +26,16 @@ export default function AdminTrendingPage() {
   }));
   const anyConfigured = sources.some((s) => s.configured);
 
+  // News Search (paid metasearch) status — active provider + whether its key is
+  // set. The key value itself is never serialized to the client.
+  const [searchProvider, searchStatuses] = await Promise.all([getActiveProvider(), getProviderStatuses()]);
+  const activeStatus = searchStatuses.find((s) => s.id === searchProvider);
+  const newsSearch = {
+    provider: searchProvider,
+    label: activeStatus?.label ?? "News Search",
+    configured: Boolean(activeStatus?.configured),
+  };
+
   return (
     <TrendingNews
       categories={categories}
@@ -33,6 +44,7 @@ export default function AdminTrendingPage() {
       sources={sources}
       configured={anyConfigured}
       aiConfigured={isAiConfigured()}
+      newsSearch={newsSearch}
     />
   );
 }

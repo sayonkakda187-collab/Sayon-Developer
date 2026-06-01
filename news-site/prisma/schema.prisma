@@ -89,6 +89,18 @@ model Newsletter {
   createdAt DateTime @default(now())
 }
 
+// Encrypted key-value store for admin-managed settings (e.g. news-search API
+// keys + the active provider). Secret values are encrypted at rest with
+// AES-256-GCM (lib/crypto.ts) and only ever decrypted server-side — never sent
+// to the browser. Non-secret values (like the active provider id) are stored
+// plain. One row per setting key.
+model AppSetting {
+  key       String   @id // e.g. "serpapi_key", "newsapi_key", "news_search_provider"
+  value     String // encrypted for *_key entries; plain for non-secret ids
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
 // Per-day view counter for the dashboard "views over time" chart. Privacy-
 // respecting: just an integer count per article per UTC day — no IP, UA, or any
 // visitor PII. Incremented alongside Article.views on each article read.

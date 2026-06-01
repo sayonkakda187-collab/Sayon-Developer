@@ -370,6 +370,38 @@ request; `ANTHROPIC_MODEL` is just the fallback default.
 default; the in-app picker overrides it). Add in Vercel for Production + Preview.
 See `.env.example`.
 
+## News Search (paid metasearch + API Settings)
+
+A separate, provider-backed search **alongside** (not replacing) the free Trending
+feed. Adds a **"News Search"** tab on the Trending page — keyword + category +
+region + language search via a **paid** provider — and an **"API Settings"** admin
+page to manage keys.
+
+- **Providers:** **SerpApi (Google News)** primary, **NewsAPI.org** alternative;
+  the admin picks the active one. `lib/newsSearch/search.ts` normalizes each into
+  the same card shape (headline, source, link, snippet, time, image), caches per
+  (provider+query+category+region+lang+page) **~20 min** to protect paid quota,
+  uses a 6–9s timeout, and maps **rate-limit/quota** errors to friendly messages
+  with stale-cache fallback. Cards reuse the trending **AI Assist** + **"Write
+  article"** flow + the **"Inspiration only"** framing.
+- **API Settings (`/admin/settings`):** paste + save each key (server action →
+  **encrypted at rest** via `lib/crypto.ts` AES-256-GCM in the new **`AppSetting`**
+  table) or use an env fallback (`SERPAPI_KEY` / `NEWSAPI_KEY`). A **DB key takes
+  priority over env**. Keys are **never** returned to the browser — the UI only
+  shows configured/not-configured status. Resolution + status live in
+  `lib/newsSearch/settings.ts`; the route is `app/api/admin/news-search/route.ts`
+  (`requireAdmin`). Nav: "API Settings" in the sidebar + mobile drawer (not the
+  bottom tab bar).
+- **⚠️ Honesty (also shown in the UI):** **SerpApi is PAID** (only ~100 free-trial
+  searches). **NewsAPI's free tier is development-only** (blocked on a live site) —
+  production needs its paid plan. So real production use needs a **paid key**; the
+  **free Trending feed** (GNews + aggregated free APIs) stays available, and free
+  options (NewsData.io / TheNewsAPI) live there.
+- **DB migration:** additive `AppSetting` (encrypted key-value store);
+  `20260601080000_app_settings`. Auto-applies on deploy. **Env:** `SERPAPI_KEY` /
+  `NEWSAPI_KEY` (optional fallbacks) + `ENCRYPTION_KEY` (already required to
+  encrypt secrets at rest).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
