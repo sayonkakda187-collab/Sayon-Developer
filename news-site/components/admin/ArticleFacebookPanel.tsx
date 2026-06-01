@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   publishArticleNow,
+  publishArticleToPageUrl,
   scheduleArticlePosts,
 } from "@/app/admin/facebook-actions";
 import type { PublishResult } from "@/lib/facebookPublish";
@@ -64,8 +65,12 @@ export function ArticleFacebookPanel({
   const { success, error } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduledFor, setScheduledFor] = useState("");
-  const [busy, setBusy] = useState<null | "now" | "schedule" | "quick">(null);
+  const [busy, setBusy] = useState<null | "now" | "schedule" | "quick" | "url">(null);
   const [results, setResults] = useState<PublishResult[] | null>(null);
+  // URL-based runner posting (no connected Page / Graph token needed).
+  const [pageUrlInput, setPageUrlInput] = useState("");
+  const [urlSessionId, setUrlSessionId] = useState("");
+  const [urlResult, setUrlResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Quick "post to ONE page" target (the Page Selector dropdown). Defaults to the
   // first connected page so the confirmation label always shows a real target.
@@ -136,6 +141,26 @@ export function ArticleFacebookPanel({
     router.refresh();
   }
 
+  // Post this article to any Page by URL, using the runner + a saved session.
+  async function onPostToUrl() {
+    if (!pageUrlInput.trim()) return error("Enter a Page URL or @username.");
+    setBusy("url");
+    setUrlResult(null);
+    const res = await publishArticleToPageUrl({
+      articleId,
+      pageUrl: pageUrlInput.trim(),
+      sessionId: urlSessionId || undefined,
+    });
+    setBusy(null);
+    if (!res.ok) {
+      setUrlResult({ ok: false, msg: res.error });
+      return error(res.error);
+    }
+    setUrlResult({ ok: true, msg: `Posted to ${res.data.pageName}` });
+    success("Posted via browser session.");
+    router.refresh();
+  }
+
   async function onPublishNow() {
     if (selected.size === 0) return error("Select at least one page.");
     setBusy("now");
@@ -181,9 +206,66 @@ export function ArticleFacebookPanel({
         </p>
       )}
 
+      {/* ── Post to any Page by URL via the browser runner — needs no connected
+          Page or Graph token, just a saved session. Always available when the
+          runner is configured. ── */}
+      {runnerConfigured && (
+        <div className="adm-fb-quick" style={{ marginBottom: 14 }}>
+          <span className="adm-fb-quick-lbl" style={{ display: "block", marginBottom: 6 }}>
+            Post to a Page by URL — browser session (no Page token)
+          </span>
+          <label className="adm-fb-quick-field">
+            <span className="adm-fb-quick-lbl">Page URL or @username</span>
+            <input
+              className="adm-input"
+              placeholder="facebook.com/YourPage   or   @YourPage"
+              value={pageUrlInput}
+              onChange={(e) => setPageUrlInput(e.target.value)}
+              aria-label="Facebook Page URL or username"
+            />
+          </label>
+          <label className="adm-fb-quick-field">
+            <span className="adm-fb-quick-lbl">Browser session</span>
+            <select
+              className="adm-input"
+              value={urlSessionId}
+              onChange={(e) => setUrlSessionId(e.target.value)}
+              aria-label="Saved browser session to post with"
+            >
+              <option value="">Runner’s live login</option>
+              {activeSessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                  {s.accountName ? ` · ${s.accountName}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="adm-btn-primary adm-fb-quick-btn"
+            onClick={onPostToUrl}
+            disabled={busy !== null || !pageUrlInput.trim()}
+          >
+            {busy === "url" && <span className="adm-spinner" aria-hidden />}
+            <FacebookIcon className="h-4 w-4" />
+            {busy === "url" ? "Posting…" : "Post with session"}
+          </button>
+          {urlResult && (
+            <p className="adm-fb-target" aria-live="polite" style={urlResult.ok ? undefined : { color: "#b91c1c" }}>
+              {urlResult.msg}
+            </p>
+          )}
+          <p className="adm-field-hint">
+            Posts this article to any Page you manage using your saved login — no Graph token or
+            connected Page required. Publish the article first for the best link preview.
+          </p>
+        </div>
+      )}
+
       {pages.length === 0 ? (
         <p className="adm-field-hint" style={{ marginTop: 6 }}>
-          No Facebook Pages connected yet.{" "}
+          No Facebook Pages connected yet (for the Graph API path).{" "}
           <Link href="/admin/facebook" className="adm-link">Connect a Page →</Link>
         </p>
       ) : (

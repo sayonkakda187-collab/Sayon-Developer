@@ -360,6 +360,73 @@ export async function publishArticleNow(input: {
   return { ok: true, data: results };
 }
 
+// ── Post to a Page by URL via the runner (no Graph token / connected page) ───
+
+/** Normalize user input (username, @handle, or facebook URL) to a page URL. */
+function normalizeFacebookUrl(input: string): string | null {
+  let s = input.trim().replace(/^@/, "");
+  if (!s) return null;
+  // Pull out whatever follows facebook.com/ if a full URL/host was given.
+  const m = s.match(/(?:https?:\/\/)?(?:www\.|m\.|web\.)?facebook\.com\/(.+)$/i);
+  if (m) s = m[1];
+  else if (/(?:https?:\/\/)?(?:www\.|m\.)?facebook\.com\/?$/i.test(s)) return null; // domain only
+  if (/^https?:\/\//i.test(s)) return null; // some other site
+  s = s.replace(/\/+$/, "");
+  if (!s || /\s/.test(s)) return null;
+  return `https://www.facebook.com/${s}`;
+}
+
+/**
+ * Post an article to a Facebook Page identified ONLY by its URL/username, using a
+ * saved browser session (or the runner's live login). No FacebookPage row or Graph
+ * token required — the runner navigates to the page and posts. Not recorded in
+ * per-page history (there's no connected page to attach it to).
+ */
+export async function publishArticleToPageUrl(input: {
+  articleId: string;
+  pageUrl: string;
+  sessionId?: string;
+}): Promise<ActionResult<{ pageName: string }>> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return fail("Browser runner isn’t configured.");
+
+  const article = await prisma.article.findUnique({
+    where: { id: input.articleId },
+    select: { id: true, title: true, slug: true, excerpt: true },
+  });
+  if (!article) return fail("Article not found.");
+
+  const pageUrl = normalizeFacebookUrl(input.pageUrl);
+  if (!pageUrl) return fail("Enter a valid Facebook Page URL or @username.");
+
+  let state: SessionState | undefined;
+  if (input.sessionId) {
+    const session = await prisma.facebookSession.findUnique({ where: { id: input.sessionId } });
+    if (!session) return fail("Selected session not found.");
+    try {
+      state = JSON.parse(decryptSecret(session.encryptedState)) as SessionState;
+    } catch {
+      await prisma.facebookSession.update({ where: { id: session.id }, data: { status: "Expired" } }).catch(() => {});
+      return fail("Stored session couldn’t be decrypted. Re-capture it.");
+    }
+    await prisma.facebookSession.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
+  }
+
+  const message = `${buildMessage(article)}\n${articleUrl(article.slug)}`;
+  try {
+    await runnerPost({ pageUrl, pageName: pageUrl, message, state });
+    return { ok: true, data: { pageName: pageUrl } };
+  } catch (e) {
+    const msg =
+      e instanceof RunnerError
+        ? e.code === "not_logged_in" || e.code === "session_expired"
+          ? "Session isn’t logged in — re-capture it, or open the runner login."
+          : e.message
+        : "Browser runner failed to post.";
+    return fail(msg);
+  }
+}
+
 // ── Schedule an article for later ────────────────────────────────────────────
 
 /**
