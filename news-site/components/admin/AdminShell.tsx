@@ -20,6 +20,7 @@ import {
   CloseIcon,
   FacebookIcon,
   TrendingIcon,
+  SettingsIcon,
 } from "./icons";
 
 const NAV = [
@@ -146,6 +147,15 @@ export function AdminShell({
             })}
           </div>
           <div className="adm-navfoot">
+            <Link
+              href="/admin/settings"
+              data-tab="settings"
+              className={`adm-navitem ${isActive("/admin/settings") ? "on" : ""}`}
+              aria-current={isActive("/admin/settings") ? "page" : undefined}
+            >
+              <SettingsIcon />
+              API Settings
+            </Link>
             <Link href="/" target="_blank" className="adm-navitem">
               <ExternalLinkIcon />
               View site
@@ -268,6 +278,16 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
+              <Link
+                href="/admin/settings"
+                data-tab="settings"
+                className={`adm-dlink ${isActive("/admin/settings") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/settings") ? "page" : undefined}
+              >
+                <SettingsIcon />
+                API Settings
+              </Link>
               <Link href="/" target="_blank" className="adm-dlink" tabIndex={open ? 0 : -1}>
                 <ExternalLinkIcon />
                 View site

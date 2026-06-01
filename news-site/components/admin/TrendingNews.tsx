@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { timeAgo } from "@/lib/site";
 import { AiAssistModal } from "@/components/admin/AiAssistModal";
+import { NewsSearchView } from "@/components/admin/NewsSearchView";
 import {
   SearchIcon,
   CloseIcon,
@@ -62,6 +63,7 @@ export function TrendingNews({
   sources,
   configured,
   aiConfigured,
+  newsSearch,
 }: {
   categories: Option[];
   languages: Option[];
@@ -73,7 +75,11 @@ export function TrendingNews({
   // Whether ANTHROPIC_API_KEY is set (server-decided). When false, the AI Assist
   // button shows a "Set up AI" state instead of calling the paid API.
   aiConfigured: boolean;
+  // Active paid News Search provider (SerpApi / NewsAPI) + whether its key is set.
+  newsSearch: { provider: string; label: string; configured: boolean };
 }) {
+  // Top-level view: the free aggregated Trending feed, or provider-backed News Search.
+  const [view, setView] = useState<"trending" | "search">("trending");
   // Which sources are enabled (default: all configured ones on).
   const [enabled, setEnabled] = useState<Set<string>>(
     () => new Set(sources.filter((s) => s.configured).map((s) => s.id)),
@@ -202,11 +208,13 @@ export function TrendingNews({
     };
   }, [searchInput]);
 
-  // Reload page 1 whenever any input changes.
+  // Reload page 1 whenever any input changes — but only while the Trending view
+  // is active (don't spend a GNews call when the News Search tab is showing).
   useEffect(() => {
+    if (view !== "trending") return;
     loadFirst();
     return () => abortRef.current?.abort();
-  }, [loadFirst]);
+  }, [loadFirst, view]);
 
   function clearSearch() {
     setSearchInput("");
@@ -252,6 +260,28 @@ export function TrendingNews({
         </button>
       </div>
 
+      {/* View toggle: free aggregated Trending vs. provider-backed News Search. */}
+      <div className="adm-seg" role="tablist" aria-label="View" style={{ marginBottom: 14 }}>
+        <button type="button" role="tab" aria-selected={view === "trending"} className={`adm-seg-btn ${view === "trending" ? "on" : ""}`} onClick={() => setView("trending")}>
+          Trending feed
+        </button>
+        <button type="button" role="tab" aria-selected={view === "search"} className={`adm-seg-btn ${view === "search" ? "on" : ""}`} onClick={() => setView("search")}>
+          News Search
+          {!newsSearch.configured && <span className="adm-seg-tag">setup</span>}
+        </button>
+      </div>
+
+      {view === "search" ? (
+        <NewsSearchView
+          categories={categories}
+          languages={languages}
+          countries={countries}
+          providerLabel={newsSearch.label}
+          configured={newsSearch.configured}
+          aiConfigured={aiConfigured}
+        />
+      ) : (
+      <>
       {/* Inspiration-only / originality reminder — always visible. */}
       <div className="adm-trend-note" role="note">
         <span className="adm-trend-note-ic" aria-hidden>
@@ -406,6 +436,8 @@ export function TrendingNews({
             ) : null}
           </div>
         </>
+      )}
+      </>
       )}
 
       {aiTarget && (

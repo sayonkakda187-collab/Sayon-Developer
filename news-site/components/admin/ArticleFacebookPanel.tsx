@@ -50,8 +50,15 @@ export function ArticleFacebookPanel({
   const { success, error } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduledFor, setScheduledFor] = useState("");
-  const [busy, setBusy] = useState<null | "now" | "schedule">(null);
+  const [busy, setBusy] = useState<null | "now" | "schedule" | "quick">(null);
   const [results, setResults] = useState<PublishResult[] | null>(null);
+
+  // Quick "post to ONE page" target (the Page Selector dropdown). Defaults to the
+  // first connected page so the confirmation label always shows a real target.
+  const connectablePages = useMemo(() => pages.filter((p) => p.status === "Connected"), [pages]);
+  const [targetPageId, setTargetPageId] = useState<string>("");
+  const targetPage =
+    pages.find((p) => p.id === targetPageId) ?? connectablePages[0] ?? pages[0] ?? null;
 
   const grouped = useMemo(() => {
     const map = new Map<string, PageOption[]>();
@@ -84,6 +91,24 @@ export function ArticleFacebookPanel({
       }
       return next;
     });
+  }
+
+  // Post to exactly the selected target page. Because each page has its own
+  // access token and we post directly to /{pageId}/feed, the target is always
+  // exact — there's no shared "current page" to switch (unlike a browser session).
+  async function onQuickPost() {
+    if (!targetPage) return error("No connected page to post to.");
+    if (targetPage.status !== "Connected") return error(`“${targetPage.pageName}” needs reconnecting before posting.`);
+    setBusy("quick");
+    setResults(null);
+    const res = await publishArticleNow({ articleId, pageDbIds: [targetPage.id] });
+    setBusy(null);
+    if (!res.ok) return error(res.error);
+    setResults(res.data);
+    const ok = res.data[0]?.ok;
+    if (ok) success(`Posted to ${targetPage.pageName}.`);
+    else error(res.data[0]?.error ?? "Failed to post.");
+    router.refresh();
   }
 
   async function onPublishNow() {
@@ -138,6 +163,47 @@ export function ArticleFacebookPanel({
         </p>
       ) : (
         <>
+          {/* ── Page Selector: post to ONE chosen page, with a clear target
+              confirmation before the action runs. ── */}
+          <div className="adm-fb-quick">
+            <label className="adm-fb-quick-field">
+              <span className="adm-fb-quick-lbl">Page Selector</span>
+              <select
+                className="adm-input"
+                value={targetPage?.id ?? ""}
+                onChange={(e) => setTargetPageId(e.target.value)}
+                aria-label="Choose the Facebook page to post to"
+              >
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.status !== "Connected"}>
+                    {p.pageName} · {p.categoryGroup}
+                    {p.status !== "Connected" ? " (reconnect)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {targetPage && (
+              <p className="adm-fb-target" aria-live="polite">
+                <span className="adm-fb-target-dot" aria-hidden />
+                Currently posting to: <strong>{targetPage.pageName}</strong>
+              </p>
+            )}
+
+            <button
+              type="button"
+              className="adm-btn-primary adm-fb-quick-btn"
+              onClick={onQuickPost}
+              disabled={busy !== null || !targetPage || targetPage.status !== "Connected"}
+            >
+              {busy === "quick" && <span className="adm-spinner" aria-hidden />}
+              <FacebookIcon className="h-4 w-4" />
+              {busy === "quick" ? "Posting…" : "Post to this page"}
+            </button>
+          </div>
+
+          <div className="adm-fb-or"><span>or pick multiple pages</span></div>
+
           <div className="adm-fb-checkgroups">
             {grouped.map(({ group, rows }) => {
               const allOn = rows.every((r) => selected.has(r.id));
