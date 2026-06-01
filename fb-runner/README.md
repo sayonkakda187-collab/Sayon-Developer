@@ -27,7 +27,8 @@ admin panel sends it commands over HTTP.
 ```bash
 cd fb-runner
 npm install            # installs Playwright + Chromium (postinstall)
-export FB_RUNNER_TOKEN="$(openssl rand -hex 24)"   # shared secret; also set in the app
+cp .env.example .env   # then edit .env and set FB_RUNNER_TOKEN
+# (or skip .env and just: export FB_RUNNER_TOKEN="$(openssl rand -hex 24)")
 npm start
 ```
 
