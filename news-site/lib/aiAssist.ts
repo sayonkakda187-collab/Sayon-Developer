@@ -10,12 +10,18 @@ import "server-only";
 // or stats). Output is a STARTING POINT the admin must fact-check and edit; it
 // is never auto-published.
 
+import { DEFAULT_MODEL_ID, isValidModel } from "@/lib/aiModels";
+
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
-// Default to the cheapest capable model; overridable via env. Runs only on an
-// explicit click, so cost is bounded by usage.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+// Resolve the model to use: a validated per-request pick wins; otherwise the
+// env default (ANTHROPIC_MODEL), otherwise the cheapest capable model. Runs only
+// on an explicit click, so cost is bounded by usage.
+function resolveModel(requested?: string): string {
+  if (isValidModel(requested)) return requested;
+  return process.env.ANTHROPIC_MODEL || DEFAULT_MODEL_ID;
+}
 
 export function isAiConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
@@ -62,6 +68,57 @@ type AnthropicResponse = {
   error?: { type?: string; message?: string };
 };
 
+/**
+ * Single chokepoint for the Anthropic Messages API: builds the request, maps
+ * transport/HTTP failures to AiAssistError, and returns the concatenated text.
+ * Shared by both the trending "assist" and the editor "edit" flows.
+ */
+async function callAnthropic(opts: {
+  model?: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+}): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new AiAssistError("auth", "ANTHROPIC_API_KEY is not configured.");
+
+  let res: Response;
+  try {
+    res = await fetch(ANTHROPIC_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: resolveModel(opts.model),
+        max_tokens: opts.maxTokens,
+        system: opts.system,
+        messages: [{ role: "user", content: opts.user }],
+      }),
+      cache: "no-store",
+    });
+  } catch {
+    throw new AiAssistError("network", "Could not reach the AI service.");
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw new AiAssistError("auth", "The AI API key was rejected.");
+    if (res.status === 429) throw new AiAssistError("quota", "AI rate limit or credit reached. Try again shortly.");
+    throw new AiAssistError("unknown", `AI service error (HTTP ${res.status}).`);
+  }
+
+  const data = (await res.json().catch(() => ({}))) as AnthropicResponse;
+  const text = (data.content ?? [])
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text as string)
+    .join("\n")
+    .trim();
+  if (!text) throw new AiAssistError("parse", "AI returned an empty response.");
+  return text;
+}
+
 /** Extract the first JSON object from the model's text output. */
 function parseResult(text: string): AiAssistResult {
   let raw = text.trim();
@@ -98,10 +155,8 @@ function parseResult(text: string): AiAssistResult {
 export async function generateAiAssist(input: {
   headline: string;
   topic?: string;
+  model?: string;
 }): Promise<AiAssistResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new AiAssistError("auth", "ANTHROPIC_API_KEY is not configured.");
-
   const headline = input.headline.trim().slice(0, 300);
   const topic = (input.topic ?? "").trim().slice(0, 100);
   if (!headline) throw new AiAssistError("unknown", "A headline is required.");
@@ -111,44 +166,90 @@ export async function generateAiAssist(input: {
     (topic ? `\nTopic/category: ${topic}` : "") +
     `\n\nHelp me start an original article about this. Remember: I do NOT have the source text, and you must write original content I will fact-check.`;
 
-  let res: Response;
-  try {
-    res = await fetch(ANTHROPIC_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-      cache: "no-store",
-    });
-  } catch {
-    throw new AiAssistError("network", "Could not reach the AI service.");
-  }
-
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      throw new AiAssistError("auth", "The AI API key was rejected.");
-    }
-    if (res.status === 429) {
-      throw new AiAssistError("quota", "AI rate limit or credit reached. Try again shortly.");
-    }
-    throw new AiAssistError("unknown", `AI service error (HTTP ${res.status}).`);
-  }
-
-  const data = (await res.json().catch(() => ({}))) as AnthropicResponse;
-  const text = (data.content ?? [])
-    .filter((b) => b.type === "text" && typeof b.text === "string")
-    .map((b) => b.text as string)
-    .join("\n")
-    .trim();
-  if (!text) throw new AiAssistError("parse", "AI returned an empty response.");
-
+  const text = await callAnthropic({
+    model: input.model,
+    system: SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 2000,
+  });
   return parseResult(text);
+}
+
+// ── Editor "edit this article" flow ──────────────────────────────────────────
+// Revises the admin's OWN article (title + body they wrote) per a quick-action
+// or free-form instruction. Returns revised fields; the editor applies them as
+// an UNSAVED change the admin reviews. Never auto-saves or publishes.
+
+export type AiEditResult = {
+  /** Revised title, when the instruction targets the headline. */
+  title?: string;
+  /** Revised article body (markdown), when the instruction targets the body. */
+  body?: string;
+  /** One-line summary of what changed, shown to the admin. */
+  summary: string;
+};
+
+const EDIT_SYSTEM_PROMPT = `You are an editing assistant for an independent news publisher. The editor gives you THEIR OWN article (title and/or markdown body that they wrote) and an instruction. Revise it per the instruction.
+
+STRICT RULES:
+- Edit only as the instruction asks; preserve the article's facts and meaning unless explicitly told to change them.
+- Do NOT invent specific quotes, statistics, names, or dates. If expansion needs a concrete fact you are not sure of, insert a clearly bracketed placeholder like "[VERIFY: ...]" instead of fabricating.
+- Keep a neutral, factual news tone (no opinion, marketing, or clickbait). Preserve the author's voice.
+- Keep markdown formatting valid. Return the FULL revised text for whichever field(s) you change, not a diff.
+
+Respond with ONLY a JSON object (no markdown fences, no preamble) matching exactly:
+{
+  "title": "the revised title — include ONLY if the instruction changes the title, else omit or null",
+  "body": "the full revised article body in markdown — include ONLY if the instruction changes the body, else omit or null",
+  "summary": "one short sentence describing what you changed"
+}`;
+
+export async function editArticle(input: {
+  title: string;
+  body: string;
+  instruction: string;
+  /** "title" | "body" — which field the instruction targets (hint for the model). */
+  target?: "title" | "body";
+  model?: string;
+}): Promise<AiEditResult> {
+  const title = input.title.trim().slice(0, 300);
+  const body = input.body.slice(0, 24000); // generous cap; protects token usage
+  const instruction = input.instruction.trim().slice(0, 600);
+  if (!instruction) throw new AiAssistError("unknown", "An instruction is required.");
+  if (!title && !body) throw new AiAssistError("unknown", "There's nothing to edit yet — add a title or body first.");
+
+  const userMessage =
+    `INSTRUCTION: ${instruction}` +
+    (input.target ? `\n(This primarily targets the ${input.target}.)` : "") +
+    `\n\nCURRENT TITLE:\n${title || "(none)"}` +
+    `\n\nCURRENT BODY (markdown):\n${body || "(none)"}`;
+
+  const text = await callAnthropic({
+    model: input.model,
+    system: EDIT_SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 4000,
+  });
+
+  const raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new AiAssistError("parse", "AI returned an unexpected format.");
+  }
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    throw new AiAssistError("parse", "AI returned malformed JSON.");
+  }
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const newTitle = str(obj.title);
+  const newBody = str(obj.body);
+  if (!newTitle && !newBody) throw new AiAssistError("parse", "AI didn’t return any changes.");
+  return {
+    title: newTitle || undefined,
+    body: newBody || undefined,
+    summary: str(obj.summary) || "Updated the article.",
+  };
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { markdownComponents } from "@/lib/markdownComponents";
+import { AiModelPicker } from "@/components/admin/AiModelPicker";
+import { useAiModel } from "@/lib/useAiModel";
 import { SparklesIcon, CloseIcon, CopyIcon, CheckIcon, PencilIcon } from "@/components/admin/icons";
 
 export type AiAssistResult = {
@@ -36,19 +38,22 @@ export function AiAssistModal({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const [model, setModel] = useAiModel();
   const [phase, setPhase] = useState<Phase>("loading");
   const [result, setResult] = useState<AiAssistResult | null>(null);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Re-run when the model changes so the admin can regenerate with another model.
   useEffect(() => {
     let cancelled = false;
+    setPhase("loading");
     (async () => {
       try {
         const res = await fetch("/api/admin/ai-assist", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ headline, topic }),
+          body: JSON.stringify({ headline, topic, model }),
         });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
@@ -69,7 +74,7 @@ export function AiAssistModal({
     return () => {
       cancelled = true;
     };
-  }, [headline, topic]);
+  }, [headline, topic, model]);
 
   // Close on Escape; lock background scroll while open.
   useEffect(() => {
@@ -114,9 +119,12 @@ export function AiAssistModal({
               <p className="adm-ai-sub">{headline}</p>
             </div>
           </div>
-          <button type="button" className="adm-iconbtn" aria-label="Close" onClick={onClose}>
-            <CloseIcon className="h-5 w-5" />
-          </button>
+          <div className="adm-ai-headtools">
+            <AiModelPicker value={model} onChange={setModel} disabled={phase === "loading"} />
+            <button type="button" className="adm-iconbtn" aria-label="Close" onClick={onClose}>
+              <CloseIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Always-visible disclaimer. */}

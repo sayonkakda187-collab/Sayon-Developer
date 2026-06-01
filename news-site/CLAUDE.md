@@ -308,9 +308,24 @@ of full content is the writer's job, in their own words.
 - Code: `lib/aiAssist.ts` (`generateAiAssist`, `isAiConfigured`),
   `app/api/admin/ai-assist/route.ts`, `components/admin/AiAssistModal.tsx`.
 
+**AI Assist · edit article (editor):** the article editor has its own **"AI
+Assist"** button (`components/admin/ArticleAiEditModal.tsx`) that edits the
+admin's OWN draft. Quick actions (improve / fix grammar / shorten / expand /
+polish tone / better headline) **and** a free-form instruction box →
+`POST /api/admin/ai-assist` with `mode:"edit"` → `editArticle()` in
+`lib/aiAssist.ts` (sends the current title+body + instruction). It previews the
+revision; **Apply** writes it into the editor as an **unsaved** change (autosave
++ undo still apply) — never auto-saves or publishes. Same originality guardrails.
+
+**Model picker:** both AI panels show a dropdown — **Haiku 4.5 / Sonnet 4.6 /
+Opus 4.8** (`lib/aiModels.ts`, the allow-list the route validates against),
+remembered per-browser (`lib/useAiModel.ts`). The picked model is sent per
+request; `ANTHROPIC_MODEL` is just the fallback default.
+
 **Env:** `GNEWS_API_KEY` (free; server-side). `ANTHROPIC_API_KEY` (**paid**,
-pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (defaults to the cheapest
-capable model). Add both in Vercel for Production + Preview. See `.env.example`.
+pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (fallback default; the
+in-app picker overrides it). Add both in Vercel for Production + Preview. See
+`.env.example`.
 
 ## Roadmap
 

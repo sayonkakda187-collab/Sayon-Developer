@@ -12,6 +12,7 @@ import { useAutosave, readLocalDraft, type DraftSnapshot } from "@/lib/useAutosa
 import { countWords, readingTime } from "@/lib/editorUtils";
 import { duplicateArticle } from "@/app/admin/actions";
 import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
+import { ArticleAiEditModal, type AiEdit } from "@/components/admin/ArticleAiEditModal";
 import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
 import { CoverCropModal } from "@/components/admin/CoverCropModal";
 import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon } from "@/components/admin/icons";
@@ -141,7 +142,16 @@ export function ArticleForm({
 
   const [aiNotice, setAiNotice] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [aiEditOpen, setAiEditOpen] = useState(false);
   const isPublished = article?.status === "published";
+
+  // Apply an AI edit into the editor as an UNSAVED change (autosave + the
+  // beforeunload guard still apply; nothing is saved or published here).
+  function applyAiEdit(edit: AiEdit) {
+    if (edit.title) setTitle(edit.title);
+    if (edit.body) setContent(edit.body);
+    setAiEditOpen(false);
+  }
 
   // On mount: first honor an AI Assist handoff (sessionStorage, one-shot), then
   // otherwise offer to restore a locally-autosaved draft.
@@ -343,6 +353,16 @@ export function ArticleForm({
           <AutosavePill state={state} dirty={dirty} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="adm-btn-ghost adm-ai-trigger"
+            onClick={() => setAiEditOpen(true)}
+            style={{ minHeight: 44 }}
+            title="Edit this article with AI (improve, fix grammar, shorten, rewrite…)"
+          >
+            <SparklesIcon className="h-[16px] w-[16px]" />
+            AI Assist
+          </button>
           {isPublished && article?.id && (
             <button
               type="button"
@@ -597,6 +617,15 @@ export function ArticleForm({
 
     {shareOpen && article?.id && (
       <SharePromoteModal articleId={article.id} onClose={() => setShareOpen(false)} />
+    )}
+
+    {aiEditOpen && (
+      <ArticleAiEditModal
+        title={title}
+        body={content}
+        onApply={applyAiEdit}
+        onClose={() => setAiEditOpen(false)}
+      />
     )}
 
     {cropSrc && (
