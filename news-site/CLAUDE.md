@@ -270,28 +270,58 @@ opens Facebook's official **sharer** dialog.
   `components/admin/SharePromoteModal.tsx`. **Env:** none new — uses
   `NEXT_PUBLIC_SITE_URL` (already documented) for absolute URLs.
 
-## Trending News (GNews discovery)
+## Trending News (multi-source aggregation)
 
 Admin-only tool to discover trending headlines and start an **original** draft
 from one. **Inspiration only** — it surfaces headlines + short snippets + the
 source link; it never copies article text into posts (copyright). Distribution
 of full content is the writer's job, in their own words.
 
-**Security / quota**
-- `GNEWS_API_KEY` is read **server-side only** (`lib/gnews.ts`) and never sent to
-  the browser. Get a free key at **gnews.io** (free tier: **100 requests/day**).
-- Results are **cached in-memory ~20 min** per category/query so browsing and
-  tab-switching reuse one upstream call instead of spending the daily quota.
-- Rate-limit (429/403), bad-key (401), and network errors map to friendly
-  messages; the page degrades to an "add your key" note when unset.
+**Aggregation (lib/news/):** combines several FREE news APIs into one **deduped**
+feed. Each provider maps its response into one `NormalizedItem` (title,
+description, source, url, image, publishedAt, `via`); sources are fetched **in
+parallel with a 6s timeout each** (`Promise.allSettled`-style), then merged and
+deduped by canonical URL + fuzzy title (Jaccard ≥ 0.82), keeping the richest copy
+and sorting by most-recent. A **source selector** (chips) lets the admin toggle
+sources on/off and shows per-source status (count / "limit reached" / "not set
+up"). **Graceful degradation:** a missing-key / errored / rate-limited source
+contributes nothing and the feed still works on the others — one source never
+breaks the page.
+
+**Sources + FREE-tier ceilings** (all keys **server-side only**, each optional —
+unset = skipped, not an error):
+| Source | Env var | Free tier |
+|---|---|---|
+| GNews | `GNEWS_API_KEY` | ~100 req/day · 10 articles/req |
+| NewsData.io | `NEWSDATA_API_KEY` | ~200 credits/day · 10/req |
+| TheNewsAPI | `THENEWSAPI_KEY` | ~100 req/day · **3 articles/req** |
+| Currents | `CURRENTSAPI_KEY` | ~600 req/day (dev) |
+
+**Honest note:** these are all **limited free tiers** — combining them maximizes
+free coverage but still has ceilings; truly high volume needs a **paid plan** on
+one provider. **NewsAPI.org is intentionally NOT integrated:** its free tier is
+Developer-only and **blocked on production/live domains** (localhost only).
+Mediastack is skipped too (free tier is HTTP-only → breaks on HTTPS, ~100/mo).
+
+**Caching / quota discipline**
+- Each source is **cached in-memory ~20 min** per query+category+lang+country+page
+  (`lib/news/fetcher.ts`), so a combined feed doesn't multiply requests. A 429
+  backs that source off (serving its cache + the other sources); stale-while-error
+  keeps the feed alive. The page degrades to an "add a key" note when **no** source
+  is configured.
 
 **Code map**
-- `lib/gnews.ts` — server-only GNews client: `fetchTrending({category, query})`
-  → `top-headlines` (category tabs) or `/search` (keyword). Returns a clean,
-  typed `TrendingItem[]` (title, snippet, source, url, image, publishedAt) —
-  deliberately **not** GNews's full `content` field.
-- `app/api/admin/trending/route.ts` — admin-only (reuses `getSessionUser()`),
-  returns clean JSON; the key stays on the server.
+- `lib/news/sources.ts` — client-safe source registry (ids, labels, env vars,
+  free-tier notes) shared by the route + the source selector.
+- `lib/news/normalize.ts` — `NormalizedItem` + `mergeAndDedupe()` (URL + fuzzy
+  title dedupe, recency sort). `lib/news/fetcher.ts` — per-source cache, quota
+  backoff, `timedFetch`. `lib/news/providers/*` — one module per API (gnews wraps
+  the existing `getTrending`; newsdata, thenewsapi, currents). `lib/news/aggregate.ts`
+  — parallel orchestration + per-source status.
+- `lib/gnews.ts` — unchanged GNews client (`getTrending` + `toTrendingItem`); its
+  own cache/quota/pagination still drive GNews and "Load more".
+- `app/api/admin/trending/route.ts` — admin-only; accepts `?sources=` (enabled
+  ids) and returns `{ items, sources[] }`; keys stay on the server.
 - `app/admin/(panel)/trending/page.tsx` + `components/admin/TrendingNews.tsx` —
   category chips + search, responsive card grid, loading skeletons, empty/error
   states, and an always-visible "write original content" note.
@@ -334,10 +364,11 @@ Opus 4.8** (`lib/aiModels.ts`, the allow-list the route validates against),
 remembered per-browser (`lib/useAiModel.ts`). The picked model is sent per
 request; `ANTHROPIC_MODEL` is just the fallback default.
 
-**Env:** `GNEWS_API_KEY` (free; server-side). `ANTHROPIC_API_KEY` (**paid**,
-pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (fallback default; the
-in-app picker overrides it). Add both in Vercel for Production + Preview. See
-`.env.example`.
+**Env:** trending sources (all free, server-side, each optional): `GNEWS_API_KEY`,
+`NEWSDATA_API_KEY`, `THENEWSAPI_KEY`, `CURRENTSAPI_KEY`. `ANTHROPIC_API_KEY`
+(**paid**, pay-per-use; server-side) + optional `ANTHROPIC_MODEL` (fallback
+default; the in-app picker overrides it). Add in Vercel for Production + Preview.
+See `.env.example`.
 
 ## Roadmap
 

@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getTrending, toTrendingItem, GNewsError, GNEWS_MAX_PAGE_SIZE } from "@/lib/gnews";
+import { GNEWS_MAX_PAGE_SIZE } from "@/lib/gnews";
+import { aggregateTrending } from "@/lib/news/aggregate";
+import { NEWS_SOURCE_IDS, isNewsSourceId, type NewsSourceId } from "@/lib/news/sources";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// Aggregating several APIs can take a moment; give the route room.
+export const maxDuration = 30;
 
-// Admin-only trending discovery via GNews. Gated by requireAdmin so the daily
-// quota can't be burned by anonymous traffic. Returns cache-aware metadata and
-// friendly messages instead of raw errors.
+// Admin-only trending discovery, now aggregated across GNews + additional free
+// news APIs (NewsData, TheNewsAPI, Currents). Gated by requireAdmin so the daily
+// quotas can't be burned by anonymous traffic. Per-source caching + graceful
+// degradation live in lib/news; one failing source never breaks the feed.
 export async function GET(req: Request) {
   await requireAdmin();
 
@@ -18,41 +23,56 @@ export async function GET(req: Request) {
   const country = searchParams.get("country") ?? "us";
   const page = Number(searchParams.get("page") ?? "1") || 1;
 
+  // `sources` is a comma-separated allow-list of source ids the user has enabled.
+  // Absent → all sources. Invalid ids are ignored.
+  const sourcesParam = searchParams.get("sources");
+  const enabled: NewsSourceId[] = sourcesParam
+    ? sourcesParam.split(",").map((s) => s.trim()).filter(isNewsSourceId)
+    : [...NEWS_SOURCE_IDS];
+
   try {
-    const result = await getTrending({ category, query, lang, country, page });
-    // Map to the inspiration-only client shape (drops the raw article body).
-    const items = result.articles
-      .map(toTrendingItem)
-      .filter((x): x is NonNullable<typeof x> => x !== null);
-    // A full page hints there *may* be more; pagination still degrades to "end"
-    // on the free tier (handled client-side via dedupe).
-    const hasMore = items.length >= GNEWS_MAX_PAGE_SIZE;
+    const result = await aggregateTrending({
+      enabled,
+      query: { category, query, lang, country, page },
+    });
+
+    // hasMore: only GNews supports our page>1 fetch; a full GNews page hints there
+    // may be more. The other sources are single-page, so "Load more" is GNews-driven.
+    const gnews = result.sources.find((s) => s.id === "gnews");
+    const hasMore = (gnews?.count ?? 0) >= GNEWS_MAX_PAGE_SIZE;
+
+    const anyOk = result.sources.some((s) => s.ok && s.count > 0);
+    const anyConfigured = result.sources.some((s) => s.configured);
+    // If nothing is configured at all, surface a clear (non-error) signal.
+    if (!anyConfigured) {
+      return NextResponse.json({
+        ok: true,
+        items: [],
+        sources: result.sources,
+        cached: false,
+        page,
+        hasMore: false,
+        notice: "No news sources are set up yet.",
+      });
+    }
+
     return NextResponse.json({
       ok: true,
-      items,
-      totalArticles: result.totalArticles,
+      items: result.items,
+      sources: result.sources,
       cached: result.cached,
-      stale: result.stale,
       page,
       hasMore,
-      notice: result.stale ? "Showing recent cached results — live data is briefly unavailable." : null,
+      notice:
+        !anyOk && result.items.length === 0
+          ? "No sources returned results — they may be rate-limited. Try again shortly."
+          : null,
     });
   } catch (err) {
-    const isQuota = err instanceof GNewsError && err.code === "quota";
-    const isAuth = err instanceof GNewsError && err.code === "auth";
-    console.error("Trending fetch failed:", err);
+    console.error("Trending aggregate failed:", err);
     return NextResponse.json(
-      {
-        ok: false,
-        items: [],
-        error: isQuota
-          ? "Trending search limit reached for today. Please try again later."
-          : isAuth
-            ? "Trending news is temporarily unavailable (service limit). Try again later."
-            : "Could not load trending news. Please try again.",
-        quota: isQuota,
-      },
-      { status: isQuota ? 429 : 502 },
+      { ok: false, items: [], error: "Could not load trending news. Please try again." },
+      { status: 502 },
     );
   }
 }
