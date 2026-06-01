@@ -12,6 +12,7 @@ import { SparklesIcon, CloseIcon, CopyIcon, CheckIcon, PencilIcon } from "@/comp
 export type AiAssistResult = {
   brief: string;
   headlines: string[];
+  excerpt: string;
   outline: string;
   background: string;
   draft: string;
@@ -97,6 +98,7 @@ export function AiAssistModal({
         AI_HANDOFF_KEY,
         JSON.stringify({
           title: (chosenHeadline || headline || "").slice(0, 200),
+          excerpt: result.excerpt,
           draft: result.draft,
           at: Date.now(),
         }),

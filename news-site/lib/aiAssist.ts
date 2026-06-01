@@ -11,6 +11,7 @@ import "server-only";
 // is never auto-published.
 
 import { DEFAULT_MODEL_ID, isValidModel } from "@/lib/aiModels";
+import { sanitizeDraft, cleanExcerpt } from "@/lib/aiDraft";
 
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -30,6 +31,7 @@ export function isAiConfigured(): boolean {
 export type AiAssistResult = {
   brief: string;
   headlines: string[];
+  excerpt: string;
   outline: string;
   background: string;
   draft: string;
@@ -51,16 +53,21 @@ STRICT RULES:
 - Write ORIGINAL content in your own words from general knowledge. Do NOT copy or closely paraphrase any single source's article text. You are NOT given the source article and must not pretend to have it.
 - Do NOT fabricate specific quotes, statistics, names, dates, or events you are not confident about. When a concrete fact would be needed, write a clearly bracketed placeholder like "[VERIFY: latest figure]" instead of inventing one.
 - Neutral, factual news tone. No opinion, no marketing language, no clickbait.
-- Assume some details may be outdated; prompt the editor to verify current facts.
+- Assume some details may be outdated; the editor will verify current facts.
 - The first draft must be genuinely original prose suitable as a starting point — not a reworded copy of the headline's source.
+
+CRITICAL — the "draft" is publishable article text:
+- The "draft" field must contain ONLY the article body itself (the real paragraphs, with inline [VERIFY: ...] markers where a fact must be checked).
+- Do NOT add any editor's note, disclaimer, reminder, or "verify before publication" / "rewrite in your own words" sentence as a header or footer of the draft. Do NOT end the draft with such a note. Do NOT add a trailing "---" divider followed by a note. No "Editor's note:". The reminder is shown to the editor elsewhere in the UI — it must never appear in the draft body.
 
 Respond with ONLY a JSON object (no markdown fences, no preamble) matching exactly:
 {
   "brief": "3-5 sentence plain-language summary of what this story is likely about and why it matters (the editor's reference).",
   "headlines": ["2-3 original alternative headline options, as an array of strings"],
+  "excerpt": "A clean 1-2 sentence summary (~120-160 characters) suitable as the article's excerpt / SEO meta-description. Plain prose only — NO markdown, NO [VERIFY] markers, NO editor's note.",
   "outline": "A structured outline as markdown with section headings and bullet points.",
   "background": "Relevant background context and 3-5 distinct angles worth covering, as markdown.",
-  "draft": "A genuinely ORIGINAL first draft in neutral news style, as markdown (~300-500 words), using [VERIFY: ...] placeholders wherever a specific fact must be checked. End with a one-line note reminding the editor to fact-check and write in their own words."
+  "draft": "A genuinely ORIGINAL first draft in neutral news style, as markdown (~300-500 words), using [VERIFY: ...] placeholders wherever a specific fact must be checked. ARTICLE BODY ONLY — no editor's note, disclaimer, or verify-before-publication footer/header."
 }`;
 
 type AnthropicResponse = {
@@ -139,12 +146,18 @@ function parseResult(text: string): AiAssistResult {
   const headlines = Array.isArray(obj.headlines)
     ? obj.headlines.map((h) => str(h)).filter(Boolean).slice(0, 5)
     : [];
+  const brief = str(obj.brief);
+  // Defense-in-depth: strip any reminder/editor's-note the model may still emit
+  // so the draft body is publishable, and derive a clean excerpt.
+  const draft = sanitizeDraft(str(obj.draft));
+  const excerpt = cleanExcerpt({ excerpt: str(obj.excerpt), brief, draft });
   return {
-    brief: str(obj.brief),
+    brief,
     headlines,
+    excerpt,
     outline: str(obj.outline),
     background: str(obj.background),
-    draft: str(obj.draft),
+    draft,
   };
 }
 
