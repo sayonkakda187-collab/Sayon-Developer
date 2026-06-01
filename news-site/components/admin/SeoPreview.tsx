@@ -8,11 +8,10 @@ import {
   SEO_TITLE,
   SEO_DESC,
 } from "@/lib/editorUtils";
+import { siteConfig } from "@/lib/site";
 
-// Public origin for the search/preview URL. NEXT_PUBLIC_SITE_URL is inlined at
-// build time; falls back to the production domain for a sensible preview.
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://dailyledger.today").replace(/\/$/, "");
-const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "");
+// Public origin for the search/preview URL — the single env-aware base URL.
+const SITE_HOST = siteConfig.url.replace(/^https?:\/\//, "");
 
 function Meter({ label, len, min, max }: { label: string; len: number; min: number; max: number }) {
   const status: LengthStatus = lengthStatus(len, min, max);
