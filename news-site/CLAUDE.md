@@ -67,10 +67,21 @@ news-site/
 ## Pages & features
 
 ### Public
-- **Home** `/` — featured hero + latest grid + category sections
+- **Home** `/` — featured hero + a **Trending-style feed**: a prominent search box,
+  **category tab pills** (Top + real DB categories that filter the cards in place,
+  with a "See all" link to the category page), and a **responsive 3/2/1 card grid**
+  (`components/HomeFeed.tsx` over a larger `feed` pool from `getHomepage()`).
 - **Article** `/news/[slug]` — full article + view counter + related (same category) + comments
-- **Category** `/category/[slug]` — paginated article list
-- **Search** `/search?q=` — server-side search over title + content
+- **Category** `/category/[slug]` — paginated **NewsCard** grid (3-col)
+- **Search** `/search?q=` — server-side search over title + content, **NewsCard** grid
+- **`NewsCard`** (`components/NewsCard.tsx`) — the shared trending-style card (cover
+  on top, category + time, headline, excerpt, hover lift); used on home/category/search.
+  `ArticleCard` remains for the article page's related stories.
+- **Theme:** light/dark via the `.dark` class + RGB design tokens; the toggle +
+  `localStorage` persistence are unchanged, but a first-time visitor with no stored
+  choice now defaults to **dark** (the polished default; set pre-paint in
+  `app/layout.tsx`'s `themeInit`). The public token system is separate from the
+  admin `.adm-*` system — the redesign reuses **public** tokens, never admin CSS.
 - Responsive header (nav + category menu) and footer with newsletter signup
 - Newsletter signup (dedupe emails)
 - Comments: visitors post (name + text), stored unapproved, only approved shown

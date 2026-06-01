@@ -9,7 +9,9 @@ export function ThemeToggle() {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
-      if ((localStorage.getItem("theme") ?? "system") === "system") {
+      // Only follow the OS when the user explicitly chose "system". With no
+      // stored choice we keep the dark default (set pre-paint in the root layout).
+      if (localStorage.getItem("theme") === "system") {
         document.documentElement.classList.toggle("dark", mq.matches);
       }
     };

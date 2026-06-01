@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { searchArticles } from "@/lib/queries";
-import { ArticleCard } from "@/components/ArticleCard";
+import { NewsCard } from "@/components/NewsCard";
 import { SearchForm } from "@/components/SearchForm";
 import { Reveal } from "@/components/Reveal";
 
@@ -42,10 +42,10 @@ export default async function SearchPage({ searchParams }: Props) {
       )}
 
       {results.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((article, i) => (
             <Reveal key={article.id} delay={Math.min(i, 4) * 55}>
-              <ArticleCard article={article} />
+              <NewsCard article={article} />
             </Reveal>
           ))}
         </div>
