@@ -15,6 +15,7 @@ import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
 import { ArticleAiEditModal, type AiEdit } from "@/components/admin/ArticleAiEditModal";
 import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
 import { CoverCropModal } from "@/components/admin/CoverCropModal";
+import { StockPhotoModal } from "@/components/admin/StockPhotoModal";
 import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon } from "@/components/admin/icons";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
@@ -74,6 +75,8 @@ type ArticleInput = {
   excerpt: string;
   content: string;
   coverImage: string | null;
+  coverCredit?: string | null;
+  coverCreditUrl?: string | null;
   categoryId: string | null;
   status: string;
   tagIds: string[];
@@ -107,6 +110,14 @@ export function ArticleForm({
   const [excerpt, setExcerpt] = useState(article?.excerpt ?? "");
   const [content, setContent] = useState(article?.content ?? initial?.content ?? "");
   const [coverImage, setCoverImage] = useState(article?.coverImage ?? "");
+  // Stock-photo attribution that travels with the cover image (set when a Pexels
+  // photo is chosen; cleared on manual upload / paste / remove).
+  const [coverCredit, setCoverCredit] = useState(article?.coverCredit ?? "");
+  const [coverCreditUrl, setCoverCreditUrl] = useState(article?.coverCreditUrl ?? "");
+  const [stockOpen, setStockOpen] = useState(false);
+  // Credit pending while a freshly-picked stock photo goes through the cropper;
+  // applied to the form only once the cropped image uploads successfully.
+  const pendingCredit = useRef<{ credit: string; url: string } | null>(null);
   const [categoryId, setCategoryId] = useState(article?.categoryId ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [uploading, setUploading] = useState<null | "cover" | "inline">(null);
@@ -227,6 +238,9 @@ export function ArticleForm({
       setUploadError("Please choose an image file.");
       return;
     }
+    pendingCredit.current = null; // a manual upload has no stock credit
+    setCoverCredit("");
+    setCoverCreditUrl("");
     setUploadError("");
     if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
     const url = URL.createObjectURL(file);
@@ -276,10 +290,29 @@ export function ArticleForm({
     setCropUploading(false);
     if (url) {
       setCoverImage(url);
+      // Commit any stock-photo credit now that the (cropped) image is stored.
+      if (pendingCredit.current) {
+        setCoverCredit(pendingCredit.current.credit);
+        setCoverCreditUrl(pendingCredit.current.url);
+        pendingCredit.current = null;
+      }
       closeCropper();
     }
     // If upload failed, uploadFile already set uploadError; keep the modal open
     // so the user can retry or cancel without losing their framing.
+  }
+
+  // A free stock photo was chosen: remember its credit, then open it in the
+  // cropper (the cropped result uploads to Blob like any other cover).
+  function onStockPick(pick: { url: string; credit: string; creditUrl: string }) {
+    pendingCredit.current = { credit: pick.credit, url: pick.creditUrl };
+    setStockOpen(false);
+    if (cropObjectUrl.current) {
+      URL.revokeObjectURL(cropObjectUrl.current);
+      cropObjectUrl.current = null;
+    }
+    setUploadError("");
+    setCropSrc(pick.url);
   }
 
   function insertImageMarkdown(name: string, url: string) {
@@ -545,6 +578,13 @@ export function ArticleForm({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={coverImage} alt="Cover preview" className="adm-cover-img" />
                 </div>
+                {coverCredit && (
+                  <p className="adm-cover-credit">
+                    Photo: {coverCreditUrl ? (
+                      <a href={coverCreditUrl} target="_blank" rel="noopener noreferrer">{coverCredit}</a>
+                    ) : coverCredit} · Pexels
+                  </p>
+                )}
                 <div className="adm-cover-acts">
                   <button type="button" className="adm-btn-ghost adm-cover-btn" onClick={adjustExistingCover}>
                     Adjust / reframe
@@ -553,34 +593,51 @@ export function ArticleForm({
                     Replace
                     <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
                   </label>
-                  <button type="button" className="adm-cover-remove" onClick={() => setCoverImage("")}>
+                  <button type="button" className="adm-btn-ghost adm-cover-btn" onClick={() => setStockOpen(true)}>
+                    <ImageIcon className="h-[15px] w-[15px]" />
+                    Free photos
+                  </button>
+                  <button
+                    type="button"
+                    className="adm-cover-remove"
+                    onClick={() => { setCoverImage(""); setCoverCredit(""); setCoverCreditUrl(""); pendingCredit.current = null; }}
+                  >
                     Remove
                   </button>
                 </div>
               </div>
             ) : (
-              <label
-                className={`adm-cover-drop ${dragOver ? "drag" : ""}`}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onCoverDrop}
-              >
-                <span className="adm-cover-drop-ic" aria-hidden>
-                  <ImageIcon className="h-6 w-6" />
-                </span>
-                <strong>{uploading === "cover" ? "Uploading…" : "Upload or drop a cover image"}</strong>
-                <span className="adm-cover-drop-sub">You’ll crop &amp; reframe it before it’s saved</span>
-                <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
-              </label>
+              <>
+                <label
+                  className={`adm-cover-drop ${dragOver ? "drag" : ""}`}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onCoverDrop}
+                >
+                  <span className="adm-cover-drop-ic" aria-hidden>
+                    <ImageIcon className="h-6 w-6" />
+                  </span>
+                  <strong>{uploading === "cover" ? "Uploading…" : "Upload or drop a cover image"}</strong>
+                  <span className="adm-cover-drop-sub">You’ll crop &amp; reframe it before it’s saved</span>
+                  <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
+                </label>
+                <button type="button" className="adm-btn-ghost adm-cover-stockbtn" onClick={() => setStockOpen(true)}>
+                  <ImageIcon className="h-[15px] w-[15px]" />
+                  Search free photos
+                </button>
+              </>
             )}
             <input
               type="text"
               name="coverImage"
               value={coverImage}
-              onChange={(e) => setCoverImage(e.target.value)}
+              onChange={(e) => { setCoverImage(e.target.value); setCoverCredit(""); setCoverCreditUrl(""); pendingCredit.current = null; }}
               placeholder="…or paste an image URL"
               className={`${inputClass} mt-2`}
             />
+            {/* Credit travels with the cover; read by saveArticle. */}
+            <input type="hidden" name="coverCredit" value={coverCredit} />
+            <input type="hidden" name="coverCreditUrl" value={coverCreditUrl} />
             {uploadError && <p className="adm-cover-err">{uploadError}</p>}
           </div>
 
@@ -625,6 +682,15 @@ export function ArticleForm({
         body={content}
         onApply={applyAiEdit}
         onClose={() => setAiEditOpen(false)}
+      />
+    )}
+
+    {stockOpen && (
+      <StockPhotoModal
+        initialTitle={title}
+        initialExcerpt={excerpt}
+        onPick={onStockPick}
+        onClose={() => setStockOpen(false)}
       />
     )}
 

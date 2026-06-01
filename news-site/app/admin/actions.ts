@@ -19,6 +19,9 @@ export async function saveArticle(formData: FormData) {
   const excerpt = String(formData.get("excerpt") ?? "").trim();
   const content = String(formData.get("content") ?? "");
   const coverImage = String(formData.get("coverImage") ?? "").trim() || null;
+  // Stock-photo attribution (only meaningful when a cover is set).
+  const coverCredit = coverImage ? String(formData.get("coverCredit") ?? "").trim() || null : null;
+  const coverCreditUrl = coverImage ? String(formData.get("coverCreditUrl") ?? "").trim() || null : null;
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   const status =
     String(formData.get("status") ?? "draft") === "published"
@@ -65,6 +68,8 @@ export async function saveArticle(formData: FormData) {
         excerpt,
         content,
         coverImage,
+        coverCredit,
+        coverCreditUrl,
         categoryId,
         status,
         publishedAt,
@@ -80,6 +85,8 @@ export async function saveArticle(formData: FormData) {
         excerpt,
         content,
         coverImage,
+        coverCredit,
+        coverCreditUrl,
         categoryId,
         status,
         publishedAt,

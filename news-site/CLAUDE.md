@@ -125,6 +125,18 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   share-card ratio — with **16:9** and **4:3** presets; so the chosen framing is
   exactly what the article hero and the shared link show. Cancel keeps the prior
   cover; a tainted-canvas / upload failure shows a clear error and keeps it too.
+- **Free stock photos (cover image):** the cover area has **"Search free photos"**
+  + **"Suggest from title"** (`components/admin/StockPhotoModal.tsx` →
+  `GET /api/admin/stock-photos` (`requireAdmin`) → `lib/stockPhotos.ts`). Provider
+  is **Pexels** (free, no card, ~200 req/hr, simplest license — no mandatory
+  download ping). **License-cleared images only — never news-source images.**
+  Searches are **cached ~30 min** server-side to protect the rate limit; quota/
+  auth/network errors degrade to friendly messages; an unset `PEXELS_API_KEY`
+  shows a "set up photos" state (manual upload still works). Picking a photo opens
+  it in the **existing cropper** (cropped result → Blob via `/api/admin/upload`),
+  so nothing is hotlinked. Photographer credit is stored on the article
+  (`coverCredit` / `coverCreditUrl`, additive migration) and shown small on the
+  public hero. Key is **server-side only**.
 - **Mobile (admin):** the admin is **mobile-first** — base styles target phones,
   and desktop layout lives behind a single `@media (min-width: 1024px)` block in
   `app/globals.css`. The shell uses a **bottom tab bar** (or `?nav=drawer`), a

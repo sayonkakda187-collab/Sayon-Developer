@@ -23,6 +23,10 @@ model Article {
   excerpt     String
   content     String // Markdown body
   coverImage  String?
+  // Optional attribution when the cover came from a free stock provider (Pexels):
+  // photographer name + a link to credit them. Null for manual uploads / pasted URLs.
+  coverCredit    String?
+  coverCreditUrl String?
   status      String    @default("draft") // "draft" | "published"
   views       Int       @default(0)
   publishedAt DateTime?

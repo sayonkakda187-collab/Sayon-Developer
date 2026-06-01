@@ -128,6 +128,19 @@ export default async function ArticlePage({ params }: Props) {
               className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15" />
+            {article.coverCredit && (
+              <p className="absolute bottom-1.5 right-2 text-[10px] font-medium text-white/55">
+                Photo:{" "}
+                {article.coverCreditUrl ? (
+                  <a href={article.coverCreditUrl} target="_blank" rel="noopener noreferrer nofollow" className="underline-offset-2 hover:underline">
+                    {article.coverCredit}
+                  </a>
+                ) : (
+                  article.coverCredit
+                )}{" "}
+                · Pexels
+              </p>
+            )}
           </div>
           <div className="absolute inset-x-0 bottom-0">
             <div className="mx-auto max-w-5xl px-4 pb-8 sm:px-6 sm:pb-12 lg:px-8">
