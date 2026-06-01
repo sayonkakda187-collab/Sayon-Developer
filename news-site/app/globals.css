@@ -977,6 +977,28 @@ body {
 [data-adm-theme="dark"] .admin-shell .adm-trend-note { background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.24); }
 [data-adm-theme="dark"] .admin-shell .adm-trend-note-ic { color: #fb7185; }
 
+/* Source selector: toggle which free news APIs feed the combined feed. */
+.adm-srcbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.adm-srcbar-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--adm-muted-2); margin-right: 2px; }
+.adm-srcchip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; border: 1px solid var(--adm-bd); background: var(--adm-card); color: var(--adm-muted);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.adm-srcchip:hover:not(:disabled) { border-color: var(--adm-muted-2); color: var(--adm-ink); }
+.adm-srcchip-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--adm-muted-2); flex: none; }
+.adm-srcchip.on { background: var(--adm-navy); border-color: var(--adm-navy); color: #fff; }
+.adm-srcchip.on .adm-srcchip-dot { background: #4ade80; }
+[data-adm-theme="dark"] .admin-shell .adm-srcchip.on { background: #1e293b; border-color: #334155; }
+.adm-srcchip.off { opacity: 0.6; cursor: not-allowed; }
+.adm-srcchip.off .adm-srcchip-dot { background: #cbd5e1; }
+.adm-srcchip-n { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(0,0,0,0.08); color: inherit; }
+.adm-srcchip.on .adm-srcchip-n { background: rgba(255,255,255,0.18); }
+/* "via" provenance tag on each card. */
+.adm-trend-via { margin-left: auto; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--adm-muted-2); border: 1px solid var(--adm-bd); border-radius: 999px; padding: 1px 7px; }
+/* Source list in the "add a key" empty state. */
+.adm-srclist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--adm-muted); text-align: left; max-width: 380px; }
+
 .adm-trend-controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 @media (min-width: 760px) {
   .adm-trend-controls { flex-direction: row; align-items: center; justify-content: space-between; }

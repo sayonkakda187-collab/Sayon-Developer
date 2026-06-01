@@ -16,8 +16,13 @@ import {
 
 type Option = { id: string; label: string };
 
-// Mirrors lib/gnews `TrendingItem`. Declared here so this client component never
-// imports the server-only GNews module.
+// A news source surfaced in the selector (mirrors lib/news/sources, kept local
+// so this client component never imports a server-only module).
+type SourceMeta = { id: string; label: string; site: string; freeNote: string; configured: boolean };
+// Per-source status returned with each feed response.
+type SourceStatus = { id: string; label: string; configured: boolean; ok: boolean; count: number; note: string | null };
+
+// Normalized inspiration-only item. `via` is which API surfaced it.
 type Item = {
   title: string;
   description: string;
@@ -25,11 +30,13 @@ type Item = {
   url: string;
   image: string | null;
   publishedAt: string | null;
+  via?: string;
 };
 
 type ApiResponse = {
   ok?: boolean;
   items?: Item[];
+  sources?: SourceStatus[];
   cached?: boolean;
   stale?: boolean;
   page?: number;
@@ -40,21 +47,39 @@ type ApiResponse = {
 
 type Phase = "loading" | "ready" | "error";
 
+// Short label for the "via" provenance tag on each card.
+const VIA_LABEL: Record<string, string> = {
+  gnews: "GNews",
+  newsdata: "NewsData",
+  thenewsapi: "TheNewsAPI",
+  currents: "Currents",
+};
+
 export function TrendingNews({
   categories,
   languages,
   countries,
+  sources,
   configured,
   aiConfigured,
 }: {
   categories: Option[];
   languages: Option[];
   countries: Option[];
+  // All registered news sources + whether each has a key set.
+  sources: SourceMeta[];
+  // True when AT LEAST ONE news source is configured.
   configured: boolean;
   // Whether ANTHROPIC_API_KEY is set (server-decided). When false, the AI Assist
   // button shows a "Set up AI" state instead of calling the paid API.
   aiConfigured: boolean;
 }) {
+  // Which sources are enabled (default: all configured ones on).
+  const [enabled, setEnabled] = useState<Set<string>>(
+    () => new Set(sources.filter((s) => s.configured).map((s) => s.id)),
+  );
+  // Per-source status from the latest fetch (counts / limit notes).
+  const [sourceStatus, setSourceStatus] = useState<SourceStatus[]>([]);
   const [category, setCategory] = useState<string>(categories[0]?.id ?? "general");
   // The trending story an AI Assist modal is open for (null = closed). Topic is
   // the active search term or category — sent alongside the headline, never the
@@ -79,6 +104,7 @@ export function TrendingNews({
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const enabledKey = [...enabled].sort().join(",");
   const buildParams = useCallback(
     (p: number) => {
       const params = new URLSearchParams();
@@ -87,9 +113,10 @@ export function TrendingNews({
       params.set("lang", lang);
       params.set("country", country);
       params.set("page", String(p));
+      if (enabledKey) params.set("sources", enabledKey);
       return params;
     },
-    [query, category, lang, country],
+    [query, category, lang, country, enabledKey],
   );
 
   // Load page 1 (replaces the list). Triggered by any filter change.
@@ -117,6 +144,7 @@ export function TrendingNews({
         return;
       }
       setItems(data.items ?? []);
+      setSourceStatus(data.sources ?? []);
       setCached(Boolean(data.cached));
       setNotice(data.notice ?? null);
       setPage(1);
@@ -189,6 +217,21 @@ export function TrendingNews({
     setQuery("");
     setCategory(id);
   }
+  // Toggle a configured source on/off (triggers a reload via buildParams deps).
+  function toggleSource(id: string) {
+    setEnabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        if (next.size === 1) return prev; // keep at least one source enabled
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+  // Quick status lookup by source id from the latest fetch.
+  const statusById = (id: string) => sourceStatus.find((s) => s.id === id);
 
   return (
     <div>
@@ -221,6 +264,38 @@ export function TrendingNews({
           article <strong>in your own words</strong> — copying a source’s text is copyright
           infringement.
         </p>
+      </div>
+
+      {/* Source selector: toggle which free news APIs feed the combined feed. */}
+      <div className="adm-srcbar" role="group" aria-label="News sources">
+        <span className="adm-srcbar-lbl">Sources</span>
+        {sources.map((s) => {
+          const st = statusById(s.id);
+          const on = enabled.has(s.id);
+          const note = !s.configured
+            ? "not set up"
+            : st?.note && st.note !== "off"
+              ? st.note
+              : on && st
+                ? `${st.count}`
+                : null;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="switch"
+              aria-checked={s.configured && on}
+              className={`adm-srcchip ${!s.configured ? "off" : on ? "on" : ""}`}
+              onClick={() => s.configured && toggleSource(s.id)}
+              disabled={!s.configured}
+              title={s.configured ? `${s.label} · ${s.freeNote}` : `${s.label} — add ${s.site} key to enable`}
+            >
+              <span className="adm-srcchip-dot" aria-hidden />
+              {s.label}
+              {note !== null && <span className="adm-srcchip-n">{note}</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Controls: category tabs + keyword search + language/country. */}
@@ -297,7 +372,7 @@ export function TrendingNews({
 
       {/* ── Content states ── */}
       {!configured ? (
-        <ConfigNeeded />
+        <ConfigNeeded sources={sources} />
       ) : phase === "loading" ? (
         <SkeletonGrid />
       ) : phase === "error" ? (
@@ -325,8 +400,8 @@ export function TrendingNews({
               </button>
             ) : ceiling ? (
               <p className="adm-trend-ceiling">
-                That’s all GNews returns on the free tier (up to 10 per search). For more sources or
-                results, a paid GNews plan would be needed.
+                That’s all the combined free tiers return for now. Enable more sources above, or a
+                paid plan on one provider would be needed for higher volume.
               </p>
             ) : null}
           </div>
@@ -394,6 +469,7 @@ function TrendingCard({
               <span>{timeAgo(item.publishedAt)}</span>
             </>
           )}
+          {item.via && <span className="adm-trend-via" title={`Found via ${VIA_LABEL[item.via] ?? item.via}`}>{VIA_LABEL[item.via] ?? item.via}</span>}
         </div>
 
         <h3 className="adm-trend-title">{item.title}</h3>
@@ -491,23 +567,27 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function ConfigNeeded() {
+function ConfigNeeded({ sources }: { sources: SourceMeta[] }) {
   return (
     <div className="adm-card">
       <div className="adm-empty">
         <div className="adm-ill">
           <TrendingIcon className="h-[34px] w-[34px]" />
         </div>
-        <h2 className="adm-serif">Add your free GNews API key</h2>
+        <h2 className="adm-serif">Add a free news API key</h2>
         <p>
-          Trending News uses the GNews API. Create a free key at{" "}
-          <a className="adm-link" href="https://gnews.io" target="_blank" rel="noopener noreferrer">
-            gnews.io
-          </a>{" "}
-          (100 requests/day), then set <code className="adm-fb-code">GNEWS_API_KEY</code> in your
-          environment — in Vercel, add it under Project → Settings → Environment Variables for
-          Production &amp; Preview, then redeploy.
+          Trending News aggregates several free news APIs — add at least one key to get started.
+          Each is free; set its env var in Vercel (Project → Settings → Environment Variables for
+          Production &amp; Preview), then redeploy.
         </p>
+        <ul className="adm-srclist">
+          {sources.map((s) => (
+            <li key={s.id}>
+              <a className="adm-link" href={`https://${s.site}`} target="_blank" rel="noopener noreferrer">{s.label}</a>
+              {" — "}{s.freeNote}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
