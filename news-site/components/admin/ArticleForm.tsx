@@ -10,6 +10,7 @@ import { SeoPreview } from "@/components/admin/SeoPreview";
 import { MarkdownToolbar } from "@/components/admin/MarkdownToolbar";
 import { useAutosave, readLocalDraft, type DraftSnapshot } from "@/lib/useAutosave";
 import { countWords, readingTime } from "@/lib/editorUtils";
+import { sanitizeDraft, hasAiLeftovers } from "@/lib/aiDraft";
 import { duplicateArticle } from "@/app/admin/actions";
 import { AI_HANDOFF_KEY } from "@/components/admin/AiAssistModal";
 import { ArticleAiEditModal, type AiEdit } from "@/components/admin/ArticleAiEditModal";
@@ -21,7 +22,15 @@ import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon } from "@/components/admi
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
 // and both disable while the server action runs — never feels frozen.
-function SubmitButtons({ onSubmitting }: { onSubmitting: () => void }) {
+function SubmitButtons({
+  onSubmitting,
+  onPublishGuard,
+}: {
+  onSubmitting: () => void;
+  // Return false to abort publishing (e.g. the user cancelled the AI-leftovers
+  // confirm). Runs before the form action fires.
+  onPublishGuard?: () => boolean;
+}) {
   const { pending } = useFormStatus();
   const [clicked, setClicked] = useState<"draft" | "published" | null>(null);
   const busy = (v: "draft" | "published") => pending && clicked === v;
@@ -44,7 +53,14 @@ function SubmitButtons({ onSubmitting }: { onSubmitting: () => void }) {
         type="submit"
         name="status"
         value="published"
-        onClick={() => { setClicked("published"); onSubmitting(); }}
+        onClick={(e) => {
+          if (onPublishGuard && !onPublishGuard()) {
+            e.preventDefault(); // user cancelled — don't submit
+            return;
+          }
+          setClicked("published");
+          onSubmitting();
+        }}
         disabled={pending}
         aria-busy={busy("published")}
         className="adm-btn-primary"
@@ -172,14 +188,15 @@ export function ArticleForm({
         const raw = sessionStorage.getItem(AI_HANDOFF_KEY);
         if (raw) {
           sessionStorage.removeItem(AI_HANDOFF_KEY); // consume once
-          const data = JSON.parse(raw) as { title?: string; draft?: string };
-          const body = (data.draft ?? "").trim();
+          const data = JSON.parse(raw) as { title?: string; excerpt?: string; draft?: string };
+          // The Content body must contain ONLY the article draft — no AI
+          // reminder/editor's-note text (that lives in the UI banner below).
+          // sanitizeDraft strips any leftover warning header/footer just in case.
+          const body = sanitizeDraft(data.draft ?? "");
+          const summary = (data.excerpt ?? "").trim();
           if (data.title) setTitle(data.title);
-          if (body) {
-            setContent(
-              `> ⚠️ AI draft — review, fact-check, and edit before publishing. Verify all facts and write in your own words.\n\n${body}`,
-            );
-          }
+          if (summary) setExcerpt(summary);
+          if (body) setContent(body);
           setAiNotice(true);
           return; // don't also pop the recovery banner
         }
@@ -340,6 +357,21 @@ export function ArticleForm({
     if (url) insertImageMarkdown(file.name, url);
   }
 
+  // Gentle, non-blocking pre-publish check: if the body still has AI reminder
+  // text or unresolved [VERIFY: …] markers, ask before publishing. Returns false
+  // only if the user cancels.
+  function publishGuard(): boolean {
+    const { verify, reminder } = hasAiLeftovers(content);
+    if (!verify && !reminder) return true;
+    const bits = [
+      reminder ? "AI reminder / editor’s-note text" : "",
+      verify ? "unresolved [VERIFY: …] markers" : "",
+    ].filter(Boolean).join(" and ");
+    return confirm(
+      `This draft still contains ${bits}. Publishing will make it visible to readers.\n\nPublish anyway?`,
+    );
+  }
+
   // ⌘B / ⌘I shortcuts in the textarea.
   function onContentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -423,14 +455,14 @@ export function ArticleForm({
           )}
           {/* Inline Save/Publish — hidden on phones (replaced by the sticky bar). */}
           <span className="adm-submit-inline">
-            <SubmitButtons onSubmitting={() => clear()} />
+            <SubmitButtons onSubmitting={() => clear()} onPublishGuard={publishGuard} />
           </span>
         </div>
       </div>
 
       {/* Sticky Save/Publish bar — phones only, always reachable while writing. */}
       <div className="adm-editbar">
-        <SubmitButtons onSubmitting={() => clear()} />
+        <SubmitButtons onSubmitting={() => clear()} onPublishGuard={publishGuard} />
       </div>
 
       {recovered && (
