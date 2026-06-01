@@ -198,6 +198,17 @@ and (2) a persistent browser process can't run on this **Vercel serverless**
 host. The **Page Selector** dropdown + "Currently posting to: [Page]" label give
 the same UX (choose a page, confirm the target) on the safe Graph API path.
 
+**Optional self-hosted browser runner (`/fb-runner`):** for users who still want
+manual-session posting, a **standalone Node service** (NOT part of this app —
+it can't run on Vercel) keeps a persistent, manually-logged-in Chromium alive
+(Playwright) and posts by automating the FB UI. It lives at the repo root so CI
+(which only builds `news-site/**`) never touches it. The app talks to it via
+`lib/fbRunner.ts` over HTTP **only when `FB_RUNNER_URL` + `FB_RUNNER_TOKEN` are
+set**; otherwise the Graph API is used unchanged. When configured, the Facebook
+panel adds a "Browser runner" posting method (`publishArticleNow({ via: "runner" })`).
+The runner is **opt-in and at-your-own-risk** (ToS/account-ban). Graph API code
+is **not** removed — the two coexist.
+
 **Security model**
 - Page access tokens are **encrypted at rest** (AES-256-GCM, `lib/crypto.ts`).
   The key derives from `ENCRYPTION_KEY` (falls back to `AUTH_SECRET`); in

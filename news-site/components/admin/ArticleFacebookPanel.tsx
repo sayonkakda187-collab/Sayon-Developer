@@ -40,11 +40,15 @@ export function ArticleFacebookPanel({
   articleStatus,
   pages,
   history,
+  runnerConfigured = false,
 }: {
   articleId: string;
   articleStatus: string;
   pages: PageOption[];
   history: HistoryItem[];
+  // When the self-hosted browser runner is configured, offer it as a posting
+  // method alongside the default Graph API.
+  runnerConfigured?: boolean;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -59,6 +63,9 @@ export function ArticleFacebookPanel({
   const [targetPageId, setTargetPageId] = useState<string>("");
   const targetPage =
     pages.find((p) => p.id === targetPageId) ?? connectablePages[0] ?? pages[0] ?? null;
+  // Posting method for the quick "post to one page" action: official Graph API
+  // (default) or the self-hosted persistent-browser runner (when configured).
+  const [via, setVia] = useState<"graph" | "runner">("graph");
 
   const grouped = useMemo(() => {
     const map = new Map<string, PageOption[]>();
@@ -101,7 +108,7 @@ export function ArticleFacebookPanel({
     if (targetPage.status !== "Connected") return error(`“${targetPage.pageName}” needs reconnecting before posting.`);
     setBusy("quick");
     setResults(null);
-    const res = await publishArticleNow({ articleId, pageDbIds: [targetPage.id] });
+    const res = await publishArticleNow({ articleId, pageDbIds: [targetPage.id], via });
     setBusy(null);
     if (!res.ok) return error(res.error);
     setResults(res.data);
@@ -187,7 +194,18 @@ export function ArticleFacebookPanel({
               <p className="adm-fb-target" aria-live="polite">
                 <span className="adm-fb-target-dot" aria-hidden />
                 Currently posting to: <strong>{targetPage.pageName}</strong>
+                <span className="adm-fb-target-via"> · via {via === "runner" ? "Browser runner" : "Graph API"}</span>
               </p>
+            )}
+
+            {runnerConfigured && (
+              <label className="adm-fb-quick-field">
+                <span className="adm-fb-quick-lbl">Posting method</span>
+                <select className="adm-input" value={via} onChange={(e) => setVia(e.target.value as "graph" | "runner")} aria-label="Posting method">
+                  <option value="graph">Graph API (official, recommended)</option>
+                  <option value="runner">Browser runner (self-hosted)</option>
+                </select>
+              </label>
             )}
 
             <button

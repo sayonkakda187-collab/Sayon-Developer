@@ -9,7 +9,8 @@ import {
   exchangeForLongLivedUserToken,
   validatePageToken,
 } from "@/lib/facebook";
-import { publishArticleToPage, type PublishResult } from "@/lib/facebookPublish";
+import { publishArticleToPage, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
+import { isRunnerConfigured, runnerStatus, runnerPost, RunnerError } from "@/lib/fbRunner";
 
 /** Standard action result for client toasts. `data` is present on success when
  *  the action returns a payload (typed via the generic), omitted otherwise. */
@@ -19,6 +20,17 @@ export type ActionResult<T = undefined> =
 
 function fail(error: string): { ok: false; error: string } {
   return { ok: false, error };
+}
+
+// ── Browser runner status (self-hosted persistent-browser posting) ───────────
+
+/** Reachability + login state of the optional self-hosted browser runner, for
+ *  the UI to decide whether to offer the "Browser runner" posting option. */
+export async function getRunnerStatus(): Promise<{ configured: boolean; reachable: boolean; loggedIn: boolean }> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return { configured: false, reachable: false, loggedIn: false };
+  const s = await runnerStatus();
+  return { configured: true, ...s };
 }
 
 // ── Connect / save a page ────────────────────────────────────────────────────
@@ -144,9 +156,39 @@ export async function disconnectFacebookPage(id: string): Promise<ActionResult> 
  * per-page result array so the UI can show which pages succeeded/failed. Also
  * records a ScheduledPost row per attempt (status posted/failed) for history.
  */
+/**
+ * Post one article to one page via the self-hosted browser runner. The runner
+ * automates the logged-in Facebook UI (switches to the page + posts the message
+ * with the article link appended). Returns the same PublishResult shape as the
+ * Graph path so the UI is identical; maps runner errors to readable messages.
+ */
+async function publishViaRunner(
+  article: { title: string; slug: string; excerpt: string | null },
+  page: { id: string; pageId: string; pageName: string },
+): Promise<PublishResult> {
+  const base = { pageDbId: page.id, pageName: page.pageName };
+  // The runner switches pages by navigating to the page's public URL.
+  const pageUrl = `https://www.facebook.com/${encodeURIComponent(page.pageId)}`;
+  const message = `${buildMessage(article)}\n${articleUrl(article.slug)}`;
+  try {
+    await runnerPost({ pageUrl, pageName: page.pageName, message });
+    return { ...base, ok: true };
+  } catch (e) {
+    const msg =
+      e instanceof RunnerError
+        ? e.code === "not_logged_in"
+          ? "Browser runner isn’t logged in to Facebook — open its login first."
+          : e.message
+        : "Browser runner failed to post.";
+    return { ...base, ok: false, error: msg };
+  }
+}
+
 export async function publishArticleNow(input: {
   articleId: string;
   pageDbIds: string[];
+  // "graph" (default, official API) or "runner" (self-hosted persistent browser).
+  via?: "graph" | "runner";
 }): Promise<ActionResult<PublishResult[]>> {
   await requireAdmin();
 
@@ -162,9 +204,18 @@ export async function publishArticleNow(input: {
   });
   if (pages.length === 0) return fail("No matching pages found.");
 
+  // Route via the self-hosted browser runner when explicitly requested AND
+  // configured; otherwise fall back to the Graph API (the default path).
+  const useRunner = input.via === "runner" && isRunnerConfigured();
+  if (input.via === "runner" && !isRunnerConfigured()) {
+    return fail("Browser runner isn’t configured. Set FB_RUNNER_URL + FB_RUNNER_TOKEN, or use the Graph API option.");
+  }
+
   const results: PublishResult[] = [];
   for (const page of pages) {
-    const result = await publishArticleToPage(article, page);
+    const result = useRunner
+      ? await publishViaRunner(article, page)
+      : await publishArticleToPage(article, page);
     results.push(result);
     // Record history (best-effort; never let logging break the response).
     await prisma.scheduledPost
