@@ -146,6 +146,25 @@ model FacebookPage {
   @@index([status])
 }
 
+// A backed-up logged-in browser session for the self-hosted fb-runner. The
+// session is a Playwright storageState (cookies + localStorage) captured after a
+// manual login and ENCRYPTED at rest (AES-256-GCM, like FacebookPage.accessToken).
+// Reused later to post via the runner without logging in again. A session blob is
+// a BEARER credential — never store or log it in plaintext.
+model FacebookSession {
+  id              String    @id @default(cuid())
+  label           String // user-friendly name, e.g. "Sayon — main account"
+  accountName     String? // FB display name captured at login (best-effort)
+  encryptedState  String // ENCRYPTED storageState JSON (never plaintext)
+  status          String    @default("Active") // "Active" | "Expired"
+  lastUsedAt      DateTime? // last time a post used this session
+  lastValidatedAt DateTime? // last time we confirmed it's still logged in
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+}
+
 model ScheduledPost {
   id             String    @id @default(cuid())
   scheduledFor   DateTime // when it should publish (UTC)
