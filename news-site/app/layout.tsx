@@ -36,7 +36,11 @@ export const metadata: Metadata = {
 
 // Runs before paint: sets the theme class (no flash) and marks `js` enabled so
 // CSS scroll-reveals only hide content when JavaScript can reveal it.
-const themeInit = `(function(){try{var r=document.documentElement;r.classList.add('js');var t=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t?(t==='dark'||(t==='system'&&m)):m;r.classList.toggle('dark',d);}catch(e){}})();`;
+// First paint: apply the theme with no flash. An explicit stored choice wins
+// ("dark"/"light"/"system"); with nothing stored we default to DARK (the
+// polished default for this news look) rather than the OS preference. The
+// toggle + persistence are unchanged.
+const themeInit = `(function(){try{var r=document.documentElement;r.classList.add('js');var t=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=t?(t==='dark'||(t==='system'&&m)):true;r.classList.toggle('dark',d);}catch(e){}})();`;
 
 export default function RootLayout({
   children,

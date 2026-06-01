@@ -45,7 +45,31 @@ export async function getHomepage() {
     },
   });
 
-  return { featured: featured ?? null, latest, categories };
+  // A larger pool powering the trending-style card grid + in-place category tab
+  // filtering on the homepage. Excludes the hero (shown separately above).
+  const feed = await prisma.article.findMany({
+    where: { ...published, ...(featured ? { id: { not: featured.id } } : {}) },
+    orderBy: { publishedAt: "desc" },
+    include: { category: true },
+    take: 48,
+  });
+
+  // Categories that actually have published articles, for the tab row. Cheap
+  // count so empty categories don't show an empty tab.
+  const withCounts = await prisma.category.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      _count: { select: { articles: { where: published } } },
+    },
+  });
+  const tabCategories = withCounts
+    .filter((c) => c._count.articles > 0)
+    .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+
+  return { featured: featured ?? null, latest, categories, feed, tabCategories };
 }
 
 /** Cached so the article page and its generateMetadata share one query. */

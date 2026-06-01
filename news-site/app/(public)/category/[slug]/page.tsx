@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCategoryArticles, getCategoryBySlug } from "@/lib/queries";
-import { ArticleCard } from "@/components/ArticleCard";
+import { NewsCard } from "@/components/NewsCard";
 import { Pagination } from "@/components/Pagination";
 import { Reveal } from "@/components/Reveal";
 
@@ -51,10 +51,10 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       {articles.length === 0 ? (
         <p className="mt-10 text-fg-muted">No articles in this category yet.</p>
       ) : (
-        <div className="mt-8 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {articles.map((article, i) => (
             <Reveal key={article.id} delay={Math.min(i, 4) * 55}>
-              <ArticleCard article={article} priority={i < 4} />
+              <NewsCard article={article} priority={i < 3} />
             </Reveal>
           ))}
         </div>
