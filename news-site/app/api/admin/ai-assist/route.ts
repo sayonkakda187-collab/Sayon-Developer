@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { generateAiAssist, isAiConfigured, AiAssistError } from "@/lib/aiAssist";
+import { generateAiAssist, editArticle, isAiConfigured, AiAssistError } from "@/lib/aiAssist";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,21 +27,48 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { headline?: unknown; topic?: unknown };
+  let body: {
+    mode?: unknown;
+    headline?: unknown;
+    topic?: unknown;
+    model?: unknown;
+    title?: unknown;
+    articleBody?: unknown;
+    instruction?: unknown;
+    target?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
   }
 
-  const headline = String(body.headline ?? "").trim();
-  const topic = String(body.topic ?? "").trim();
-  if (headline.length < 4) {
-    return NextResponse.json({ ok: false, error: "A headline is required." }, { status: 400 });
-  }
+  // The validated model id (or undefined → server default) is passed straight
+  // through; lib/aiAssist re-validates against the allow-list.
+  const model = typeof body.model === "string" ? body.model : undefined;
+  const mode = body.mode === "edit" ? "edit" : "assist";
 
   try {
-    const result = await generateAiAssist({ headline, topic });
+    if (mode === "edit") {
+      // Revise the admin's own article (title + body) per an instruction.
+      const title = String(body.title ?? "");
+      const articleBody = String(body.articleBody ?? "");
+      const instruction = String(body.instruction ?? "").trim();
+      const target = body.target === "title" || body.target === "body" ? body.target : undefined;
+      if (instruction.length < 2) {
+        return NextResponse.json({ ok: false, error: "Tell the AI what to change." }, { status: 400 });
+      }
+      const result = await editArticle({ title, body: articleBody, instruction, target, model });
+      return NextResponse.json({ ok: true, result });
+    }
+
+    // Default: trending headline → 5-section starter.
+    const headline = String(body.headline ?? "").trim();
+    const topic = String(body.topic ?? "").trim();
+    if (headline.length < 4) {
+      return NextResponse.json({ ok: false, error: "A headline is required." }, { status: 400 });
+    }
+    const result = await generateAiAssist({ headline, topic, model });
     return NextResponse.json({ ok: true, result });
   } catch (err) {
     const code = err instanceof AiAssistError ? err.code : "unknown";
@@ -53,7 +80,9 @@ export async function POST(req: Request) {
           ? "AI rate limit or credit reached. Please try again shortly."
           : code === "network"
             ? "Couldn’t reach the AI service. Please try again."
-            : "The AI assistant couldn’t generate a draft. Please try again.";
+            : err instanceof AiAssistError
+              ? err.message
+              : "The AI assistant couldn’t complete that. Please try again.";
     console.error("AI assist failed:", err);
     return NextResponse.json({ ok: false, error: message }, { status });
   }

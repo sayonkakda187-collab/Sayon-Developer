@@ -1277,6 +1277,34 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-ai-error { text-align: center; padding: 16px; color: var(--adm-muted); }
 .adm-ai-error p { margin-bottom: 12px; }
 
+/* Model picker (in the modal head) + editor edit-mode controls. */
+.adm-ai-headtools { display: flex; align-items: center; gap: 10px; }
+.adm-ai-modelpick { display: inline-flex; align-items: center; gap: 7px; }
+.adm-ai-modelpick-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--adm-muted-2); }
+.adm-ai-modelpick .adm-input { width: auto; min-width: 0; padding: 7px 10px; font-size: 12.5px; }
+.adm-ai-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-ai-action {
+  padding: 9px 13px; border-radius: 999px; border: 1px solid var(--adm-bd); background: var(--adm-card);
+  color: var(--adm-ink); font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 40px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.adm-ai-action:hover { border-color: #a855f7; color: #9333ea; background: rgba(168,85,247,0.06); }
+[data-adm-theme="dark"] .admin-shell .adm-ai-action:hover { color: #c084fc; }
+.adm-ai-action:disabled { opacity: 0.55; cursor: default; }
+.adm-ai-instruct { display: flex; gap: 8px; align-items: stretch; }
+.adm-ai-instruct .adm-input { flex: 1; }
+.adm-ai-instruct .adm-btn-primary { flex: none; min-height: 0; padding: 0 16px; }
+.adm-ai-preview { max-height: 320px; overflow-y: auto; }
+.adm-ai-trigger:hover { border-color: #a855f7; color: #9333ea; }
+[data-adm-theme="dark"] .admin-shell .adm-ai-trigger:hover { color: #c084fc; }
+
+@media (max-width: 560px) {
+  .adm-ai-headtools { gap: 6px; }
+  .adm-ai-modelpick-lbl { display: none; }
+  .adm-ai-instruct { flex-direction: column; }
+  .adm-ai-instruct .adm-btn-primary { min-height: 44px; }
+}
+
 /* AI-assisted draft banner in the editor. */
 .adm-ai-banner { display: flex; align-items: flex-start; gap: 11px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; color: var(--adm-ink); background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.28); margin-bottom: 16px; }
 .adm-ai-banner .adm-ai-spark { width: 30px; height: 30px; border-radius: 8px; }
