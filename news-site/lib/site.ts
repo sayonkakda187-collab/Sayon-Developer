@@ -1,11 +1,32 @@
+// Production domain — the canonical public origin. Used as the fallback so a
+// production build NEVER emits localhost canonical/og:url tags (which break
+// Facebook/Twitter share previews), even if NEXT_PUBLIC_SITE_URL is unset.
+const PRODUCTION_URL = "https://dailyledger.today";
+
+/**
+ * Absolute base URL for metadata/Open Graph, canonical tags, the sitemap, and
+ * any absolute URL. Resolution order:
+ *   1. NEXT_PUBLIC_SITE_URL if set (inlined at build; set this in Vercel).
+ *   2. The production domain when building/running in production.
+ *   3. http://localhost:3000 for local development.
+ * Always returned without a trailing slash so callers can append paths safely.
+ */
+function resolveSiteUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const base = fromEnv || (process.env.NODE_ENV === "production" ? PRODUCTION_URL : "http://localhost:3000");
+  return base.replace(/\/+$/, "");
+}
+
 export const siteConfig = {
   name: "The Daily Ledger",
   description:
     "Independent reporting on technology, business, and the world.",
-  // Absolute base URL, used for metadata/Open Graph and the sitemap (Phase 4).
-  // Override in production via NEXT_PUBLIC_SITE_URL.
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  // Absolute base URL (no trailing slash). Set NEXT_PUBLIC_SITE_URL in Vercel
+  // (Production + Preview) to your domain; production falls back to the canonical
+  // domain rather than localhost so share previews always resolve.
+  url: resolveSiteUrl(),
 };
+
 
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return "";

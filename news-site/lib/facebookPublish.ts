@@ -7,10 +7,9 @@ import { siteConfig } from "@/lib/site";
 
 /** Canonical public URL for an article (Facebook scrapes its OG tags). */
 export function articleUrl(slug: string): string {
-  // Prefer the configured production URL; fall back to the known domain so the
-  // link is always absolute and canonical even if the env var is unset.
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://dailyledger.today").replace(/\/$/, "");
-  return `${base}/news/${slug}`;
+  // Single source of truth: siteConfig.url is env-aware and never localhost in
+  // production, so shared links are always absolute + canonical.
+  return `${siteConfig.url}/news/${slug}`;
 }
 
 /** The message body posted to Facebook for an article. */

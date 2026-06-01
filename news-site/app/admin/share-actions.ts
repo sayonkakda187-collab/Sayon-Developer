@@ -27,8 +27,7 @@ export type ShareInfo = {
 function absoluteImage(coverImage: string | null): string | null {
   if (!coverImage) return null;
   if (/^https?:\/\//i.test(coverImage)) return coverImage;
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://dailyledger.today").replace(/\/$/, "");
-  return `${base}${coverImage.startsWith("/") ? "" : "/"}${coverImage}`;
+  return `${siteConfig.url}${coverImage.startsWith("/") ? "" : "/"}${coverImage}`;
 }
 
 /** Build a sensible, engaging-but-neutral default caption. */
