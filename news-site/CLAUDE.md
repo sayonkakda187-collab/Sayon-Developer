@@ -209,6 +209,18 @@ panel adds a "Browser runner" posting method (`publishArticleNow({ via: "runner"
 The runner is **opt-in and at-your-own-risk** (ToS/account-ban). Graph API code
 is **not** removed — the two coexist.
 
+**Browser-runner Page discovery + multi-Page posting (no Graph token).** The
+article editor's Facebook panel (when the runner is configured) can **"Load my
+Pages"** — `discoverRunnerPages()` → `runnerPages()` → the runner's `GET /pages`
+(`listPages(state)`) scrapes every Page the logged-in account manages. It runs in
+an **ephemeral context off the saved session** (the on-disk session file or a
+passed `state`), so it works on a **headless server** (the old `listPages` only
+read the headed-login profile). The admin then ticks several Pages and posts the
+article to all of them; the client calls `publishArticleToPageUrl` **once per Page,
+sequentially** (the runner drives one browser, and one request per Page keeps each
+under the route's `maxDuration = 60`). No connected `FacebookPage` row or Page
+token is needed — only the captured browser session.
+
 **Security model**
 - Page access tokens are **encrypted at rest** (AES-256-GCM, `lib/crypto.ts`).
   The key derives from `ENCRYPTION_KEY` (falls back to `AUTH_SECRET`); in

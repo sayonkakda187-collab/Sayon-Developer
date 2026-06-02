@@ -102,6 +102,17 @@ export async function runnerPost(input: {
   return { ok: true };
 }
 
+/** List the Pages the logged-in account manages (best-effort scrape). Uses the
+ *  runner's on-disk session by default, or a given saved session `state`. */
+export async function runnerPages(state?: SessionState): Promise<RunnerPage[]> {
+  if (state) {
+    const r = await call<{ pages: RunnerPage[] }>("POST", "/pages", { state });
+    return r.pages ?? [];
+  }
+  const r = await call<{ pages: RunnerPage[] }>("GET", "/pages");
+  return r.pages ?? [];
+}
+
 /** Absolute URL for an article (the runner posts the link as part of the text). */
 export function articleLink(slug: string): string {
   return `${siteConfig.url}/news/${slug}`;

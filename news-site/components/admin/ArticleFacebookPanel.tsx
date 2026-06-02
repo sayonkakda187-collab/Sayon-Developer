@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   publishArticleNow,
   publishArticleToPageUrl,
+  discoverRunnerPages,
   scheduleArticlePosts,
 } from "@/app/admin/facebook-actions";
 import type { PublishResult } from "@/lib/facebookPublish";
@@ -65,12 +66,22 @@ export function ArticleFacebookPanel({
   const { success, error } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduledFor, setScheduledFor] = useState("");
-  const [busy, setBusy] = useState<null | "now" | "schedule" | "quick" | "url">(null);
+  const [busy, setBusy] = useState<null | "now" | "schedule" | "quick" | "url" | "discover" | "multipost">(null);
   const [results, setResults] = useState<PublishResult[] | null>(null);
   // URL-based runner posting (no connected Page / Graph token needed).
   const [pageUrlInput, setPageUrlInput] = useState("");
   const [urlSessionId, setUrlSessionId] = useState("");
   const [urlResult, setUrlResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Multi-Page runner posting: discover the account's Pages, tick several, and
+  // post this article to all of them (sequentially — the runner drives one
+  // browser; one request per Page keeps each call short).
+  const [discovered, setDiscovered] = useState<{ id: string; name: string; url: string }[] | null>(null);
+  const [discSessionId, setDiscSessionId] = useState("");
+  const [pickedPages, setPickedPages] = useState<Set<string>>(new Set());
+  const [postProgress, setPostProgress] = useState<
+    Record<string, { status: "pending" | "posting" | "ok" | "fail"; error?: string }>
+  >({});
 
   // Quick "post to ONE page" target (the Page Selector dropdown). Defaults to the
   // first connected page so the confirmation label always shows a real target.
@@ -158,6 +169,64 @@ export function ArticleFacebookPanel({
     }
     setUrlResult({ ok: true, msg: `Posted to ${res.data.pageName}` });
     success("Posted via browser session.");
+    router.refresh();
+  }
+
+  // Pull every Page the chosen session manages into a multi-select list.
+  async function onLoadPages() {
+    setBusy("discover");
+    setDiscovered(null);
+    const res = await discoverRunnerPages(discSessionId || undefined);
+    setBusy(null);
+    if (!res.ok) return error(res.error);
+    setDiscovered(res.data.pages);
+    setPickedPages(new Set());
+    setPostProgress({});
+    if (res.data.pages.length === 0) error("No Pages found for this session (Facebook’s list may have changed).");
+    else success(`Loaded ${res.data.pages.length} Page${res.data.pages.length === 1 ? "" : "s"}.`);
+  }
+
+  function togglePicked(url: string) {
+    setPickedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  function togglePickAll(on: boolean) {
+    setPickedPages(on && discovered ? new Set(discovered.map((p) => p.url)) : new Set());
+  }
+
+  // Post this article to every ticked Page, one at a time (the runner drives a
+  // single browser; sequential avoids racing it and keeps each request short).
+  async function onPostSelected() {
+    if (!discovered) return;
+    const targets = discovered.filter((p) => pickedPages.has(p.url));
+    if (targets.length === 0) return error("Select at least one Page.");
+    setBusy("multipost");
+    setPostProgress(Object.fromEntries(targets.map((p) => [p.url, { status: "pending" as const }])));
+    let okCount = 0;
+    for (const page of targets) {
+      setPostProgress((prev) => ({ ...prev, [page.url]: { status: "posting" } }));
+      const res = await publishArticleToPageUrl({
+        articleId,
+        pageUrl: page.url,
+        sessionId: discSessionId || undefined,
+      });
+      if (res.ok) {
+        okCount++;
+        setPostProgress((prev) => ({ ...prev, [page.url]: { status: "ok" } }));
+      } else {
+        setPostProgress((prev) => ({ ...prev, [page.url]: { status: "fail", error: res.error } }));
+      }
+    }
+    setBusy(null);
+    const failCount = targets.length - okCount;
+    if (failCount === 0) success(`Posted to ${okCount} Page${okCount === 1 ? "" : "s"}.`);
+    else if (okCount === 0) error(`All ${failCount} failed. See details below.`);
+    else success(`Posted to ${okCount}, ${failCount} failed. See details below.`);
     router.refresh();
   }
 
@@ -259,6 +328,118 @@ export function ArticleFacebookPanel({
           <p className="adm-field-hint">
             Posts this article to any Page you manage using your saved login — no Graph token or
             connected Page required. Publish the article first for the best link preview.
+          </p>
+        </div>
+      )}
+
+      {/* ── Load every Page the logged-in session manages, then post this article
+          to MANY at once (browser runner; no Graph token / connected Page). ── */}
+      {runnerConfigured && (
+        <div className="adm-fb-quick" style={{ marginBottom: 14 }}>
+          <span className="adm-fb-quick-lbl" style={{ display: "block", marginBottom: 6 }}>
+            Post to multiple Pages — load your Pages, tick several, publish to all
+          </span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label className="adm-fb-quick-field" style={{ flex: "1 1 200px" }}>
+              <span className="adm-fb-quick-lbl">Browser session</span>
+              <select
+                className="adm-input"
+                value={discSessionId}
+                onChange={(e) => setDiscSessionId(e.target.value)}
+                aria-label="Session to load Pages from"
+              >
+                <option value="">Runner’s live login</option>
+                {activeSessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                    {s.accountName ? ` · ${s.accountName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="adm-btn-ghost adm-fb-quick-btn"
+              onClick={onLoadPages}
+              disabled={busy !== null}
+            >
+              {busy === "discover" && <span className="adm-spinner" aria-hidden />}
+              {busy === "discover" ? "Loading…" : "Load my Pages"}
+            </button>
+          </div>
+
+          {discovered && discovered.length > 0 && (
+            <>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", margin: "10px 0 6px" }}>
+                <button
+                  type="button"
+                  className="adm-fb-grouptoggle"
+                  onClick={() => togglePickAll(pickedPages.size !== discovered.length)}
+                >
+                  {pickedPages.size === discovered.length ? "Clear all" : "Select all"}
+                </button>
+                <span className="adm-field-hint" style={{ margin: 0 }}>
+                  {pickedPages.size} of {discovered.length} selected
+                </span>
+              </div>
+              <div className="adm-fb-checkgroups">
+                <fieldset className="adm-fb-checkgroup">
+                  {discovered.map((p) => {
+                    const prog = postProgress[p.url];
+                    return (
+                      <label key={p.url} className="adm-check">
+                        <input
+                          type="checkbox"
+                          checked={pickedPages.has(p.url)}
+                          onChange={() => togglePicked(p.url)}
+                          disabled={busy === "multipost"}
+                        />
+                        <span>
+                          {p.name}
+                          {prog && (
+                            <span
+                              className={`adm-pill ${prog.status === "ok" ? "" : "amber"}`}
+                              style={{ marginLeft: 6, ...(prog.status === "fail" ? { color: "#b91c1c", background: "#fee2e2" } : {}) }}
+                              title={prog.error ?? ""}
+                            >
+                              {prog.status === "posting"
+                                ? "posting…"
+                                : prog.status === "ok"
+                                  ? "posted"
+                                  : prog.status === "fail"
+                                    ? "failed"
+                                    : "pending"}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              </div>
+              <button
+                type="button"
+                className="adm-btn-primary adm-fb-quick-btn"
+                style={{ marginTop: 10 }}
+                onClick={onPostSelected}
+                disabled={busy !== null || pickedPages.size === 0}
+              >
+                {busy === "multipost" && <span className="adm-spinner" aria-hidden />}
+                <FacebookIcon className="h-4 w-4" />
+                {busy === "multipost"
+                  ? "Posting…"
+                  : `Post to ${pickedPages.size} selected Page${pickedPages.size === 1 ? "" : "s"}`}
+              </button>
+            </>
+          )}
+          {discovered && discovered.length === 0 && (
+            <p className="adm-field-hint">
+              No Pages found. Make sure this session is logged into an account that manages Pages.
+            </p>
+          )}
+          <p className="adm-field-hint">
+            Loads every Page your logged-in account manages, then posts this article to each one you
+            tick — using your browser session (no Graph token). Posts run one Page at a time.
           </p>
         </div>
       )}

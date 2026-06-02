@@ -6,6 +6,11 @@ import { ToastProvider } from "@/components/admin/Toast";
 import { ArticleFacebookPanel } from "@/components/admin/ArticleFacebookPanel";
 import { isRunnerConfigured } from "@/lib/fbRunner";
 
+// Browser-runner actions (discover Pages, post each Page) drive a real browser on
+// the runner and can take 20–40s each — give server actions on this route room to
+// finish instead of the 10s default (60s is the Vercel Hobby ceiling).
+export const maxDuration = 60;
+
 export default async function EditArticlePage({
   params,
 }: {

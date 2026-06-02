@@ -17,8 +17,10 @@ import {
   runnerExportSession,
   runnerValidateSession,
   runnerPost,
+  runnerPages,
   RunnerError,
   type SessionState,
+  type RunnerPage,
 } from "@/lib/fbRunner";
 
 /** Standard action result for client toasts. `data` is present on success when
@@ -132,6 +134,45 @@ export async function deleteFacebookSession(id: string): Promise<ActionResult> {
     return { ok: true, data: undefined };
   } catch {
     return fail("Couldn’t delete the session.");
+  }
+}
+
+// ── Discover the Pages a logged-in browser session manages ───────────────────
+
+/**
+ * List the Pages the runner's logged-in account manages (best-effort scrape), so
+ * the UI can show them as a multi-select for posting. Uses a saved (encrypted)
+ * session when `sessionId` is given, else the runner's own on-disk session.
+ */
+export async function discoverRunnerPages(
+  sessionId?: string,
+): Promise<ActionResult<{ pages: RunnerPage[] }>> {
+  await requireAdmin();
+  if (!isRunnerConfigured()) return fail("Browser runner isn’t configured.");
+
+  let state: SessionState | undefined;
+  if (sessionId) {
+    const session = await prisma.facebookSession.findUnique({ where: { id: sessionId } });
+    if (!session) return fail("Selected session not found.");
+    try {
+      state = JSON.parse(decryptSecret(session.encryptedState)) as SessionState;
+    } catch {
+      await prisma.facebookSession.update({ where: { id: session.id }, data: { status: "Expired" } }).catch(() => {});
+      return fail("Stored session couldn’t be decrypted. Re-capture it.");
+    }
+  }
+
+  try {
+    const pages = await runnerPages(state);
+    return { ok: true, data: { pages } };
+  } catch (e) {
+    const msg =
+      e instanceof RunnerError
+        ? e.code === "not_logged_in" || e.code === "session_expired"
+          ? "Session isn’t logged in — re-capture it, or open the runner login."
+          : e.message
+        : "Couldn’t load Pages from the browser runner.";
+    return fail(msg);
   }
 }
 

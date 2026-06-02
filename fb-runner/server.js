@@ -101,8 +101,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, ...r });
     }
 
-    if (req.method === "GET" && url.pathname === "/pages") {
-      return send(res, 200, { ok: true, pages: await listPages() });
+    // GET → use the runner's on-disk session; POST { state } → use a passed session.
+    if (url.pathname === "/pages" && (req.method === "GET" || req.method === "POST")) {
+      const body = req.method === "POST" ? await readJson(req) : {};
+      if (body === null) return send(res, 400, { ok: false, code: "bad_request", error: "Invalid JSON body." });
+      return send(res, 200, { ok: true, pages: await listPages(body?.state) });
     }
 
     if (req.method === "POST" && url.pathname === "/post") {
