@@ -148,13 +148,13 @@ export async function postToPage(args: {
  */
 export async function exchangeForLongLivedUserToken(
   shortLivedToken: string,
+  creds?: { appId?: string | null; appSecret?: string | null },
 ): Promise<{ accessToken: string; expiresInSeconds?: number }> {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  const appId = creds?.appId || process.env.FACEBOOK_APP_ID;
+  const appSecret = creds?.appSecret || process.env.FACEBOOK_APP_SECRET;
   if (!appId || !appSecret) {
     throw new FacebookApiError(
-      "Long-lived token exchange needs FACEBOOK_APP_ID and FACEBOOK_APP_SECRET. " +
-        "Alternatively, paste a long-lived Page token directly.",
+      "Long-lived token exchange needs your Facebook App ID and App Secret — add them in the Connect dialog (or set FACEBOOK_APP_ID / FACEBOOK_APP_SECRET).",
     );
   }
   const url =
@@ -171,6 +171,34 @@ export async function exchangeForLongLivedUserToken(
     throw new FacebookApiError("Facebook did not return a long-lived token.");
   }
   return { accessToken: data.access_token, expiresInSeconds: data.expires_in };
+}
+
+/**
+ * List the Pages a USER access token manages, each with its PAGE access token.
+ * GET /me/accounts. Page tokens derived from a long-lived user token are
+ * effectively non-expiring for posting. SERVER-SIDE ONLY — never return the page
+ * access tokens to the browser.
+ */
+export async function getUserPages(
+  userToken: string,
+): Promise<{ id: string; name: string; accessToken: string }[]> {
+  const url =
+    `${GRAPH_BASE}/me/accounts?fields=id,name,access_token&limit=100` +
+    `&access_token=${encodeURIComponent(userToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{ data?: { id?: string; name?: string; access_token?: string }[] }>(
+    res,
+    "Could not list your Pages",
+  );
+  const pages = (data.data ?? [])
+    .filter((p) => p.id && p.access_token)
+    .map((p) => ({ id: p.id as string, name: p.name || (p.id as string), accessToken: p.access_token as string }));
+  if (pages.length === 0) {
+    throw new FacebookApiError(
+      "No Pages found for this token — make sure it has the pages_show_list scope and you manage at least one Page.",
+    );
+  }
+  return pages;
 }
 
 /** Build a facebook.com permalink from a returned post id ("{page}_{post}"). */

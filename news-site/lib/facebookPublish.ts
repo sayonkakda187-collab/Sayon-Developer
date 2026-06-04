@@ -58,6 +58,7 @@ export type PublishResult = {
 export async function publishArticleToPage(
   article: ArticleForPost,
   page: PageForPost,
+  caption?: string,
 ): Promise<PublishResult> {
   let token: string;
   try {
@@ -79,7 +80,7 @@ export async function publishArticleToPage(
     const { postId } = await postToPage({
       pageId: page.pageId,
       accessToken: token,
-      message: buildMessage(article),
+      message: caption?.trim() || buildMessage(article),
       link: articleUrl(article.slug),
     });
     // Successful post implies a valid token → keep/restore Connected + sync time.

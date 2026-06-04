@@ -269,11 +269,29 @@ token is needed — only the captured browser session.
 short→long-lived token exchange), optional `FACEBOOK_GRAPH_VERSION`,
 `NEXT_PUBLIC_SITE_URL` (canonical links in posts).
 
-**Facebook setup (one time):** create a Facebook App (Business), add the page(s)
-under a Page-token flow, grant `pages_manage_posts` + `pages_read_engagement`
-(and `pages_show_list`), generate a **long-lived Page access token**, then paste
-the Page ID + token into the Connect dialog. Posting to Pages you don't own (or
-beyond dev mode) requires **App Review** for those permissions.
+**Facebook setup (one time) — two ways to connect (`/admin/facebook` → Connect):**
+- **Auto (recommended):** paste your **App ID + App Secret** (App Dashboard →
+  Settings → Basic) and a short-lived **User token** from the Graph API Explorer
+  (scopes `pages_show_list` + `pages_read_engagement` + `pages_manage_posts`).
+  The server (`facebookFetchPages`) **exchanges it for a long-lived user token**
+  (`exchangeForLongLivedUserToken`), calls **`GET /me/accounts`** (`getUserPages`)
+  to list your Pages, you pick one, and `facebookConnectPage` stores that **Page
+  token** (effectively non-expiring) encrypted. App ID/Secret + the long-lived
+  user token live in `AppSetting` (secret + token **encrypted**; see
+  `lib/facebookSettings.ts`); env `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` still
+  work as a fallback.
+- **Manual:** paste a Page ID + a long-lived **Page access token** directly.
+
+Posting to Pages you don't own (or beyond dev mode) requires **App Review**.
+The post caption is **editable** before sending (defaults to `buildMessage`); the
+article link is attached separately so Facebook renders its OG preview.
+
+> 🔐 **Token hygiene:** App Secret + all tokens are encrypted at rest and never
+> sent to the browser or logged. **If a token (or the App Secret) was ever
+> exposed — e.g. pasted into a screenshot or chat — regenerate it immediately**
+> (App Dashboard rotates the App Secret; Graph Explorer re-issues user tokens),
+> then reconnect in Settings. A leaked Page token can post as your Page until
+> revoked.
 
 ## Share / Promote panel (manual, no token)
 

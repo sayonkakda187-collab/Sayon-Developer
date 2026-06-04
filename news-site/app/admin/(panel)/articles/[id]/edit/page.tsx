@@ -5,6 +5,7 @@ import { ArticleForm } from "@/components/admin/ArticleForm";
 import { ToastProvider } from "@/components/admin/Toast";
 import { ArticleFacebookPanel } from "@/components/admin/ArticleFacebookPanel";
 import { isRunnerConfigured } from "@/lib/fbRunner";
+import { buildMessage } from "@/lib/facebookPublish";
 
 // Browser-runner actions (discover Pages, post each Page) drive a real browser on
 // the runner and can take 20–40s each — give server actions on this route room to
@@ -66,6 +67,7 @@ export default async function EditArticlePage({
         <ArticleFacebookPanel
           articleId={article.id}
           articleStatus={article.status}
+          defaultCaption={buildMessage({ title: article.title, excerpt: article.excerpt })}
           pages={pages}
           runnerConfigured={isRunnerConfigured()}
           runnerSessions={sessions}
