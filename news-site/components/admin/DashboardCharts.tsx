@@ -8,6 +8,7 @@ import { ArticleRow, categoryColor } from "./ArticleRow";
 import { ArticleThumb } from "./ArticleThumb";
 import { DashboardControls } from "./DashboardControls";
 import { ViewsChart } from "./ViewsChart";
+import { AdskeeperPanel } from "./AdskeeperPanel";
 import { timeAgo } from "@/lib/site";
 import { PlusIcon, CommentsIcon, PencilIcon } from "./icons";
 
@@ -123,6 +124,11 @@ export function DashboardCharts(props: DashboardProps) {
           <span className="adm-qa-ic" style={{ background: "rgba(245,158,11,.14)", color: "#f59e0b" }}><PencilIcon className="h-[18px] w-[18px]" /></span>
           <span><b>Manage articles</b><s>{props.draftArticles} draft{props.draftArticles === 1 ? "" : "s"}</s></span>
         </Link>
+      </div>
+
+      {/* Ad earnings (AdsKeeper) — self-fetching; safe no-op until configured */}
+      <div style={{ marginBottom: 18 }}>
+        <AdskeeperPanel />
       </div>
 
       {/* Row 1 — Real views-over-time chart + Top articles by views */}

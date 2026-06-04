@@ -11,6 +11,8 @@ import {
   NEWS_SEARCH_PROVIDERS,
   type NewsSearchProviderId,
 } from "@/lib/newsSearch/settings";
+import { saveAdskeeperApiKey, saveAdskeeperClientId } from "@/lib/adskeeper/settings";
+import { clearEarningsCache } from "@/lib/adskeeper/client";
 
 // Server actions for the API Settings page. Each re-checks requireAdmin. Keys
 // arrive over POST, are encrypted at rest, and are NEVER returned to the client.
@@ -44,6 +46,38 @@ export async function chooseNewsProvider(
   revalidatePath("/admin/settings");
   revalidatePath("/admin/trending");
   return { ok: true };
+}
+
+// ── AdsKeeper API credentials ────────────────────────────────────────────────
+
+export async function saveAdskeeperKey(
+  rawKey: string,
+): Promise<{ ok: true; cleared: boolean } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    await saveAdskeeperApiKey(rawKey);
+    clearEarningsCache(); // new key takes effect immediately
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    return { ok: true, cleared: rawKey.trim().length === 0 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the AdsKeeper key." };
+  }
+}
+
+export async function saveAdskeeperClient(
+  rawId: string,
+): Promise<{ ok: true; cleared: boolean } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    await saveAdskeeperClientId(rawId);
+    clearEarningsCache();
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    return { ok: true, cleared: rawId.trim().length === 0 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the Client ID." };
+  }
 }
 
 // ── Admin profile picture (avatar) ───────────────────────────────────────────
