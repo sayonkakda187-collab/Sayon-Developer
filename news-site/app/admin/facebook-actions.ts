@@ -8,7 +8,14 @@ import {
   FacebookApiError,
   exchangeForLongLivedUserToken,
   validatePageToken,
+  getUserPages,
 } from "@/lib/facebook";
+import {
+  getFacebookAppCreds,
+  saveFacebookAppCreds,
+  saveFacebookUserToken,
+  getFacebookUserToken,
+} from "@/lib/facebookSettings";
 import { publishArticleToPage, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
 import {
   isRunnerConfigured,
@@ -236,6 +243,86 @@ export async function connectFacebookPage(input: {
   }
 }
 
+// ── Auto-connect: App ID/Secret + short-lived user token → long-lived →
+//    GET /me/accounts → pick a Page → store its (encrypted) Page token ─────────
+
+/**
+ * Step 1. Saves the App credentials (App Secret encrypted), exchanges the pasted
+ * short-lived USER token for a long-lived one, stores that (encrypted) for the
+ * connect step, and returns the Pages this account manages — id + name ONLY
+ * (page access tokens never reach the browser).
+ */
+export async function facebookFetchPages(input: {
+  appId?: string;
+  appSecret?: string;
+  userToken: string;
+}): Promise<ActionResult<{ pages: { id: string; name: string }[] }>> {
+  await requireAdmin();
+  const userToken = input.userToken?.trim();
+  if (!userToken) return fail("Paste your Facebook user access token first.");
+  try {
+    if (input.appId?.trim() && input.appSecret?.trim()) {
+      await saveFacebookAppCreds({ appId: input.appId.trim(), appSecret: input.appSecret.trim() });
+    }
+    const creds = await getFacebookAppCreds();
+    if (!creds.appId || !creds.appSecret) {
+      return fail("Enter your App ID and App Secret (App Dashboard → Settings → Basic).");
+    }
+    const longLived = await exchangeForLongLivedUserToken(userToken, creds);
+    await saveFacebookUserToken(longLived.accessToken);
+    const pages = await getUserPages(longLived.accessToken);
+    return { ok: true, data: { pages: pages.map((p) => ({ id: p.id, name: p.name })) } };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Couldn’t fetch your Pages from Facebook.");
+  }
+}
+
+/**
+ * Step 2. Re-reads the stored long-lived user token, finds the chosen Page's
+ * PAGE token from /me/accounts, validates it, and stores it ENCRYPTED as a
+ * FacebookPage. The page token never touches the browser.
+ */
+export async function facebookConnectPage(input: {
+  pageId: string;
+  categoryGroup: string;
+}): Promise<ActionResult> {
+  await requireAdmin();
+  const pageId = input.pageId.trim();
+  const categoryGroup = input.categoryGroup.trim();
+  if (!pageId) return fail("Pick a Page to connect.");
+  if (!categoryGroup) return fail("Choose a category group.");
+  try {
+    const userToken = await getFacebookUserToken();
+    if (!userToken) return fail("Your Facebook connection expired — fetch your Pages again.");
+    const pages = await getUserPages(userToken);
+    const page = pages.find((p) => p.id === pageId);
+    if (!page) return fail("That Page wasn’t found on your account — fetch your Pages again.");
+    const { name } = await validatePageToken(page.id, page.accessToken);
+    await prisma.facebookPage.upsert({
+      where: { pageId: page.id },
+      update: {
+        pageName: name,
+        accessToken: encryptSecret(page.accessToken),
+        categoryGroup,
+        status: "Connected",
+        lastSyncedAt: new Date(),
+      },
+      create: {
+        pageId: page.id,
+        pageName: name,
+        accessToken: encryptSecret(page.accessToken),
+        categoryGroup,
+        status: "Connected",
+        lastSyncedAt: new Date(),
+      },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Couldn’t connect the Page.");
+  }
+}
+
 // ── Refresh / validate an existing page's token ──────────────────────────────
 
 /**
@@ -336,6 +423,8 @@ export async function publishArticleNow(input: {
   // When via="runner", optionally post using a saved (encrypted) browser session
   // instead of the runner's live login.
   sessionId?: string;
+  // Optional edited caption for the post message (Graph path). Blank → default.
+  caption?: string;
 }): Promise<ActionResult<PublishResult[]>> {
   await requireAdmin();
 
@@ -378,7 +467,7 @@ export async function publishArticleNow(input: {
   for (const page of pages) {
     const result = useRunner
       ? await publishViaRunner(article, page, sessionState)
-      : await publishArticleToPage(article, page);
+      : await publishArticleToPage(article, page, input.caption);
     results.push(result);
     // Record history (best-effort; never let logging break the response).
     await prisma.scheduledPost

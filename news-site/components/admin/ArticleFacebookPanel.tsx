@@ -49,6 +49,7 @@ export function ArticleFacebookPanel({
   articleStatus,
   pages,
   history,
+  defaultCaption = "",
   runnerConfigured = false,
   runnerSessions = [],
 }: {
@@ -56,6 +57,8 @@ export function ArticleFacebookPanel({
   articleStatus: string;
   pages: PageOption[];
   history: HistoryItem[];
+  // Prefilled, editable caption for the Graph "Post to this page" action.
+  defaultCaption?: string;
   // When the self-hosted browser runner is configured, offer it as a posting
   // method alongside the default Graph API.
   runnerConfigured?: boolean;
@@ -95,6 +98,8 @@ export function ArticleFacebookPanel({
   // Saved browser session to post with (runner only). "" = runner's live login.
   const activeSessions = useMemo(() => runnerSessions.filter((s) => s.status === "Active"), [runnerSessions]);
   const [sessionId, setSessionId] = useState<string>("");
+  // Editable caption for the Graph "Post to this page" action (prefilled).
+  const [caption, setCaption] = useState(defaultCaption);
 
   const grouped = useMemo(() => {
     const map = new Map<string, PageOption[]>();
@@ -142,6 +147,7 @@ export function ArticleFacebookPanel({
       pageDbIds: [targetPage.id],
       via,
       sessionId: via === "runner" && sessionId ? sessionId : undefined,
+      caption: via === "graph" ? caption : undefined,
     });
     setBusy(null);
     if (!res.ok) return error(res.error);
@@ -506,6 +512,23 @@ export function ArticleFacebookPanel({
                     </option>
                   ))}
                 </select>
+              </label>
+            )}
+
+            {via === "graph" && (
+              <label className="adm-fb-quick-field">
+                <span className="adm-fb-quick-lbl">Caption (editable)</span>
+                <textarea
+                  className="adm-input"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  rows={4}
+                  aria-label="Post caption"
+                  placeholder="Caption for the Facebook post"
+                />
+                <span className="adm-field-hint">
+                  The article link + preview are attached automatically. Edit the text, or leave the default.
+                </span>
               </label>
             )}
 
