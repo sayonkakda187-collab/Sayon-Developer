@@ -33,12 +33,30 @@ type Props = {
   busy?: boolean;
   /** Surfaced when the canvas export fails (e.g. a cross-origin source taints it). */
   onExportError?: (message: string) => void;
+  /** Aspect presets to offer. Defaults to the cover ratios; pass a single ratio
+   *  (e.g. a 1:1 square) to LOCK the crop — the preset switcher then hides. */
+  aspects?: CropAspect[];
+  /** Longest output edge in px. Defaults to the cover width (1200). */
+  outputWidth?: number;
+  /** Modal heading + helper note (defaults describe the cover-image use). */
+  heading?: string;
+  note?: string;
 };
 
 type Natural = { w: number; h: number };
 
-export function CoverCropModal({ src, onApply, onCancel, busy = false, onExportError }: Props) {
-  const [aspect, setAspect] = useState<CropAspect>(COVER_ASPECTS[0]);
+export function CoverCropModal({
+  src,
+  onApply,
+  onCancel,
+  busy = false,
+  onExportError,
+  aspects = COVER_ASPECTS,
+  outputWidth = OUTPUT_WIDTH,
+  heading = "Adjust cover image",
+  note = "Exports a 1200px-wide image · this framing is what shows on the article and when shared on Facebook.",
+}: Props) {
+  const [aspect, setAspect] = useState<CropAspect>(aspects[0]);
   const [natural, setNatural] = useState<Natural | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -185,8 +203,8 @@ export function CoverCropModal({ src, onApply, onCancel, busy = false, onExportE
     const img = imgRef.current;
     if (!img || !natural || !frameW) return;
 
-    const outW = OUTPUT_WIDTH;
-    const outH = Math.round(OUTPUT_WIDTH / aspect.ratio);
+    const outW = outputWidth;
+    const outH = Math.round(outputWidth / aspect.ratio);
     const canvas = document.createElement("canvas");
     canvas.width = outW;
     canvas.height = outH;
@@ -227,10 +245,10 @@ export function CoverCropModal({ src, onApply, onCancel, busy = false, onExportE
 
   return (
     <div className="adm-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
-      <div className="adm-modal adm-crop-modal" role="dialog" aria-modal="true" aria-label="Adjust cover image">
+      <div className="adm-modal adm-crop-modal" role="dialog" aria-modal="true" aria-label={heading}>
         <div className="adm-modal-head">
           <div>
-            <h2 className="adm-serif" style={{ margin: 0 }}>Adjust cover image</h2>
+            <h2 className="adm-serif" style={{ margin: 0 }}>{heading}</h2>
             <p className="adm-crop-sub">Drag to reposition · scroll, pinch, or use the slider to zoom</p>
           </div>
           <button type="button" className="adm-iconbtn" aria-label="Cancel" onClick={onCancel} disabled={busy}>
@@ -246,20 +264,22 @@ export function CoverCropModal({ src, onApply, onCancel, busy = false, onExportE
             </div>
           ) : (
             <>
-              {/* Aspect presets. */}
-              <div className="adm-crop-aspects" role="group" aria-label="Aspect ratio">
-                {COVER_ASPECTS.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={`adm-crop-aspect ${a.id === aspect.id ? "on" : ""}`}
-                    onClick={() => setAspect(a)}
-                    title={a.note}
-                  >
-                    {a.label}
-                  </button>
-                ))}
-              </div>
+              {/* Aspect presets (hidden when the crop is locked to a single ratio). */}
+              {aspects.length > 1 && (
+                <div className="adm-crop-aspects" role="group" aria-label="Aspect ratio">
+                  {aspects.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      className={`adm-crop-aspect ${a.id === aspect.id ? "on" : ""}`}
+                      onClick={() => setAspect(a)}
+                      title={a.note}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* The crop stage. */}
               <div
@@ -309,10 +329,7 @@ export function CoverCropModal({ src, onApply, onCancel, busy = false, onExportE
                 <span className="adm-crop-zoom-lbl" aria-hidden>+</span>
               </div>
 
-              <p className="adm-crop-note">
-                Exports a {OUTPUT_WIDTH}px-wide image · this framing is what shows on the article and
-                when shared on Facebook.
-              </p>
+              <p className="adm-crop-note">{note}</p>
             </>
           )}
         </div>
