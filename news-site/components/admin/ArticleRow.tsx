@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDate, formatNumber } from "@/lib/site";
+import { ArticleThumb } from "@/components/admin/ArticleThumb";
 
 // Category → accent color (Business green, Technology amber, World purple);
 // anything else falls back to a neutral slate. Keeps the dashboard, the bar
@@ -20,18 +21,20 @@ type Row = {
   slug: string;
   status: string;
   views: number;
+  coverImage: string | null;
   category: { name: string } | null;
   publishedAt: Date | null;
   createdAt: Date;
 };
 
-/** A single article line: initial tile + title + meta row (status · category ·
- *  views · date). Links to the editor; the title initial uses the first letter. */
+/** A single article line: cover thumbnail + title + meta row (status · category ·
+ *  views · date). Links to the editor; falls back to the title initial when an
+ *  article has no cover image. */
 export function ArticleRow({ a }: { a: Row }) {
   const published = a.status === "published";
   return (
     <Link href={`/admin/articles/${a.id}/edit`} className="adm-arow">
-      <span className="adm-ini">{a.title.slice(0, 1).toUpperCase()}</span>
+      <ArticleThumb cover={a.coverImage} title={a.title} />
       <span className="adm-abody">
         <span className="adm-ati" style={{ display: "block" }}>
           {a.title}

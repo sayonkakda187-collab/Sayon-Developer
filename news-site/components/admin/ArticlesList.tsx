@@ -7,6 +7,7 @@ import { formatDate, formatNumber } from "@/lib/site";
 import { useToast } from "@/components/admin/Toast";
 import { duplicateArticle, bulkArticleAction } from "@/app/admin/actions";
 import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
+import { ArticleThumb } from "@/components/admin/ArticleThumb";
 import { PencilIcon, EyeIcon, SearchIcon, ShareIcon } from "@/components/admin/icons";
 
 type Item = {
@@ -15,6 +16,7 @@ type Item = {
   slug: string;
   status: string;
   views: number;
+  coverImage: string | null;
   category: { name: string } | null;
   publishedAt: string | null;
   createdAt: string;
@@ -278,7 +280,7 @@ export function ArticlesList({
                   <label className="adm-am-rowcheck">
                     <input type="checkbox" checked={isSel} onChange={() => toggle(a.id)} aria-label={`Select ${a.title}`} />
                   </label>
-                  <span className="adm-ini">{a.title.slice(0, 1).toUpperCase()}</span>
+                  <ArticleThumb cover={a.coverImage} title={a.title} />
                   <div className="adm-abody">
                     <Link href={`/admin/articles/${a.id}/edit`} className="adm-ati" style={{ display: "block" }}>{a.title}</Link>
                     {a.snippet && <div className="adm-asnip">{renderSnippet(a.snippet)}</div>}

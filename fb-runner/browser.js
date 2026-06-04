@@ -248,10 +248,8 @@ export async function validateSession(state) {
   }
 }
 
-/** List the Pages the interactive-login account manages (best-effort scrape). */
-export async function listPages() {
-  if (!(await isLoggedIn())) throw new ManualActionError("not_logged_in", "Not logged in to Facebook. Use “Open login” first.");
-  const p = await getPage();
+/** Scrape the managed-Pages list off an already-authenticated page `p`. */
+async function scrapePages(p) {
   await p.goto("https://www.facebook.com/pages/?category=your_pages", { waitUntil: "domcontentloaded" }).catch(() => {});
   await p.waitForTimeout(2500);
   return await p.evaluate(() => {
@@ -268,6 +266,34 @@ export async function listPages() {
     }
     return Array.from(seen.values()).slice(0, 50);
   });
+}
+
+/**
+ * List the Pages the logged-in account manages (best-effort scrape). Prefers a
+ * saved session — the per-call `state` or the on-disk session FILE — in an
+ * EPHEMERAL headless context, so this works on a HEADLESS SERVER (e.g. EC2) just
+ * like posting does. Falls back to the live headed login context (PC mode).
+ */
+export async function listPages(state) {
+  const effectiveState = state || fileSessionState();
+  if (effectiveState) {
+    const browser = await chromium.launch({ headless: process.env.FB_HEADLESS !== "0" });
+    try {
+      const ctx = await browser.newContext({ storageState: effectiveState, viewport: { width: 1280, height: 900 } });
+      ctx.setDefaultTimeout(ACTION_TIMEOUT);
+      ctx.setDefaultNavigationTimeout(NAV_TIMEOUT);
+      const p = await ctx.newPage();
+      const ls = await readLoginState(p);
+      if (!ls.loggedIn) throw new ManualActionError("session_expired", "Saved session is no longer logged in — recapture it.");
+      return await scrapePages(p);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+  }
+  // No session anywhere: use the live headed login context (PC mode).
+  if (!(await isLoggedIn())) throw new ManualActionError("not_logged_in", "Not logged in to Facebook. Use “Open login” first.");
+  const p = await getPage();
+  return await scrapePages(p);
 }
 
 /**

@@ -289,6 +289,7 @@ export type ArticleSearchHit = {
   slug: string;
   status: string;
   views: number;
+  coverImage: string | null;
   category: { name: string } | null;
   tags: string[];
   publishedAt: string | null;
@@ -385,6 +386,7 @@ export async function searchArticlesAdmin(
       content: true,
       status: true,
       views: true,
+      coverImage: true,
       publishedAt: true,
       createdAt: true,
       category: { select: { name: true } },
@@ -425,6 +427,7 @@ export async function searchArticlesAdmin(
         slug: a.slug,
         status: a.status,
         views: a.views,
+        coverImage: a.coverImage,
         category: a.category,
         tags: a.tags.map((t) => t.name),
         publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
