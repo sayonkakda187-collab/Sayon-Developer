@@ -1,54 +1,103 @@
 /*
- * Minimal service worker for the Daily Ledger admin PWA.
- * - Cache-first for hashed static assets (instant, reliable shell).
- * - Network for everything else: pages and /api are always fresh, and POST
- *   requests (login, mutations) are never intercepted/cached.
+ * Service worker for the Daily Ledger admin PWA.
+ *
+ * FRESHNESS-FIRST, so the INSTALLED app always tracks the latest deploy (the old
+ * SW served a stale build forever — this fixes that):
+ *  - Page navigations / HTML / RSC  -> NETWORK-FIRST. Always the latest admin
+ *    when online; a cached copy is used only as an OFFLINE fallback. The
+ *    installed PWA can never show a stale UI while online.
+ *  - Immutable build output (/_next/static/*) -> cache-first. Those URLs are
+ *    content-hashed, so they change every deploy — safe to cache forever.
+ *  - Icons / fonts / images -> stale-while-revalidate (fast + self-healing).
+ *  - /api + any POST/mutation -> never cached (straight to the network).
+ *
+ * UPDATES: a new SW does NOT skip-waiting on install, so it never reloads you
+ * mid-edit. The page detects the waiting worker, shows an "update available"
+ * prompt, and on tap posts SKIP_WAITING -> the SW activates, purges old caches,
+ * and the page reloads into the fresh build. Bump VERSION to force a purge.
  */
-const STATIC_CACHE = "dl-admin-static-v1";
+const VERSION = "v2-20260604";
+const STATIC_CACHE = `dl-admin-static-${VERSION}`;
+const PAGES_CACHE = `dl-admin-pages-${VERSION}`;
+const KEEP = new Set([STATIC_CACHE, PAGES_CACHE]);
 
 self.addEventListener("install", () => {
-  self.skipWaiting();
+  // Intentionally NO skipWaiting() — wait for the app's "Reload" prompt so an
+  // update never interrupts an in-progress edit.
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.filter((k) => k !== STATIC_CACHE).map((k) => caches.delete(k)),
-        ),
-      )
+      .then((keys) => Promise.all(keys.filter((k) => !KEEP.has(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
 
+// The page asks us to take over immediately (user tapped "Reload").
+self.addEventListener("message", (event) => {
+  const type = event.data && (event.data.type || event.data);
+  if (type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
-
+  if (request.method !== "GET") return; // never touch login/mutations
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  const isStatic =
-    url.pathname.startsWith("/_next/static/") ||
+  // Content-hashed build output → cache-first (immutable).
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    return;
+  }
+
+  // Page navigations / HTML documents → network-first (always latest online).
+  if (request.mode === "navigate" || (request.headers.get("accept") || "").includes("text/html")) {
+    event.respondWith(networkFirst(request, PAGES_CACHE));
+    return;
+  }
+
+  // Icons / fonts / images → stale-while-revalidate.
+  if (
     url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/apple-icon") ||
-    /\.(?:css|js|woff2?|png|jpe?g|svg|ico|gif|webp|avif)$/.test(url.pathname);
-
-  if (!isStatic) return; // pages + /api go straight to the network (always fresh)
-
-  event.respondWith(
-    caches.open(STATIC_CACHE).then(async (cache) => {
-      const cached = await cache.match(request);
-      if (cached) return cached;
-      try {
-        const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
-        return response;
-      } catch {
-        return cached || Response.error();
-      }
-    }),
-  );
+    /\.(?:css|js|woff2?|png|jpe?g|svg|ico|gif|webp|avif)$/.test(url.pathname)
+  ) {
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
+    return;
+  }
+  // Everything else (/api, RSC data fetches) → default to the network (fresh).
 });
+
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const res = await fetch(request);
+  if (res.ok) cache.put(request, res.clone());
+  return res;
+}
+
+async function networkFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const res = await fetch(request);
+    if (res.ok) cache.put(request, res.clone());
+    return res;
+  } catch {
+    return (await cache.match(request)) || (await cache.match("/admin")) || Response.error();
+  }
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const hit = await cache.match(request);
+  const fetching = fetch(request)
+    .then((res) => {
+      if (res.ok) cache.put(request, res.clone());
+      return res;
+    })
+    .catch(() => hit);
+  return hit || fetching;
+}
