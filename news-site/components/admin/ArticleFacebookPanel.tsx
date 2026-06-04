@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -114,6 +114,49 @@ export function ArticleFacebookPanel({
     }));
   }, [pages]);
 
+  // Remember the last page selections across visits (per browser). Hydrate once
+  // on mount, filtered to pages that still exist / are connected.
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("fb.lastTarget");
+      if (t && connectablePages.some((p) => p.id === t)) setTargetPageId(t);
+      const raw = localStorage.getItem("fb.lastSelected");
+      if (raw) {
+        const ids = JSON.parse(raw) as string[];
+        const valid = ids.filter((id) => pages.some((p) => p.id === id));
+        if (valid.length) setSelected(new Set(valid));
+      }
+    } catch {
+      /* localStorage unavailable (private mode) — fall back to defaults */
+    }
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (targetPageId) localStorage.setItem("fb.lastTarget", targetPageId);
+    } catch {
+      /* ignore */
+    }
+  }, [targetPageId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("fb.lastSelected", JSON.stringify([...selected]));
+    } catch {
+      /* ignore */
+    }
+  }, [selected]);
+
+  // Select-all / deselect-all across every connected page (multi-post grid).
+  const allConnectedIds = useMemo(() => connectablePages.map((p) => p.id), [connectablePages]);
+  const allSelected = allConnectedIds.length > 0 && allConnectedIds.every((id) => selected.has(id));
+  function toggleAll(on: boolean) {
+    setSelected(on ? new Set(allConnectedIds) : new Set());
+  }
+  const selectedNames = pages.filter((p) => selected.has(p.id)).map((p) => p.pageName);
+
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -140,6 +183,11 @@ export function ArticleFacebookPanel({
   async function onQuickPost() {
     if (!targetPage) return error("No connected page to post to.");
     if (targetPage.status !== "Connected") return error(`“${targetPage.pageName}” needs reconnecting before posting.`);
+    try {
+      localStorage.setItem("fb.lastTarget", targetPage.id);
+    } catch {
+      /* ignore */
+    }
     setBusy("quick");
     setResults(null);
     const res = await publishArticleNow({
@@ -229,10 +277,10 @@ export function ArticleFacebookPanel({
       }
     }
     setBusy(null);
-    const failCount = targets.length - okCount;
-    if (failCount === 0) success(`Posted to ${okCount} Page${okCount === 1 ? "" : "s"}.`);
-    else if (okCount === 0) error(`All ${failCount} failed. See details below.`);
-    else success(`Posted to ${okCount}, ${failCount} failed. See details below.`);
+    const total = targets.length;
+    if (okCount === total) success(`Posted to all ${total} Page${total === 1 ? "" : "s"}.`);
+    else if (okCount === 0) error(`All ${total} failed. See details below.`);
+    else success(`Posted to ${okCount} of ${total} Pages. See details below.`);
     router.refresh();
   }
 
@@ -245,10 +293,10 @@ export function ArticleFacebookPanel({
     if (!res.ok) return error(res.error);
     setResults(res.data);
     const okCount = res.data.filter((r) => r.ok).length;
-    const failCount = res.data.length - okCount;
-    if (failCount === 0) success(`Posted to ${okCount} page${okCount === 1 ? "" : "s"}.`);
-    else if (okCount === 0) error(`All ${failCount} posts failed. See details below.`);
-    else success(`Posted to ${okCount}, ${failCount} failed. See details below.`);
+    const total = res.data.length;
+    if (okCount === total) success(`Posted to all ${total} page${total === 1 ? "" : "s"}.`);
+    else if (okCount === 0) error(`All ${total} posts failed. See details below.`);
+    else success(`Posted to ${okCount} of ${total} pages. See details below.`);
     router.refresh();
   }
 
@@ -546,6 +594,17 @@ export function ArticleFacebookPanel({
 
           <div className="adm-fb-or"><span>or pick multiple pages</span></div>
 
+          {pages.length > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "2px 0 8px" }}>
+              <button type="button" className="adm-fb-grouptoggle" onClick={() => toggleAll(!allSelected)}>
+                {allSelected ? "Deselect all" : "Select all"}
+              </button>
+              <span className="adm-field-hint" style={{ margin: 0 }}>
+                {selected.size} of {connectablePages.length} selected
+              </span>
+            </div>
+          )}
+
           <div className="adm-fb-checkgroups">
             {grouped.map(({ group, rows }) => {
               const allOn = rows.every((r) => selected.has(r.id));
@@ -580,6 +639,13 @@ export function ArticleFacebookPanel({
             })}
           </div>
 
+          {selected.size > 0 && (
+            <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 10 }}>
+              <span className="adm-fb-target-dot" aria-hidden />
+              Posting to: <strong>{selectedNames.join(", ")}</strong>
+            </p>
+          )}
+
           <div className="adm-fb-publishrow">
             <button
               type="button"
@@ -611,7 +677,7 @@ export function ArticleFacebookPanel({
               </button>
             </div>
           </div>
-          <p className="adm-field-hint">Selected: {selected.size} page{selected.size === 1 ? "" : "s"}. Times use your local timezone.</p>
+          <p className="adm-field-hint">Scheduled times use your local timezone.</p>
 
           {results && (
             <div className="adm-fb-results">

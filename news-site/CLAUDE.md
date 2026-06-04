@@ -272,19 +272,29 @@ short→long-lived token exchange), optional `FACEBOOK_GRAPH_VERSION`,
 **Facebook setup (one time) — two ways to connect (`/admin/facebook` → Connect):**
 - **Auto (recommended):** paste your **App ID + App Secret** (App Dashboard →
   Settings → Basic) and a short-lived **User token** from the Graph API Explorer
-  (scopes `pages_show_list` + `pages_read_engagement` + `pages_manage_posts`).
+  (scopes `pages_show_list` + `pages_read_engagement` + `pages_manage_posts`; add
+  `business_management` if your Pages are owned by a Business Manager).
   The server (`facebookFetchPages`) **exchanges it for a long-lived user token**
   (`exchangeForLongLivedUserToken`), calls **`GET /me/accounts`** (`getUserPages`)
   to list your Pages, you pick one, and `facebookConnectPage` stores that **Page
   token** (effectively non-expiring) encrypted. App ID/Secret + the long-lived
-  user token live in `AppSetting` (secret + token **encrypted**; see
-  `lib/facebookSettings.ts`); env `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` still
-  work as a fallback.
+  user token live in `AppSetting` (secret + token **encrypted**; the user token's
+  ~60-day expiry is stored non-secret and shown as "Connection valid until …";
+  see `lib/facebookSettings.ts`); env `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET`
+  still work as a fallback.
 - **Manual:** paste a Page ID + a long-lived **Page access token** directly.
+
+**Refresh Pages** (`facebookRefreshPages`, button on `/admin/facebook`): re-calls
+`GET /me/accounts` with the stored long-lived user token to refresh every
+connected Page's token/name **and auto-add Pages you created since** (filed under
+"Uncategorized"). No re-pasting needed while the user token is valid.
 
 Posting to Pages you don't own (or beyond dev mode) requires **App Review**.
 The post caption is **editable** before sending (defaults to `buildMessage`); the
-article link is attached separately so Facebook renders its OG preview.
+article link is attached separately so Facebook renders its OG preview. Multi-page
+posts space Graph calls ~300ms apart and surface rate-limit errors (codes
+4/17/32/341/613 or HTTP 429) as a clear "wait a few minutes" message — never a
+silent hammer or crash.
 
 > 🔐 **Token hygiene:** App Secret + all tokens are encrypted at rest and never
 > sent to the browser or logged. **If a token (or the App Secret) was ever
