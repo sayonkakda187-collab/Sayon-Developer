@@ -1,8 +1,10 @@
 import { ToastProvider } from "@/components/admin/Toast";
 import { NewsApiSettings } from "@/components/admin/NewsApiSettings";
+import { AdskeeperSettings } from "@/components/admin/AdskeeperSettings";
 import { SettingsProfile } from "@/components/admin/SettingsProfile";
 import { SettingsAiModel } from "@/components/admin/SettingsAiModel";
 import { getActiveProvider, getProviderStatuses } from "@/lib/newsSearch/settings";
+import { getAdskeeperStatus } from "@/lib/adskeeper/settings";
 import { getSessionUser } from "@/lib/auth";
 import { getDefaultAiModel } from "@/lib/aiSettings";
 
@@ -10,11 +12,12 @@ import { getDefaultAiModel } from "@/lib/aiSettings";
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const [statuses, activeProvider, user, defaultModel] = await Promise.all([
+  const [statuses, activeProvider, user, defaultModel, adskeeperStatus] = await Promise.all([
     getProviderStatuses(),
     getActiveProvider(),
     getSessionUser(),
     getDefaultAiModel(),
+    getAdskeeperStatus(),
   ]);
 
   const email = user?.email ?? "";
@@ -24,7 +27,7 @@ export default async function AdminSettingsPage() {
     <div>
       <div className="adm-page-h">
         <h1>Settings</h1>
-        <p>Your profile, the AI Assistant default, and the news-search API keys.</p>
+        <p>Your profile, the AI Assistant default, and the news-search & AdsKeeper API keys.</p>
       </div>
       <ToastProvider>
         <div className="adm-settings-stack">
@@ -42,6 +45,7 @@ export default async function AdminSettingsPage() {
             }))}
             activeProvider={activeProvider}
           />
+          <AdskeeperSettings status={adskeeperStatus} />
         </div>
       </ToastProvider>
     </div>

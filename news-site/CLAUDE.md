@@ -463,6 +463,38 @@ page to manage keys.
   `NEWSAPI_KEY` (optional fallbacks) + `ENCRYPTION_KEY` (already required to
   encrypt secrets at rest).
 
+## AdsKeeper earnings (publisher Graph/REST API)
+
+A dashboard **"Ad Earnings · AdsKeeper"** panel showing **real** ad stats —
+revenue, impressions, clicks, CTR, eCPM, EPC — for a selectable range (Today / 7
+/ 30 days / This month), a **revenue-over-time** chart, a **per-website**
+breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
+(only when the API returns a balance). Self-fetching client panel
+(`components/admin/AdskeeperPanel.tsx`) so the dashboard loads instantly.
+
+- **Auth + storage:** publisher **API key/token** saved **encrypted at rest**
+  (`AppSetting`, AES-256-GCM) via `lib/adskeeper/settings.ts`; optional
+  Client/Publisher ID (plain). Env fallback `ADSKEEPER_API_KEY` /
+  `ADSKEEPER_CLIENT_ID`; **DB key beats env**. Key is **server-side only**, never
+  returned to the browser or logged. Settings UI: `AdskeeperSettings` on
+  `/admin/settings` (AdsKeeper → Account settings → API → copy API Key).
+- **Calls:** `lib/adskeeper/client.ts` (server-only). `Authorization: Bearer
+  {token}` to `https://api.adskeeper.com/v1/...`, a website-custom-report with
+  `dateInterval` + dimensions(date,website) + metrics. **30-min in-process cache**
+  (Refresh button forces a fresh pull; saving a key clears it). Graceful states:
+  not-configured, 401/403 → "reconnect", 429 → rate-limit, no-data, network.
+  **Only ever shows real returned data — never estimates earnings.**
+- **⚠️ Wire-up note:** the AdsKeeper docs are bot-protected (couldn't be read at
+  build time), so the exact **report path** + **metric field names** are unverified.
+  They're isolated in ONE block in `client.ts` (overridable via `ADSKEEPER_API_BASE`
+  / `ADSKEEPER_REPORT_PATH`); `mapReport()` already accepts common field-name
+  variants. Confirm against your docs (or test with a real token on preview) and
+  adjust that block only — UI/caching/states are independent.
+- **DB migration:** none (reuses `AppSetting`). **Env:** `ADSKEEPER_API_KEY` /
+  `ADSKEEPER_CLIENT_ID` (optional) + `ENCRYPTION_KEY` (already required).
+- 🔐 If your AdsKeeper key is ever exposed (screenshot/chat), regenerate it in the
+  AdsKeeper dashboard and re-save it here.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
