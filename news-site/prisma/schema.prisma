@@ -122,6 +122,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         String   @default("admin")
+  avatarUrl    String? // optional admin profile picture (Blob URL); falls back to initials
   createdAt    DateTime @default(now())
 }
 

@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { getSessionUser, requireAdmin } from "@/lib/auth";
+import { setDefaultAiModel } from "@/lib/aiSettings";
+import { isValidModel } from "@/lib/aiModels";
 import {
   saveProviderKey,
   setActiveProvider,
@@ -41,4 +44,49 @@ export async function chooseNewsProvider(
   revalidatePath("/admin/settings");
   revalidatePath("/admin/trending");
   return { ok: true };
+}
+
+// ── Admin profile picture (avatar) ───────────────────────────────────────────
+
+// Only accept our own upload outputs: a Vercel Blob URL or the local /uploads
+// fallback. Prevents storing an arbitrary external URL on the user row.
+const BLOB_HOST_RE = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i;
+
+/** Set or clear (null) the signed-in admin's avatar. The image is uploaded via
+ *  /api/admin/upload first; here we only persist the resulting URL. */
+export async function updateAdminAvatar(
+  url: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  let value: string | null = null;
+  if (url) {
+    const u = url.trim();
+    if (!BLOB_HOST_RE.test(u) && !u.startsWith("/uploads/")) {
+      return { ok: false, error: "Invalid image URL." };
+    }
+    value = u;
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: value } });
+  revalidatePath("/admin", "layout"); // refresh the avatar across the admin shell
+  return { ok: true };
+}
+
+// ── Default AI Assistant model ───────────────────────────────────────────────
+
+/** Set the account-wide default AI model (the AI Assist panels' default). */
+export async function updateDefaultAiModel(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  if (!isValidModel(id)) return { ok: false, error: "Unknown model." };
+  try {
+    await setDefaultAiModel(id);
+    revalidatePath("/admin/settings");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the model." };
+  }
 }

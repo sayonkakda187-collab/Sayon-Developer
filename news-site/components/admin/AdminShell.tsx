@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/actions";
 import { AdminThemeToggle } from "./AdminThemeToggle";
+import { AdminAvatar } from "./AdminAvatar";
 import { GlobalSearch } from "./GlobalSearch";
 import {
   BookIcon,
@@ -34,9 +35,11 @@ const NAV = [
 
 export function AdminShell({
   userEmail,
+  avatarUrl,
   children,
 }: {
   userEmail: string;
+  avatarUrl?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -122,7 +125,9 @@ export function AdminShell({
           <Link href="/admin/comments" className="adm-iconbtn" aria-label="Comments">
             <MessageIcon className="h-5 w-5" />
           </Link>
-          <span className="adm-avatar" title={userEmail}>{initials}</span>
+          <span className="adm-avatar" title={userEmail}>
+            <AdminAvatar avatarUrl={avatarUrl} initials={initials} />
+          </span>
         </div>
       </header>
 
@@ -154,7 +159,7 @@ export function AdminShell({
               aria-current={isActive("/admin/settings") ? "page" : undefined}
             >
               <SettingsIcon />
-              API Settings
+              Settings
             </Link>
             <Link href="/" target="_blank" className="adm-navitem">
               <ExternalLinkIcon />
@@ -196,7 +201,7 @@ export function AdminShell({
                 title={userEmail}
                 onClick={() => setOpen(true)}
               >
-                {initials}
+                <AdminAvatar avatarUrl={avatarUrl} initials={initials} />
               </button>
             </div>
 
@@ -286,7 +291,7 @@ export function AdminShell({
                 aria-current={isActive("/admin/settings") ? "page" : undefined}
               >
                 <SettingsIcon />
-                API Settings
+                Settings
               </Link>
               <Link href="/" target="_blank" className="adm-dlink" tabIndex={open ? 0 : -1}>
                 <ExternalLinkIcon />
