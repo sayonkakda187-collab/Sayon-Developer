@@ -1626,3 +1626,28 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-keypill { display: inline-flex; align-items: center; gap: 4px; flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--adm-bd); color: var(--adm-muted-2); white-space: nowrap; }
 .adm-keypill.on { color: #15803d; border-color: rgba(22,163,74,0.4); background: rgba(22,163,74,0.08); }
 [data-adm-theme="dark"] .admin-shell .adm-keypill.on { color: #4ade80; }
+
+/* ── PWA "update available" prompt (shown when a new service worker is waiting,
+   i.e. a newer admin build is ready). Tap "Reload" to activate it. Theme-aware
+   (ink-on-card flips in dark), safe-area aware, and clears the mobile tab bar. ── */
+.adm-pwa-update {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 120;
+  display: flex; align-items: center; gap: 12px;
+  max-width: calc(100% - 24px);
+  padding: 11px 12px 11px 16px; border-radius: 13px;
+  background: var(--adm-ink); color: var(--adm-card);
+  box-shadow: 0 12px 34px rgba(8, 12, 22, 0.32);
+  font-size: 13.5px; font-weight: 500; line-height: 1.3;
+}
+.adm-pwa-update-txt { min-width: 0; }
+.adm-pwa-update-btn {
+  flex: none; border: none; cursor: pointer; border-radius: 9px;
+  padding: 9px 16px; min-height: 40px; font-weight: 700; font-size: 13.5px;
+  background: #2563eb; color: #fff;
+}
+.adm-pwa-update-btn:hover { background: #1d4ed8; }
+@media (max-width: 1023px) {
+  /* Sit above the bottom tab bar so the prompt isn't hidden behind it. */
+  .adm-pwa-update { bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
