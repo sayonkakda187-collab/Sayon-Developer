@@ -27,13 +27,19 @@ type GraphError = {
 export class FacebookApiError extends Error {
   /** True when the token is invalid/expired/revoked (Graph codes 190/102/463…). */
   readonly expired: boolean;
+  /** True when Facebook is rate-limiting us (codes 4/17/32/341/613 or HTTP 429). */
+  readonly rateLimited: boolean;
   readonly code?: number;
   readonly subcode?: number;
 
-  constructor(message: string, opts: { expired?: boolean; code?: number; subcode?: number } = {}) {
+  constructor(
+    message: string,
+    opts: { expired?: boolean; rateLimited?: boolean; code?: number; subcode?: number } = {},
+  ) {
     super(message);
     this.name = "FacebookApiError";
     this.expired = opts.expired ?? false;
+    this.rateLimited = opts.rateLimited ?? false;
     this.code = opts.code;
     this.subcode = opts.subcode;
   }
@@ -42,14 +48,24 @@ export class FacebookApiError extends Error {
 /** Graph error codes that mean "this token can no longer be used." */
 const TOKEN_INVALID_CODES = new Set([190, 102, 463, 467, 2500]);
 
-function toFriendlyError(err: GraphError | undefined, fallback: string): FacebookApiError {
+/** Graph error codes that mean "you're being throttled / temporarily blocked." */
+const RATE_LIMIT_CODES = new Set([4, 17, 32, 341, 613]);
+
+function toFriendlyError(
+  err: GraphError | undefined,
+  fallback: string,
+  httpStatus?: number,
+): FacebookApiError {
   const code = err?.code;
   const expired = code != null && TOKEN_INVALID_CODES.has(code);
+  const rateLimited = httpStatus === 429 || (code != null && RATE_LIMIT_CODES.has(code));
   const base = err?.message?.trim() || fallback;
   const message = expired
     ? `${base} (the Page access token is invalid or expired — reconnect the page).`
-    : base;
-  return new FacebookApiError(message, { expired, code, subcode: err?.error_subcode });
+    : rateLimited
+      ? `${base} (Facebook rate limit reached — wait a few minutes before trying again).`
+      : base;
+  return new FacebookApiError(message, { expired, rateLimited, code, subcode: err?.error_subcode });
 }
 
 /** Parse a Graph response, throwing a categorized error on failure. */
@@ -62,7 +78,7 @@ async function parseGraph<T>(res: Response, fallback: string): Promise<T> {
   }
   if (!res.ok || (json as { error?: GraphError })?.error) {
     const err = (json as { error?: GraphError })?.error;
-    throw toFriendlyError(err, `${fallback} (HTTP ${res.status}).`);
+    throw toFriendlyError(err, `${fallback} (HTTP ${res.status}).`, res.status);
   }
   return json as T;
 }

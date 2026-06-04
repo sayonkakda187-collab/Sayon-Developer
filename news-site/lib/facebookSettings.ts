@@ -12,6 +12,7 @@ import { encryptSecret, decryptSecret } from "@/lib/crypto";
 const APP_ID_KEY = "facebook_app_id";
 const APP_SECRET_KEY = "facebook_app_secret";
 const USER_TOKEN_KEY = "facebook_user_token";
+const USER_TOKEN_EXPIRES_KEY = "facebook_user_token_expires_at";
 
 export async function getFacebookAppCreds(): Promise<{ appId: string | null; appSecret: string | null }> {
   const rows = await prisma.appSetting.findMany({ where: { key: { in: [APP_ID_KEY, APP_SECRET_KEY] } } });
@@ -47,11 +48,23 @@ export async function saveFacebookAppCreds(input: { appId: string; appSecret: st
   });
 }
 
-export async function saveFacebookUserToken(token: string): Promise<void> {
+export async function saveFacebookUserToken(token: string, expiresInSeconds?: number): Promise<void> {
   await prisma.appSetting.upsert({
     where: { key: USER_TOKEN_KEY },
     update: { value: encryptSecret(token), encrypted: true },
     create: { key: USER_TOKEN_KEY, value: encryptSecret(token), encrypted: true },
+  });
+  // Long-lived user tokens last ~60 days; persist the expiry (non-secret) so the
+  // UI can show when a reconnect is needed. Some report no expiry (effectively
+  // non-expiring) — store an empty value in that case.
+  const expiresAt =
+    expiresInSeconds && expiresInSeconds > 0
+      ? new Date(Date.now() + expiresInSeconds * 1000).toISOString()
+      : "";
+  await prisma.appSetting.upsert({
+    where: { key: USER_TOKEN_EXPIRES_KEY },
+    update: { value: expiresAt, encrypted: false },
+    create: { key: USER_TOKEN_EXPIRES_KEY, value: expiresAt, encrypted: false },
   });
 }
 
@@ -66,11 +79,20 @@ export async function getFacebookUserToken(): Promise<string | null> {
 }
 
 /** Non-secret connection status for the UI (no values ever leak). */
-export async function getFacebookConnectStatus(): Promise<{ appConfigured: boolean; userTokenSaved: boolean }> {
+export async function getFacebookConnectStatus(): Promise<{
+  appConfigured: boolean;
+  userTokenSaved: boolean;
+  userTokenExpiresAt: string | null;
+}> {
   const { appId, appSecret } = await getFacebookAppCreds();
-  const userRow = await prisma.appSetting.findUnique({
-    where: { key: USER_TOKEN_KEY },
-    select: { key: true },
+  const rows = await prisma.appSetting.findMany({
+    where: { key: { in: [USER_TOKEN_KEY, USER_TOKEN_EXPIRES_KEY] } },
   });
-  return { appConfigured: Boolean(appId && appSecret), userTokenSaved: Boolean(userRow) };
+  const byKey = new Map(rows.map((r) => [r.key, r.value]));
+  const expires = byKey.get(USER_TOKEN_EXPIRES_KEY);
+  return {
+    appConfigured: Boolean(appId && appSecret),
+    userTokenSaved: byKey.has(USER_TOKEN_KEY),
+    userTokenExpiresAt: expires ? expires : null,
+  };
 }

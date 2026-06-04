@@ -9,6 +9,7 @@ import {
   type FacebookSessionView,
 } from "@/components/admin/FacebookSessionsManager";
 import { isRunnerConfigured } from "@/lib/fbRunner";
+import { getFacebookConnectStatus } from "@/lib/facebookSettings";
 
 // Tokens + Graph state are dynamic; never statically cache this screen.
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function AdminFacebookPage() {
   // Count posted/pending per page in SQL (groupBy) rather than loading every
   // ScheduledPost row into memory just to count it — keeps this O(pages), not
   // O(all posts ever), as post history grows.
-  const [pages, counts, sessions] = await Promise.all([
+  const [pages, counts, sessions, connect] = await Promise.all([
     prisma.facebookPage.findMany({
       orderBy: [{ categoryGroup: "asc" }, { pageName: "asc" }],
     }),
@@ -27,6 +28,7 @@ export default async function AdminFacebookPage() {
       _count: { _all: true },
     }),
     prisma.facebookSession.findMany({ orderBy: { createdAt: "desc" } }),
+    getFacebookConnectStatus(),
   ]);
 
   const postedByPage = new Map<string, number>();
@@ -61,7 +63,7 @@ export default async function AdminFacebookPage() {
   return (
     <ToastProvider>
       <FacebookSessionsManager sessions={sessionView} runnerConfigured={isRunnerConfigured()} />
-      <FacebookPagesManager pages={view} />
+      <FacebookPagesManager pages={view} connect={connect} />
     </ToastProvider>
   );
 }

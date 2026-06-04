@@ -8,6 +8,7 @@ import {
   refreshFacebookPage,
   facebookFetchPages,
   facebookConnectPage,
+  facebookRefreshPages,
 } from "@/app/admin/facebook-actions";
 import {
   FACEBOOK_CATEGORY_GROUPS,
@@ -47,11 +48,18 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function FacebookPagesManager({ pages }: { pages: FacebookPageView[] }) {
+export function FacebookPagesManager({
+  pages,
+  connect,
+}: {
+  pages: FacebookPageView[];
+  connect?: { appConfigured: boolean; userTokenSaved: boolean; userTokenExpiresAt: string | null };
+}) {
   const router = useRouter();
   const { success, error } = useToast();
   const [showConnect, setShowConnect] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
   const [, startTransition] = useTransition();
 
   // Group pages by niche/category for a scannable, grouped table.
@@ -91,6 +99,22 @@ export function FacebookPagesManager({ pages }: { pages: FacebookPageView[] }) {
     refresh();
   }
 
+  // Re-sync every Page from Facebook: refresh existing tokens + pull in any
+  // Pages added on Facebook since last time (no re-pasting credentials).
+  async function onRefreshPages() {
+    setRefreshingAll(true);
+    const res = await facebookRefreshPages();
+    setRefreshingAll(false);
+    if (!res.ok) return error(res.error);
+    const { refreshed, added } = res.data;
+    success(
+      added > 0
+        ? `Synced ${refreshed + added} Page${refreshed + added === 1 ? "" : "s"} (${added} new).`
+        : `Refreshed ${refreshed} Page${refreshed === 1 ? "" : "s"}.`,
+    );
+    refresh();
+  }
+
   return (
     <div>
       <div className="adm-pagehead">
@@ -101,11 +125,36 @@ export function FacebookPagesManager({ pages }: { pages: FacebookPageView[] }) {
               ? "Connect Pages to distribute articles via the Graph API"
               : `${pages.length} page${pages.length === 1 ? "" : "s"} connected`}
           </p>
+          {connect?.userTokenExpiresAt &&
+            (new Date(connect.userTokenExpiresAt).getTime() > Date.now() ? (
+              <p className="adm-fb-sub" style={{ marginTop: 4 }}>
+                Connection valid until {formatDate(connect.userTokenExpiresAt)} · Page tokens stay active —
+                reconnect after this to keep refreshing Pages.
+              </p>
+            ) : (
+              <p className="adm-fb-sub" style={{ marginTop: 4, color: "#b45309" }}>
+                Connection expired {formatDate(connect.userTokenExpiresAt)} — reconnect to refresh Pages.
+              </p>
+            ))}
         </div>
-        <button type="button" className="adm-btn-primary adm-head-cta" onClick={() => setShowConnect(true)}>
-          <PlusIcon className="h-[18px] w-[18px]" />
-          Connect New Page
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {connect?.userTokenSaved && (
+            <button
+              type="button"
+              className="adm-btn-ghost adm-head-cta"
+              onClick={onRefreshPages}
+              disabled={refreshingAll}
+              title="Re-sync Pages from Facebook (refresh tokens + pull in newly-added Pages)"
+            >
+              <RefreshIcon className={`h-[18px] w-[18px] ${refreshingAll ? "adm-spinning" : ""}`} />
+              {refreshingAll ? "Refreshing…" : "Refresh Pages"}
+            </button>
+          )}
+          <button type="button" className="adm-btn-primary adm-head-cta" onClick={() => setShowConnect(true)}>
+            <PlusIcon className="h-[18px] w-[18px]" />
+            Connect New Page
+          </button>
+        </div>
       </div>
 
       {pages.length === 0 ? (
@@ -322,7 +371,7 @@ function ConnectModal({
                 <p className="adm-field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
                   Paste your <strong>App ID</strong> + <strong>App Secret</strong> (App Dashboard → Settings → Basic) and a
                   short-lived <strong>User token</strong> from the Graph API Explorer (scopes: pages_show_list,
-                  pages_read_engagement, pages_manage_posts). We exchange it for a long-lived token and list your Pages —
+                  pages_read_engagement, pages_manage_posts, business_management). We exchange it for a long-lived token and list your Pages —
                   all stored encrypted, server-side.
                 </p>
                 <label className="adm-field">

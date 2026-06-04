@@ -269,7 +269,7 @@ export async function facebookFetchPages(input: {
       return fail("Enter your App ID and App Secret (App Dashboard → Settings → Basic).");
     }
     const longLived = await exchangeForLongLivedUserToken(userToken, creds);
-    await saveFacebookUserToken(longLived.accessToken);
+    await saveFacebookUserToken(longLived.accessToken, longLived.expiresInSeconds);
     const pages = await getUserPages(longLived.accessToken);
     return { ok: true, data: { pages: pages.map((p) => ({ id: p.id, name: p.name })) } };
   } catch (e) {
@@ -320,6 +320,55 @@ export async function facebookConnectPage(input: {
     return { ok: true, data: undefined };
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Couldn’t connect the Page.");
+  }
+}
+
+// ── Refresh ALL pages: re-fetch /me/accounts to re-sync + discover new ───────
+
+/**
+ * Re-fetch GET /me/accounts using the stored long-lived user token: refresh the
+ * token + name of every already-connected Page, and auto-add any NEW Pages the
+ * account now manages (filed under "Uncategorized" until you set a group). Lets a
+ * Page you just created on Facebook show up here without re-pasting anything.
+ */
+export async function facebookRefreshPages(): Promise<ActionResult<{ refreshed: number; added: number }>> {
+  await requireAdmin();
+  try {
+    const userToken = await getFacebookUserToken();
+    if (!userToken) {
+      return fail("Connect with the Auto flow first (App ID + Secret + user token) — then Refresh Pages can re-sync.");
+    }
+    const pages = await getUserPages(userToken);
+    const existing = await prisma.facebookPage.findMany({ select: { pageId: true } });
+    const known = new Set(existing.map((p) => p.pageId));
+    let refreshed = 0;
+    let added = 0;
+    for (const p of pages) {
+      const isNew = !known.has(p.id);
+      await prisma.facebookPage.upsert({
+        where: { pageId: p.id },
+        update: {
+          pageName: p.name,
+          accessToken: encryptSecret(p.accessToken),
+          status: "Connected",
+          lastSyncedAt: new Date(),
+        },
+        create: {
+          pageId: p.id,
+          pageName: p.name,
+          accessToken: encryptSecret(p.accessToken),
+          categoryGroup: "Uncategorized",
+          status: "Connected",
+          lastSyncedAt: new Date(),
+        },
+      });
+      if (isNew) added++;
+      else refreshed++;
+    }
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: { refreshed, added } };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Couldn’t refresh your Pages from Facebook.");
   }
 }
 
@@ -464,7 +513,8 @@ export async function publishArticleNow(input: {
   }
 
   const results: PublishResult[] = [];
-  for (const page of pages) {
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
     const result = useRunner
       ? await publishViaRunner(article, page, sessionState)
       : await publishArticleToPage(article, page, input.caption);
@@ -483,6 +533,11 @@ export async function publishArticleNow(input: {
         },
       })
       .catch(() => {});
+    // Gentle spacing between Graph calls so a multi-page burst doesn't trip
+    // Facebook's rate limits (skipped after the last page / for the runner).
+    if (!useRunner && i < pages.length - 1) {
+      await new Promise((r) => setTimeout(r, 300));
+    }
   }
 
   revalidatePath("/admin/facebook");
