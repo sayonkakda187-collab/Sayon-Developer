@@ -466,6 +466,10 @@ body {
 .adm-arow { display: flex; gap: 11px; padding: 11px 0; border-top: 1px solid var(--adm-bd); }
 .adm-arow:first-of-type { border-top: none; }
 .adm-ini { width: 34px; height: 34px; border-radius: 9px; background: #eef1f4; color: #475569; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+/* Cover-image thumbnail variant: reuse the .adm-ini box (size/radius per context)
+   and clip the next/image fill to it, so list/row layout is unchanged. */
+.adm-thumb { position: relative; overflow: hidden; padding: 0; }
+.adm-thumb img { border-radius: inherit; }
 .adm-abody { flex: 1; min-width: 0; }
 .adm-ati { font-size: 13.5px; font-weight: 600; color: var(--adm-ink); line-height: 1.3; }
 .adm-amr { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }

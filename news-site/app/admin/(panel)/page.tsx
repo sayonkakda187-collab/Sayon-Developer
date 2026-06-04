@@ -33,6 +33,7 @@ export default async function DashboardPage() {
         slug: a.slug,
         status: a.status,
         views: a.views,
+        coverImage: a.coverImage,
         category: a.category ? { name: a.category.name } : null,
         publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
         createdAt: a.createdAt.toISOString(),

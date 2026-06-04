@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatDate, formatNumber } from "@/lib/site";
 import { StatGauge } from "./StatGauge";
 import { ArticleRow, categoryColor } from "./ArticleRow";
+import { ArticleThumb } from "./ArticleThumb";
 import { DashboardControls } from "./DashboardControls";
 import { ViewsChart } from "./ViewsChart";
 import { timeAgo } from "@/lib/site";
@@ -16,6 +17,7 @@ type Article = {
   slug: string;
   status: string;
   views: number;
+  coverImage: string | null;
   category: { name: string } | null;
   publishedAt: string | null;
   createdAt: string;
@@ -221,7 +223,7 @@ export function DashboardCharts(props: DashboardProps) {
                     <tr key={a.id}>
                       <td>
                         <Link href={`/admin/articles/${a.id}/edit`} className="adm-tt">
-                          <span className="adm-ini">{a.title.slice(0, 1).toUpperCase()}</span>
+                          <ArticleThumb cover={a.coverImage} title={a.title} />
                           <span className="adm-ttl">{a.title}</span>
                         </Link>
                       </td>
@@ -237,7 +239,7 @@ export function DashboardCharts(props: DashboardProps) {
                 {recent.map((a) => (
                   <ArticleRow
                     key={a.id}
-                    a={{ id: a.id, title: a.title, slug: a.slug, status: a.status, views: a.sv, category: a.category, publishedAt: a.publishedAt ? new Date(a.publishedAt) : null, createdAt: new Date(a.createdAt) }}
+                    a={{ id: a.id, title: a.title, slug: a.slug, status: a.status, views: a.sv, coverImage: a.coverImage, category: a.category, publishedAt: a.publishedAt ? new Date(a.publishedAt) : null, createdAt: new Date(a.createdAt) }}
                   />
                 ))}
               </div>
