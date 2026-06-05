@@ -156,7 +156,7 @@ ad placements wired up. Everything is config-driven from **one file:
 1. Paste your **SITE ID** (the number from your head loader URL
    `https://jsc.adskeeper.com/site/SITE_ID.js`) into `ADSKEEPER_SITE_ID`.
 2. In the AdsKeeper dashboard → **Add Widget**, create one widget per placement
-   and paste each **WIDGET ID** into `ADS.TOP`, `ADS.IN_ARTICLE`, `ADS.SIDEBAR`,
+   and paste each **WIDGET ID** into `ADS.IN_ARTICLE`, `ADS.RECOMMENDED`,
    `ADS.HOME`.
 3. Set `ADS_ENABLED = true`.
 
@@ -174,12 +174,17 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   container (`data-type="_mgwidget"`) and lazily triggers `_mgq.push(["_mgc.load"])`
   via IntersectionObserver. Reserves `minHeight` (no layout shift), carries an
   "Advertisement" label, and matches the site tokens in light/dark.
-- Placements on `/news/[slug]`: **TOP** (below the lede), **IN_ARTICLE** (split
-  into the middle of the body at a paragraph boundary), **SIDEBAR** (above
-  "Related Stories"; this layout is single-column).
+- **Reader-first placement on `/news/[slug]`:** the **headline + cover + byline
+  lead — no ad above the story.** Then **IN_ARTICLE** (a native unit injected
+  between paragraphs *after the first ~3 paragraphs*) and, at the end, the main
+  **RECOMMENDED** "Interesting for you" widget *after the story body* (before
+  comments) — this is the one live widget (`2019769`), moved here from the old
+  top slot so it never blocks the read. Short articles (<4 paragraphs) skip the
+  in-article unit. No sidebar (single-column layout).
 - Placement on `/` (homepage): **HOME** (between the featured hero and the first
   content block / "Latest News"). Each placement needs its **own** widget id —
-  don't reuse `ADS.TOP` here, or it won't fill.
+  AdsKeeper won't fill the same id in two containers, so `IN_ARTICLE` / `HOME`
+  stay placeholders (render nothing in prod) until you add separate widget ids.
 
 ## Facebook Pages integration (Graph API)
 

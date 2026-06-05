@@ -12,10 +12,10 @@
  *   1. SITE ID — In the AdsKeeper dashboard, your head loader URL looks like
  *      https://jsc.adskeeper.com/site/123456.js. That number (123456) is your
  *      SITE ID. Paste it into ADSKEEPER_SITE_ID below.
- *   2. WIDGET IDs — AdsKeeper dashboard → "Add Widget". Create ONE widget for
- *      each placement (Top, In-article, Sidebar/Related). Each widget you save
- *      gives you a WIDGET ID. Paste them into ADS.TOP / ADS.IN_ARTICLE /
- *      ADS.SIDEBAR below (the data-widget-id value of each container).
+ *   2. WIDGET IDs — AdsKeeper dashboard → "Add Widget". Create ONE widget per
+ *      placement (In-article, end-of-article Recommendation, Home). Each widget
+ *      you save gives you a WIDGET ID. Paste them into ADS.IN_ARTICLE /
+ *      ADS.RECOMMENDED / ADS.HOME below (the data-widget-id of each container).
  *   3. ENABLE — set ADS_ENABLED to true.
  *
  * That's it. Until you do all three, real visitors see NOTHING (the site stays
@@ -32,16 +32,16 @@ export const ADSKEEPER_SITE_ID = "1097964";
 // 2) One WIDGET ID per on-page placement. ← REPLACE each with the widget id
 //    from AdsKeeper dashboard → Add Widget.
 //    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
-//    should only appear in a single container per page. So only TOP is live for
-//    now; create a separate widget for each of the other three before enabling
-//    them (reusing 2019769 here is not supported and would leave them unfilled).
+//    may appear in only ONE container per page. So only RECOMMENDED is live for
+//    now; create a separate widget for IN_ARTICLE / HOME before they fill
+//    (reusing 2019769 in another slot is not supported and would leave it unfilled).
 export const ADS = {
-  /** Top of the article, just under the headline/lede. */
-  TOP: "2019769",
-  /** Injected into the middle of the article body, between paragraphs. */
+  /** In-article unit, injected between paragraphs AFTER the opening (~3rd
+   *  paragraph) so readers reach the story first. Placeholder until you add one. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
-  /** Sidebar / related area — here, just above "Related Stories". */
-  SIDEBAR: "REPLACE_WITH_WIDGET_ID",
+  /** End-of-article "Interesting for you" recommendation widget (what to read
+   *  next) — rendered AFTER the story body, never above it. The one live widget. */
+  RECOMMENDED: "2019769",
   /** Homepage — between the featured hero and the first content block. */
   HOME: "REPLACE_WITH_WIDGET_ID",
 } as const;

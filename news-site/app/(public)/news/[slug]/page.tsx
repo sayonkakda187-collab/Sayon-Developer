@@ -20,29 +20,21 @@ import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 type Props = { params: { slug: string } };
 
 /**
- * Split markdown into two halves at a paragraph boundary nearest the middle, so
- * the in-article ad sits between paragraphs (never mid-sentence). Returns null
- * for short articles (fewer than 4 blocks) to avoid crowding, and keeps fenced
- * code blocks intact by only cutting where the ``` fences are balanced.
+ * Split markdown after roughly the first 3 paragraphs so the in-article ad sits
+ * between paragraphs once the reader has started the story (never above it or
+ * mid-sentence). Returns null for short articles (fewer than 4 blocks) to avoid
+ * crowding, and keeps fenced code blocks intact by only cutting where the ```
+ * fences are balanced.
  */
 function splitForMidAd(content: string): [string, string] | null {
   const blocks = content.split(/\n{2,}/);
   if (blocks.length < 4) return null;
 
-  const total = content.length;
   const fenceCount = (s: string) => (s.match(/```/g) || []).length;
 
-  let acc = 0;
-  let idx = 0;
-  for (let i = 0; i < blocks.length; i++) {
-    acc += blocks[i].length + 2; // +2 approximates the blank line we split on
-    if (acc >= total / 2) {
-      idx = i + 1;
-      break;
-    }
-  }
-  // Keep at least one block on each side of the ad.
-  idx = Math.min(Math.max(idx, 1), blocks.length - 1);
+  // After the first ~3 paragraphs — readers have started the story — but never
+  // on the very last block.
+  let idx = Math.min(3, blocks.length - 1);
 
   // If the cut would land inside a code fence, walk forward until balanced.
   while (idx < blocks.length && fenceCount(blocks.slice(0, idx).join("\n\n")) % 2 !== 0) {
@@ -109,14 +101,8 @@ export default async function ArticlePage({ params }: Props) {
 
   return (
     <main>
-      {/* TOP ad — first thing in view the moment the article opens. Centered
-          and responsive: full width with edge padding on mobile, capped and
-          centered on larger screens. AdsKeeper reserves min-height 300px for
-          this widget (no layout shift). */}
-      <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
-        <AdSlot name="TOP" widgetId={ADS.TOP} minHeight={300} />
-      </div>
-
+      {/* Reader-first: the headline + cover + byline lead — no ad above the
+          story. Ads flow in-article and at the end (see below). */}
       {/* Immersive hero */}
       {article.coverImage ? (
         <header className="relative isolate">
@@ -217,6 +203,10 @@ export default async function ArticlePage({ params }: Props) {
           )}
         </div>
 
+        {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
+            widget lives here, AFTER the story ends (never above it). */}
+        <AdSlot name="RECOMMENDED" widgetId={ADS.RECOMMENDED} minHeight={300} />
+
         <section
           id="comments"
           aria-label="Comments"
@@ -262,10 +252,6 @@ export default async function ArticlePage({ params }: Props) {
             <CommentForm articleId={article.id} />
           </div>
         </section>
-
-        {/* SIDEBAR/RELATED ad — this layout is single-column (no sidebar), so
-            the slot sits just above "Related Stories". */}
-        <AdSlot name="SIDEBAR" widgetId={ADS.SIDEBAR} minHeight={320} />
 
         {related.length > 0 && (
           <section className="mt-16 border-t border-border pt-10">
