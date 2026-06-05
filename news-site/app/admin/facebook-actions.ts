@@ -737,3 +737,99 @@ export async function cancelScheduledPost(id: string): Promise<ActionResult> {
     return fail("Could not cancel the scheduled post.");
   }
 }
+
+// ── Schedule shares from the two-step flow (server-side; fires via cron) ───────
+
+export type ScheduledShareInput = { pageDbId: string; scheduledAt: string }; // ISO UTC
+
+/**
+ * Create pending ScheduledPost rows (one per page) at the given UTC times, with
+ * an optional shared caption. The Vercel Cron runner (/api/cron/facebook-post)
+ * posts each when due — works while the admin is closed. Same table the cron +
+ * post history already use; each time must be in the future.
+ */
+export async function scheduleArticleShares(input: {
+  articleId: string;
+  caption?: string;
+  schedules: ScheduledShareInput[];
+}): Promise<ActionResult<{ count: number }>> {
+  await requireAdmin();
+  if (!input.schedules?.length) return fail("Pick at least one page.");
+
+  const article = await prisma.article.findUnique({ where: { id: input.articleId }, select: { id: true } });
+  if (!article) return fail("Article not found.");
+
+  const pages = await prisma.facebookPage.findMany({
+    where: { id: { in: input.schedules.map((s) => s.pageDbId) } },
+    select: { id: true },
+  });
+  const known = new Set(pages.map((p) => p.id));
+
+  const now = Date.now();
+  const caption = input.caption?.trim() ? input.caption.trim() : null;
+  const rows: { articleId: string; facebookPageId: string; scheduledFor: Date; caption: string | null; status: string }[] = [];
+  for (const s of input.schedules) {
+    if (!known.has(s.pageDbId)) return fail("One of the selected pages no longer exists.");
+    const when = new Date(s.scheduledAt);
+    if (Number.isNaN(when.getTime())) return fail("Invalid schedule time.");
+    if (when.getTime() < now - 60_000) return fail("Pick a time in the future.");
+    rows.push({ articleId: article.id, facebookPageId: s.pageDbId, scheduledFor: when, caption, status: "pending" });
+  }
+
+  await prisma.scheduledPost.createMany({ data: rows });
+  revalidatePath("/admin/facebook");
+  return { ok: true, data: { count: rows.length } };
+}
+
+/** Edit a still-pending scheduled post (time and/or caption). */
+export async function updateScheduledShare(input: {
+  id: string;
+  scheduledAt?: string;
+  caption?: string;
+}): Promise<ActionResult> {
+  await requireAdmin();
+  const existing = await prisma.scheduledPost.findUnique({ where: { id: input.id }, select: { status: true } });
+  if (!existing) return fail("Scheduled post not found.");
+  if (existing.status !== "pending") return fail("Only pending posts can be edited.");
+
+  const data: { scheduledFor?: Date; caption?: string | null } = {};
+  if (input.scheduledAt != null) {
+    const when = new Date(input.scheduledAt);
+    if (Number.isNaN(when.getTime())) return fail("Invalid schedule time.");
+    if (when.getTime() < Date.now() - 60_000) return fail("Pick a time in the future.");
+    data.scheduledFor = when;
+  }
+  if (input.caption != null) data.caption = input.caption.trim() ? input.caption.trim() : null;
+  if (Object.keys(data).length === 0) return fail("Nothing to update.");
+
+  // Guard against editing a row the cron just claimed (pending → posting).
+  const res = await prisma.scheduledPost.updateMany({ where: { id: input.id, status: "pending" }, data });
+  if (res.count === 0) return fail("That post is no longer pending.");
+  revalidatePath("/admin/facebook");
+  return { ok: true, data: undefined };
+}
+
+/** Cancel a pending scheduled post — keeps it in the list as "canceled". */
+export async function cancelScheduledShare(id: string): Promise<ActionResult> {
+  await requireAdmin();
+  const res = await prisma.scheduledPost.updateMany({
+    where: { id, status: "pending" },
+    data: { status: "canceled" },
+  });
+  if (res.count === 0) return fail("That post is no longer pending.");
+  revalidatePath("/admin/facebook");
+  return { ok: true, data: undefined };
+}
+
+/** Delete a scheduled post row entirely (anything except one mid-send). */
+export async function deleteScheduledShare(id: string): Promise<ActionResult> {
+  await requireAdmin();
+  try {
+    const res = await prisma.scheduledPost.deleteMany({ where: { id, status: { not: "posting" } } });
+    if (res.count === 0) return fail("Can’t delete a post that’s currently sending.");
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch {
+    return fail("Couldn’t delete the scheduled post.");
+  }
+}

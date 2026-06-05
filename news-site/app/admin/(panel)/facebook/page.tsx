@@ -5,6 +5,10 @@ import {
   FacebookPagesManager,
   type FacebookPageView,
 } from "@/components/admin/FacebookPagesManager";
+import {
+  FacebookScheduledPosts,
+  type ScheduledPostView,
+} from "@/components/admin/FacebookScheduledPosts";
 import { getFacebookConnectStatus } from "@/lib/facebookSettings";
 
 // Tokens + Graph state are dynamic; never statically cache this screen.
@@ -14,7 +18,7 @@ export default async function AdminFacebookPage() {
   // Count posted/pending per page in SQL (groupBy) rather than loading every
   // ScheduledPost row into memory just to count it — keeps this O(pages), not
   // O(all posts ever), as post history grows.
-  const [pages, counts, connect] = await Promise.all([
+  const [pages, counts, scheduled, connect] = await Promise.all([
     prisma.facebookPage.findMany({
       orderBy: [{ categoryGroup: "asc" }, { pageName: "asc" }],
     }),
@@ -22,6 +26,14 @@ export default async function AdminFacebookPage() {
       by: ["facebookPageId", "status"],
       where: { status: { in: ["posted", "pending"] } },
       _count: { _all: true },
+    }),
+    prisma.scheduledPost.findMany({
+      orderBy: { scheduledFor: "desc" },
+      take: 100,
+      include: {
+        article: { select: { title: true } },
+        facebookPage: { select: { pageName: true } },
+      },
     }),
     getFacebookConnectStatus(),
   ]);
@@ -44,9 +56,22 @@ export default async function AdminFacebookPage() {
     pendingCount: pendingByPage.get(p.id) ?? 0,
   }));
 
+  const scheduledView: ScheduledPostView[] = scheduled.map((s) => ({
+    id: s.id,
+    articleTitle: s.article.title,
+    pageName: s.facebookPage.pageName,
+    scheduledFor: s.scheduledFor.toISOString(),
+    status: s.status,
+    caption: s.caption,
+    graphPostId: s.graphPostId,
+    error: s.error,
+    postedAt: s.postedAt ? s.postedAt.toISOString() : null,
+  }));
+
   return (
     <ToastProvider>
       <FacebookShareFlow pages={view} connect={connect} />
+      <FacebookScheduledPosts posts={scheduledView} />
       <FacebookPagesManager pages={view} connect={connect} />
     </ToastProvider>
   );

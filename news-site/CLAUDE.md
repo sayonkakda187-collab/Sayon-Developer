@@ -216,6 +216,31 @@ countdown/cancel UX; a single page selected posts immediately (no delay). Honest
 note: a delay **reduces** spam-flag risk but is a **courtesy, not a guarantee** —
 reasonable posting volume + original content are the real protection.
 
+**Server-side scheduling (fires while offline):** Step 2 offers **Post now** or
+**Schedule**. Scheduling writes `ScheduledPost` rows (status `pending`, optional
+`caption`, `scheduledFor` in UTC) via `scheduleArticleShares`; the existing
+**Vercel Cron** `/api/cron/facebook-post` (now **every 5 min** in `vercel.json`)
+drains due rows, **atomically claims** each (`pending → posting` via `updateMany`,
+so it never double-posts even if runs overlap), posts via the Graph API with the
+stored page token + caption, and marks `posted` (+`graphPostId`) / `failed`
+(+reason). Times are entered in **Asia/Phnom_Penh** (fixed +07:00, no DST) and
+stored UTC (`lib/fbSchedule.ts`); **same time for all** or **per-page times**. A
+**Scheduled posts** manager (`FacebookScheduledPosts`) lists upcoming/past with a
+status filter and **edit / cancel (→ canceled) / delete** for pending rows.
+Immediate posting (incl. the multi-page delay) is unchanged.
+- **Env:** set **`CRON_SECRET`** in Vercel — the cron is **fail-closed** (refuses
+  to run in production without it; Vercel Cron sends it as `Authorization:
+  Bearer`).
+- ⚠️ **Frequent cron needs Vercel Pro.** Hobby caps cron at **once per day** — on
+  Hobby, change the schedule back to daily (e.g. `0 14 * * *`) or upgrade.
+- **Migration:** `20260605120000_scheduled_post_caption` adds
+  `ScheduledPost.caption` (auto-applies via `prisma migrate deploy`).
+- Honest: scheduling relies on Vercel Cron + a **long-lived** page token; if the
+  token expires, scheduled posts fail with a "reconnect" reason until you refresh
+  it in **Facebook Pages**. Facebook's own **Meta Business Suite Planner** also
+  offers free native scheduling. This schedules **my own** articles to **my own**
+  pages via the official Graph API — not mass automation.
+
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
 Page is **exact by construction** — there is no shared "logged-in session" or

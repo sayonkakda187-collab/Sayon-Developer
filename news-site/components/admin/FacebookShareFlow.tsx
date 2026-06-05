@@ -7,6 +7,7 @@ import {
   publishArticleNow,
   listPublishedArticlesForShare,
   facebookRefreshPages,
+  scheduleArticleShares,
   type ShareArticleItem,
 } from "@/app/admin/facebook-actions";
 import { useToast } from "@/components/admin/Toast";
@@ -19,14 +20,17 @@ import {
   RefreshIcon,
   SearchIcon,
   CheckIcon,
+  CalendarIcon,
 } from "@/components/admin/icons";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 import { permalinkForPost } from "@/lib/facebook";
+import { formatSchedule, nowLocalInput, localInputToUtcISO, SCHEDULE_TZ } from "@/lib/fbSchedule";
 
 type Step = "pages" | "articles";
 type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled"; error?: string; postId?: string };
 
 const PER_PAGE = 9;
+const TZ_LABEL = SCHEDULE_TZ.replace("_", " ");
 const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
 
 function avatarColor(seed: string): string {
@@ -144,6 +148,14 @@ export function FacebookShareFlow({
   const countdownIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownResolveRef = useRef<(() => void) | null>(null);
 
+  // Scheduling (server-side; fires via Vercel Cron even while offline)
+  const [mode, setMode] = useState<"now" | "schedule">("now");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [perPageTime, setPerPageTime] = useState(false);
+  const [perPageAt, setPerPageAt] = useState<Record<string, string>>({});
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledOk, setScheduledOk] = useState<{ pageName: string; at: string }[] | null>(null);
+
   const selectedPages = useMemo(() => pages.filter((p) => selectedPageIds.has(p.id)), [pages, selectedPageIds]);
   const expiredSelected = selectedPages.filter((p) => p.status !== "Connected");
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -227,6 +239,7 @@ export function FacebookShareFlow({
     setPageNum(1);
     setDone(false);
     setCancelled(false);
+    setScheduledOk(null);
     setProgress({});
   }
 
@@ -242,6 +255,7 @@ export function FacebookShareFlow({
     setCaption(defaultCaption(a));
     setDone(false);
     setCancelled(false);
+    setScheduledOk(null);
     setProgress({});
   }
 
@@ -332,6 +346,35 @@ export function FacebookShareFlow({
       else if (okCount === 0) error(`All ${totalSel} posts failed — see details below.`);
       else success(`Posted to ${okCount} of ${totalSel} pages — see details below.`);
     }
+    router.refresh();
+  }
+
+  // Queue server-side scheduled posts (one per page) — they fire via the Vercel
+  // Cron runner even while the admin is closed. Times are entered in Phnom_Penh.
+  async function schedule() {
+    if (!article) return;
+    const ids = [...selectedPageIds];
+    if (ids.length === 0) return error("Select at least one page.");
+    const multi = ids.length > 1 && perPageTime;
+    const schedules: { pageDbId: string; scheduledAt: string }[] = [];
+    for (const id of ids) {
+      const iso = localInputToUtcISO(multi ? perPageAt[id] ?? "" : scheduleAt);
+      if (!iso) {
+        const name = pages.find((p) => p.id === id)?.pageName ?? "a page";
+        return error(multi ? `Pick a date & time for “${name}”.` : "Pick a date & time.");
+      }
+      if (new Date(iso).getTime() < Date.now()) return error("Pick a time in the future.");
+      schedules.push({ pageDbId: id, scheduledAt: iso });
+    }
+    setScheduling(true);
+    const res = await scheduleArticleShares({ articleId: article.id, caption, schedules });
+    setScheduling(false);
+    if (!res.ok) return error(res.error);
+    setScheduledOk(schedules.map((s) => ({
+      pageName: pages.find((p) => p.id === s.pageDbId)?.pageName ?? "Page",
+      at: formatSchedule(s.scheduledAt),
+    })));
+    success(`Scheduled ${res.data.count} post${res.data.count === 1 ? "" : "s"}.`);
     router.refresh();
   }
 
@@ -576,9 +619,19 @@ export function FacebookShareFlow({
                 </div>
               </div>
 
+              {/* When to post — now (immediate) or schedule (server-side) */}
+              {!posting && !done && !cancelled && !scheduledOk && (
+                <div className="adm-seg" role="tablist" aria-label="When to post" style={{ marginTop: 10, width: "fit-content" }}>
+                  <button type="button" role="tab" aria-selected={mode === "now"} className={`adm-seg-btn ${mode === "now" ? "on" : ""}`} onClick={() => setMode("now")}>Post now</button>
+                  <button type="button" role="tab" aria-selected={mode === "schedule"} className={`adm-seg-btn ${mode === "schedule" ? "on" : ""}`} onClick={() => setMode("schedule")}>Schedule</button>
+                </div>
+              )}
+
+              {mode === "now" ? (
+                <>
               {/* Delay between pages — only relevant when posting to several */}
               {selectedPages.length > 1 && (
-                <div className="adm-field" style={{ marginTop: 4 }}>
+                <div className="adm-field" style={{ marginTop: 10 }}>
                   <span>
                     Delay between pages{" "}
                     <span className="adm-field-hint" style={{ display: "inline" }}>— posts run one at a time with this gap, to avoid rapid multi-page posting</span>
@@ -703,6 +756,75 @@ export function FacebookShareFlow({
                   </>
                 )}
               </div>
+                </>
+              ) : (
+                <>
+                  {/* Schedule mode — server-side, fires via cron while offline */}
+                  {scheduledOk ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p className="adm-fb-target" aria-live="polite">
+                        <span className="adm-fb-target-dot" aria-hidden />
+                        Scheduled — these will auto-post even while you’re offline:
+                      </p>
+                      <ul className="adm-fb-sub" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                        {scheduledOk.map((s) => (
+                          <li key={s.pageName}><strong>{s.pageName}</strong> — {s.at}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      {selectedPages.length > 1 && (
+                        <label className="adm-check" style={{ marginBottom: 4 }}>
+                          <input type="checkbox" checked={perPageTime} onChange={(e) => setPerPageTime(e.target.checked)} disabled={scheduling} />
+                          <span>Set a different time per page</span>
+                        </label>
+                      )}
+                      {selectedPages.length > 1 && perPageTime ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+                          {selectedPages.map((p) => (
+                            <label key={p.id} className="adm-field" style={{ marginTop: 0 }}>
+                              <span>{p.pageName} — date &amp; time ({TZ_LABEL})</span>
+                              <input type="datetime-local" className="adm-input" style={{ maxWidth: 260 }} value={perPageAt[p.id] ?? ""} min={nowLocalInput()} onChange={(e) => setPerPageAt((m) => ({ ...m, [p.id]: e.target.value }))} disabled={scheduling} />
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <label className="adm-field" style={{ marginTop: 0 }}>
+                          <span>Date &amp; time ({TZ_LABEL}){selectedPages.length > 1 ? " — same time for all selected pages" : ""}</span>
+                          <input type="datetime-local" className="adm-input" style={{ maxWidth: 260 }} value={scheduleAt} min={nowLocalInput()} onChange={(e) => setScheduleAt(e.target.value)} disabled={scheduling} />
+                        </label>
+                      )}
+                      <span className="adm-field-hint" style={{ marginTop: 6 }}>
+                        Times are {TZ_LABEL}. Scheduled posts fire automatically on the server — you don’t need to keep this open. Requires a connected long-lived token (reconnect in “Facebook Pages” if one expires).
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                    {scheduledOk ? (
+                      <>
+                        <button type="button" className="adm-btn-primary" onClick={() => { setArticle(null); setScheduledOk(null); }}>
+                          Schedule another
+                        </button>
+                        <button type="button" className="adm-btn-ghost" onClick={() => setStep("pages")}>
+                          Back to pages
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="adm-btn-primary" onClick={schedule} disabled={scheduling || !caption.trim()}>
+                          {scheduling ? <span className="adm-spinner" aria-hidden /> : <CalendarIcon className="h-4 w-4" />}
+                          {scheduling ? "Scheduling…" : `Schedule ${selectedPages.length} post${selectedPages.length === 1 ? "" : "s"}`}
+                        </button>
+                        <button type="button" className="adm-btn-ghost" onClick={() => setArticle(null)} disabled={scheduling}>
+                          Choose a different article
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

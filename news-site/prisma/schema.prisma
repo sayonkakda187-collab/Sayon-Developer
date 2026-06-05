@@ -169,7 +169,8 @@ model FacebookSession {
 model ScheduledPost {
   id             String    @id @default(cuid())
   scheduledFor   DateTime // when it should publish (UTC)
-  status         String    @default("pending") // "pending" | "posting" | "posted" | "failed"
+  status         String    @default("pending") // "pending" | "posting" | "posted" | "failed" | "canceled"
+  caption        String? // optional edited post caption; null → default message
   postedAt       DateTime?
   error          String? // failure reason, if status = "failed"
   graphPostId    String? // the returned Facebook post id ("{page}_{post}")

@@ -73,7 +73,7 @@ async function runDuePosts() {
     }
 
     try {
-      const result = await publishArticleToPage(post.article, post.facebookPage);
+      const result = await publishArticleToPage(post.article, post.facebookPage, post.caption ?? undefined);
       await prisma.scheduledPost.update({
         where: { id },
         data: result.ok
