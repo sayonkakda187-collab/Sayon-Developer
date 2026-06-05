@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ArticlesList } from "@/components/admin/ArticlesList";
 import { ToastProvider } from "@/components/admin/Toast";
 import { PlusIcon } from "@/components/admin/icons";
+import { getActiveSite, articleWhereForSite } from "@/lib/sites";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ export default async function AdminArticlesPage({
 }: {
   searchParams?: { q?: string; published?: string };
 }) {
+  // Scope the list to the site selected in the switcher. The default site also
+  // includes legacy null-siteId rows, so the current site's articles are never
+  // hidden. With one site this returns exactly today's full list.
+  const activeSite = await getActiveSite();
   const articles = await prisma.article.findMany({
+    where: activeSite ? articleWhereForSite(activeSite) : undefined,
     orderBy: { createdAt: "desc" },
     include: { category: true },
   });

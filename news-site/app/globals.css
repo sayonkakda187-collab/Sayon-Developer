@@ -626,6 +626,30 @@ body {
 .adm-drawer.open .adm-dfoot .adm-dlink { opacity: 1; transform: none; }
 @keyframes adm-dlink-in { to { opacity: 1; transform: none; } }
 
+/* ── Site switcher (multi-site) ──────────────────────────────────────────── */
+/* Lives in the desktop sidebar (light, theme-aware tokens) and the mobile
+   drawer (always dark — overridden under .adm-dsite). One site → a disabled,
+   read-only label; it becomes interactive once a second site is added. */
+.adm-siteswitch {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border-radius: 11px;
+  border: 1px solid var(--adm-bd); background: var(--adm-card); color: var(--adm-muted);
+}
+.adm-siteswitch svg { flex: none; color: var(--adm-muted); }
+.adm-siteswitch select {
+  flex: 1; min-width: 0; border: none; background: none; outline: none;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--adm-ink);
+  cursor: pointer; appearance: none; -webkit-appearance: none; text-overflow: ellipsis;
+}
+.adm-siteswitch select:disabled { cursor: default; opacity: 1; }
+.adm-siteswitch select option { color: #0f172a; } /* native menu is system-light */
+
+/* Drawer context (dark slide-out panel). */
+.adm-dsite { padding: 2px 2px 10px; margin-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.adm-dsite .adm-siteswitch { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); color: #9fb0c4; }
+.adm-dsite .adm-siteswitch svg { color: #9fb0c4; }
+.adm-dsite .adm-siteswitch select { color: #fff; }
+
 /* ── Auth (login) ────────────────────────────────────────────────────────── */
 .adm-auth-card {
   width: 100%; max-width: 360px; border-radius: 22px; padding: 30px 26px;
@@ -771,6 +795,7 @@ body {
   /* Frame = sidebar + main. */
   .adm-frame { display: flex; flex-direction: row; flex: 1; min-height: 0; }
   .adm-sidebar { display: flex; flex-direction: column; width: 236px; flex: none; padding: 14px 16px 18px; }
+  .adm-sidebar-site { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); }
   .adm-navgroup { display: flex; flex-direction: column; gap: 5px; flex: 1; }
   .adm-navitem { display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 12px; color: #475569; font-size: 14.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background 0.15s; }
   .adm-navitem svg { width: 19px; height: 19px; flex: none; }
