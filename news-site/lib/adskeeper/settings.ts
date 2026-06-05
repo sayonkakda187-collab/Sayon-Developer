@@ -3,44 +3,61 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
-// Server-only store for AdsKeeper publisher API credentials. The API key/token is
-// saved ENCRYPTED at rest (AES-256-GCM) in AppSetting and only decrypted here on
-// the server — NEVER returned to the browser. The optional Client/Publisher ID is
-// non-secret (plain). Both have an env fallback (ADSKEEPER_API_KEY /
-// ADSKEEPER_CLIENT_ID) so they can be set in Vercel instead.
+// Server-only store for AdsKeeper publisher API credentials. AdsKeeper uses the
+// MGID REST platform: you authenticate with your account LOGIN + PASSWORD against
+// the auth function, which returns a short-lived 32-char token (see ./client).
+// Some accounts can instead paste a ready API TOKEN + Client/Publisher ID.
+//
+// Secrets (password, API token) are saved ENCRYPTED at rest (AES-256-GCM) in
+// AppSetting and only decrypted here on the server — NEVER returned to the
+// browser. Login + Client ID are non-secret (plain). Everything has an env
+// fallback so it can live in Vercel instead. A saved DB value beats env.
 
-const API_KEY_SETTING = "adskeeper_api_key";
-const CLIENT_ID_SETTING = "adskeeper_client_id";
-export const ADSKEEPER_API_KEY_ENV = "ADSKEEPER_API_KEY";
-export const ADSKEEPER_CLIENT_ID_ENV = "ADSKEEPER_CLIENT_ID";
+const API_KEY_SETTING = "adskeeper_api_key"; // ready API token (encrypted)
+const LOGIN_SETTING = "adskeeper_login"; // account login / email (plain)
+const PASSWORD_SETTING = "adskeeper_password"; // account password (encrypted)
+const CLIENT_ID_SETTING = "adskeeper_client_id"; // idAuth / client id (plain)
 
-export type AdskeeperCreds = { apiKey: string | null; clientId: string | null };
+export const ADSKEEPER_ENV = {
+  apiKey: "ADSKEEPER_API_KEY",
+  login: "ADSKEEPER_LOGIN",
+  password: "ADSKEEPER_PASSWORD",
+  clientId: "ADSKEEPER_CLIENT_ID",
+} as const;
 
-/** Resolve credentials: DB-saved (decrypted) first, then env fallback. Returns
- *  nulls when neither is set. NEVER expose the result to the client. */
+export type AdskeeperCreds = {
+  apiKey: string | null; // ready token (skips the login step)
+  login: string | null;
+  password: string | null;
+  clientId: string | null; // idAuth (required for the stats path when using a token)
+};
+
+function decrypt(row: { value: string; encrypted: boolean } | null): string | null {
+  if (!row?.value) return null;
+  try {
+    return row.encrypted ? decryptSecret(row.value) : row.value;
+  } catch {
+    return null; // corrupt/rotated ciphertext → treat as unset
+  }
+}
+
+/** Resolve all credentials: DB-saved (decrypted) first, then env fallback.
+ *  NEVER expose the result to the client. */
 export async function getAdskeeperCreds(): Promise<AdskeeperCreds> {
   const rows = await prisma.appSetting.findMany({
-    where: { key: { in: [API_KEY_SETTING, CLIENT_ID_SETTING] } },
+    where: { key: { in: [API_KEY_SETTING, LOGIN_SETTING, PASSWORD_SETTING, CLIENT_ID_SETTING] } },
   });
   const byKey = new Map(rows.map((r) => [r.key, r]));
 
-  let apiKey: string | null = null;
-  const keyRow = byKey.get(API_KEY_SETTING);
-  if (keyRow?.value) {
-    try {
-      apiKey = keyRow.encrypted ? decryptSecret(keyRow.value) : keyRow.value;
-    } catch {
-      apiKey = null; // corrupt/rotated key → fall through to env
-    }
-  }
-  let clientId = byKey.get(CLIENT_ID_SETTING)?.value || null;
+  const apiKey = decrypt(byKey.get(API_KEY_SETTING) ?? null) || process.env[ADSKEEPER_ENV.apiKey]?.trim() || null;
+  const login = (byKey.get(LOGIN_SETTING)?.value || null) || process.env[ADSKEEPER_ENV.login]?.trim() || null;
+  const password = decrypt(byKey.get(PASSWORD_SETTING) ?? null) || process.env[ADSKEEPER_ENV.password]?.trim() || null;
+  const clientId = (byKey.get(CLIENT_ID_SETTING)?.value || null) || process.env[ADSKEEPER_ENV.clientId]?.trim() || null;
 
-  apiKey = apiKey || process.env[ADSKEEPER_API_KEY_ENV]?.trim() || null;
-  clientId = clientId || process.env[ADSKEEPER_CLIENT_ID_ENV]?.trim() || null;
-  return { apiKey, clientId };
+  return { apiKey, login, password, clientId };
 }
 
-/** Save (encrypt) the API key. Empty string clears it. */
+/** Save (encrypt) a ready API token. Empty string clears it. */
 export async function saveAdskeeperApiKey(raw: string): Promise<void> {
   const key = raw.trim();
   if (!key) {
@@ -54,7 +71,34 @@ export async function saveAdskeeperApiKey(raw: string): Promise<void> {
   });
 }
 
-/** Save the (non-secret) Client/Publisher ID. Empty string clears it. */
+/** Save the account login + password used by the auth function. The password is
+ *  encrypted. Passing a blank password keeps any already-saved one (so the login
+ *  can be edited without retyping). Blank login AND password clears both. */
+export async function saveAdskeeperLoginCreds(rawLogin: string, rawPassword: string): Promise<void> {
+  const login = rawLogin.trim();
+  const password = rawPassword.trim();
+
+  if (!login && !password) {
+    await prisma.appSetting.deleteMany({ where: { key: { in: [LOGIN_SETTING, PASSWORD_SETTING] } } });
+    return;
+  }
+  if (login) {
+    await prisma.appSetting.upsert({
+      where: { key: LOGIN_SETTING },
+      update: { value: login, encrypted: false },
+      create: { key: LOGIN_SETTING, value: login, encrypted: false },
+    });
+  }
+  if (password) {
+    await prisma.appSetting.upsert({
+      where: { key: PASSWORD_SETTING },
+      update: { value: encryptSecret(password), encrypted: true },
+      create: { key: PASSWORD_SETTING, value: encryptSecret(password), encrypted: true },
+    });
+  }
+}
+
+/** Save the (non-secret) Client/Publisher ID (idAuth). Empty string clears it. */
 export async function saveAdskeeperClientId(raw: string): Promise<void> {
   const id = raw.trim();
   if (!id) {
@@ -68,36 +112,44 @@ export async function saveAdskeeperClientId(raw: string): Promise<void> {
   });
 }
 
+type Source = "db" | "env" | "none";
 export type AdskeeperStatus = {
-  keySource: "db" | "env" | "none";
-  clientIdSource: "db" | "env" | "none";
+  /** "login" = login+password set, "token" = API token set, "none" = unset. */
+  authMode: "login" | "token" | "none";
+  tokenSource: Source;
+  loginSource: Source;
+  passwordSource: Source;
+  clientIdSource: Source;
   configured: boolean;
-  apiKeyEnv: string;
-  clientIdEnv: string;
+  env: typeof ADSKEEPER_ENV;
 };
 
-/** Configured status for the Settings UI (no key values ever leak). */
+/** Configured status for the Settings UI (no secret values ever leak). */
 export async function getAdskeeperStatus(): Promise<AdskeeperStatus> {
   const rows = await prisma.appSetting.findMany({
-    where: { key: { in: [API_KEY_SETTING, CLIENT_ID_SETTING] } },
+    where: { key: { in: [API_KEY_SETTING, LOGIN_SETTING, PASSWORD_SETTING, CLIENT_ID_SETTING] } },
     select: { key: true },
   });
   const saved = new Set(rows.map((r) => r.key));
-  const keySource = saved.has(API_KEY_SETTING)
-    ? "db"
-    : process.env[ADSKEEPER_API_KEY_ENV]?.trim()
-      ? "env"
-      : "none";
-  const clientIdSource = saved.has(CLIENT_ID_SETTING)
-    ? "db"
-    : process.env[ADSKEEPER_CLIENT_ID_ENV]?.trim()
-      ? "env"
-      : "none";
+  const src = (settingKey: string, envVar: string): Source =>
+    saved.has(settingKey) ? "db" : process.env[envVar]?.trim() ? "env" : "none";
+
+  const tokenSource = src(API_KEY_SETTING, ADSKEEPER_ENV.apiKey);
+  const loginSource = src(LOGIN_SETTING, ADSKEEPER_ENV.login);
+  const passwordSource = src(PASSWORD_SETTING, ADSKEEPER_ENV.password);
+  const clientIdSource = src(CLIENT_ID_SETTING, ADSKEEPER_ENV.clientId);
+
+  const hasLogin = loginSource !== "none" && passwordSource !== "none";
+  const hasToken = tokenSource !== "none";
+  const authMode = hasLogin ? "login" : hasToken ? "token" : "none";
+
   return {
-    keySource,
+    authMode,
+    tokenSource,
+    loginSource,
+    passwordSource,
     clientIdSource,
-    configured: keySource !== "none",
-    apiKeyEnv: ADSKEEPER_API_KEY_ENV,
-    clientIdEnv: ADSKEEPER_CLIENT_ID_ENV,
+    configured: authMode !== "none",
+    env: ADSKEEPER_ENV,
   };
 }
