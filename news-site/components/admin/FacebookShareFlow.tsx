@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   publishArticleNow,
   listPublishedArticlesForShare,
   facebookRefreshPages,
+  scheduleArticleShares,
   type ShareArticleItem,
 } from "@/app/admin/facebook-actions";
 import { useToast } from "@/components/admin/Toast";
@@ -19,20 +20,47 @@ import {
   RefreshIcon,
   SearchIcon,
   CheckIcon,
+  CalendarIcon,
 } from "@/components/admin/icons";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 import { permalinkForPost } from "@/lib/facebook";
+import { formatSchedule, nowLocalInput, localInputToUtcISO, SCHEDULE_TZ } from "@/lib/fbSchedule";
 
 type Step = "pages" | "articles";
-type PostStatus = { status: "pending" | "posting" | "ok" | "fail"; error?: string; postId?: string };
+type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled"; error?: string; postId?: string };
 
 const PER_PAGE = 9;
+const TZ_LABEL = SCHEDULE_TZ.replace("_", " ");
 const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
 
 function avatarColor(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+// Presets for the gap between pages when posting to several at once (seconds).
+// 0 = post immediately. A delay lowers spam-flag risk but is a courtesy, not a
+// guarantee — reasonable volume + original content matter more.
+const DELAY_PRESETS = [
+  { label: "None", value: 0 },
+  { label: "30 seconds", value: 30 },
+  { label: "1 minute", value: 60 },
+  { label: "2 minutes", value: 120 },
+  { label: "5 minutes", value: 300 },
+];
+const DEFAULT_DELAY = 60; // safe default (30–60s range)
+
+/** Vary a delay by ±25% so the gaps aren't suspiciously identical. */
+function applyJitter(secs: number): number {
+  if (secs <= 0) return 0;
+  return Math.max(1, Math.round(secs * (0.75 + Math.random() * 0.5)));
+}
+function formatDuration(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s ? `${m}m ${s}s` : `${m}m`;
 }
 
 /** Page avatar: best-effort public Page picture with a tidy initials fallback. */
@@ -109,6 +137,25 @@ export function FacebookShareFlow({
   const [progress, setProgress] = useState<Record<string, PostStatus>>({});
   const [done, setDone] = useState(false);
 
+  // Between-pages delay (only applies when posting to multiple pages).
+  const [delaySeconds, setDelaySeconds] = useState(DEFAULT_DELAY);
+  const [customMode, setCustomMode] = useState(false);
+  const [jitter, setJitter] = useState(true);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [waitingFor, setWaitingFor] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
+  const cancelRef = useRef(false);
+  const countdownIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownResolveRef = useRef<(() => void) | null>(null);
+
+  // Scheduling (server-side; fires via Vercel Cron even while offline)
+  const [mode, setMode] = useState<"now" | "schedule">("now");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [perPageTime, setPerPageTime] = useState(false);
+  const [perPageAt, setPerPageAt] = useState<Record<string, string>>({});
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledOk, setScheduledOk] = useState<{ pageName: string; at: string }[] | null>(null);
+
   const selectedPages = useMemo(() => pages.filter((p) => selectedPageIds.has(p.id)), [pages, selectedPageIds]);
   const expiredSelected = selectedPages.filter((p) => p.status !== "Connected");
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -134,6 +181,32 @@ export function FacebookShareFlow({
       clearTimeout(t);
     };
   }, [step, q, pageNum, error]);
+
+  // Remember the delay choice across sessions (per browser).
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem("fb.shareDelay");
+      if (d != null) {
+        const n = parseInt(d, 10);
+        if (Number.isFinite(n) && n >= 0) {
+          setDelaySeconds(n);
+          setCustomMode(!DELAY_PRESETS.some((p) => p.value === n));
+        }
+      }
+      const j = localStorage.getItem("fb.shareJitter");
+      if (j != null) setJitter(j === "1");
+    } catch {
+      /* localStorage unavailable (private mode) */
+    }
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("fb.shareDelay", String(delaySeconds)); } catch { /* ignore */ }
+  }, [delaySeconds]);
+  useEffect(() => {
+    try { localStorage.setItem("fb.shareJitter", jitter ? "1" : "0"); } catch { /* ignore */ }
+  }, [jitter]);
+  // Clear any running countdown timer on unmount.
+  useEffect(() => () => { if (countdownIvRef.current) clearInterval(countdownIvRef.current); }, []);
 
   function togglePage(id: string) {
     setSelectedPageIds((prev) => {
@@ -165,6 +238,8 @@ export function FacebookShareFlow({
     setQ("");
     setPageNum(1);
     setDone(false);
+    setCancelled(false);
+    setScheduledOk(null);
     setProgress({});
   }
 
@@ -179,21 +254,59 @@ export function FacebookShareFlow({
     setArticle(a);
     setCaption(defaultCaption(a));
     setDone(false);
+    setCancelled(false);
+    setScheduledOk(null);
     setProgress({});
   }
 
-  // Post to each selected Page sequentially (Graph API) with live status; one
-  // page failing never stops the others. Records history via the action.
+  // Cancellable countdown for the gap between pages. Resolves true if interrupted
+  // (Stop pressed), false when it elapses naturally.
+  function countdownSleep(totalSecs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let left = totalSecs;
+      setCountdown(left);
+      const finish = (interrupted: boolean) => {
+        if (countdownIvRef.current) { clearInterval(countdownIvRef.current); countdownIvRef.current = null; }
+        countdownResolveRef.current = null;
+        setCountdown(null);
+        resolve(interrupted);
+      };
+      countdownResolveRef.current = () => finish(true);
+      countdownIvRef.current = setInterval(() => {
+        left -= 1;
+        if (left <= 0) finish(false);
+        else setCountdown(left);
+      }, 1000);
+    });
+  }
+
+  // Stop the sequence: skip remaining pages + interrupt any active countdown.
+  function stop() {
+    cancelRef.current = true;
+    if (countdownResolveRef.current) countdownResolveRef.current();
+  }
+
+  // Post to each selected Page sequentially (Graph API) with a configurable gap
+  // between pages + live status. One page failing never stops the rest; Stop
+  // cancels the remaining queue. Client-driven — keep this page open until done.
   async function share() {
     if (!article) return;
     const ids = [...selectedPageIds];
     if (ids.length === 0) return error("Select at least one page.");
-    setPosting(true);
+    cancelRef.current = false;
+    setCancelled(false);
     setDone(false);
+    setPosting(true);
+    setCountdown(null);
+    setWaitingFor(null);
     setProgress(Object.fromEntries(ids.map((id) => [id, { status: "pending" as const }])));
 
+    const gap = ids.length > 1 ? Math.max(0, delaySeconds) : 0;
     let okCount = 0;
-    for (const id of ids) {
+
+    for (let i = 0; i < ids.length; i++) {
+      if (cancelRef.current) break;
+      const id = ids[i];
       setProgress((p) => ({ ...p, [id]: { status: "posting" } }));
       const res = await publishArticleNow({ articleId: article.id, pageDbIds: [id], caption });
       const r = res.ok ? res.data[0] : null;
@@ -204,14 +317,64 @@ export function FacebookShareFlow({
         const msg = res.ok ? r?.error ?? "Failed to post." : res.error;
         setProgress((p) => ({ ...p, [id]: { status: "fail", error: msg } }));
       }
+
+      // Wait before the next page (skip after the last / when no gap / cancelled).
+      if (i < ids.length - 1 && gap > 0 && !cancelRef.current) {
+        setWaitingFor(pages.find((p) => p.id === ids[i + 1])?.pageName ?? null);
+        const interrupted = await countdownSleep(jitter ? applyJitter(gap) : gap);
+        setWaitingFor(null);
+        if (interrupted || cancelRef.current) break;
+      }
     }
 
+    setCountdown(null);
+    setWaitingFor(null);
     setPosting(false);
-    setDone(true);
+
     const totalSel = ids.length;
-    if (okCount === totalSel) success(`Posted to all ${totalSel} page${totalSel === 1 ? "" : "s"}.`);
-    else if (okCount === 0) error(`All ${totalSel} posts failed — see details below.`);
-    else success(`Posted to ${okCount} of ${totalSel} pages — see details below.`);
+    if (cancelRef.current) {
+      setCancelled(true);
+      setProgress((p) => {
+        const next = { ...p };
+        for (const id of ids) if (next[id]?.status === "pending") next[id] = { status: "cancelled" };
+        return next;
+      });
+      success(`Stopped — posted to ${okCount} of ${totalSel} page${totalSel === 1 ? "" : "s"}.`);
+    } else {
+      setDone(true);
+      if (okCount === totalSel) success(`Posted to all ${totalSel} page${totalSel === 1 ? "" : "s"}.`);
+      else if (okCount === 0) error(`All ${totalSel} posts failed — see details below.`);
+      else success(`Posted to ${okCount} of ${totalSel} pages — see details below.`);
+    }
+    router.refresh();
+  }
+
+  // Queue server-side scheduled posts (one per page) — they fire via the Vercel
+  // Cron runner even while the admin is closed. Times are entered in Phnom_Penh.
+  async function schedule() {
+    if (!article) return;
+    const ids = [...selectedPageIds];
+    if (ids.length === 0) return error("Select at least one page.");
+    const multi = ids.length > 1 && perPageTime;
+    const schedules: { pageDbId: string; scheduledAt: string }[] = [];
+    for (const id of ids) {
+      const iso = localInputToUtcISO(multi ? perPageAt[id] ?? "" : scheduleAt);
+      if (!iso) {
+        const name = pages.find((p) => p.id === id)?.pageName ?? "a page";
+        return error(multi ? `Pick a date & time for “${name}”.` : "Pick a date & time.");
+      }
+      if (new Date(iso).getTime() < Date.now()) return error("Pick a time in the future.");
+      schedules.push({ pageDbId: id, scheduledAt: iso });
+    }
+    setScheduling(true);
+    const res = await scheduleArticleShares({ articleId: article.id, caption, schedules });
+    setScheduling(false);
+    if (!res.ok) return error(res.error);
+    setScheduledOk(schedules.map((s) => ({
+      pageName: pages.find((p) => p.id === s.pageDbId)?.pageName ?? "Page",
+      at: formatSchedule(s.scheduledAt),
+    })));
+    success(`Scheduled ${res.data.count} post${res.data.count === 1 ? "" : "s"}.`);
     router.refresh();
   }
 
@@ -456,6 +619,70 @@ export function FacebookShareFlow({
                 </div>
               </div>
 
+              {/* When to post — now (immediate) or schedule (server-side) */}
+              {!posting && !done && !cancelled && !scheduledOk && (
+                <div className="adm-seg" role="tablist" aria-label="When to post" style={{ marginTop: 10, width: "fit-content" }}>
+                  <button type="button" role="tab" aria-selected={mode === "now"} className={`adm-seg-btn ${mode === "now" ? "on" : ""}`} onClick={() => setMode("now")}>Post now</button>
+                  <button type="button" role="tab" aria-selected={mode === "schedule"} className={`adm-seg-btn ${mode === "schedule" ? "on" : ""}`} onClick={() => setMode("schedule")}>Schedule</button>
+                </div>
+              )}
+
+              {mode === "now" ? (
+                <>
+              {/* Delay between pages — only relevant when posting to several */}
+              {selectedPages.length > 1 && (
+                <div className="adm-field" style={{ marginTop: 10 }}>
+                  <span>
+                    Delay between pages{" "}
+                    <span className="adm-field-hint" style={{ display: "inline" }}>— posts run one at a time with this gap, to avoid rapid multi-page posting</span>
+                  </span>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                    <select
+                      className="adm-input"
+                      style={{ maxWidth: 170 }}
+                      value={customMode ? "custom" : String(delaySeconds)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "custom") setCustomMode(true);
+                        else { setCustomMode(false); setDelaySeconds(Number(v)); }
+                      }}
+                      disabled={posting}
+                      aria-label="Delay between pages"
+                    >
+                      {DELAY_PRESETS.map((p) => (
+                        <option key={p.value} value={String(p.value)}>{p.label}</option>
+                      ))}
+                      <option value="custom">Custom…</option>
+                    </select>
+                    {customMode && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={3600}
+                          className="adm-input"
+                          style={{ width: 92 }}
+                          value={delaySeconds}
+                          onChange={(e) => setDelaySeconds(Math.max(0, Math.min(3600, Math.floor(Number(e.target.value) || 0))))}
+                          disabled={posting}
+                          aria-label="Custom delay in seconds"
+                        />
+                        <span className="adm-field-hint" style={{ margin: 0 }}>seconds</span>
+                      </span>
+                    )}
+                    <label className="adm-check" style={{ margin: 0 }}>
+                      <input type="checkbox" checked={jitter} onChange={(e) => setJitter(e.target.checked)} disabled={posting} />
+                      <span>Vary a little</span>
+                    </label>
+                  </div>
+                  <span className="adm-field-hint">
+                    {delaySeconds > 0
+                      ? `~${formatDuration(delaySeconds)} between pages${jitter ? " (varied ±25%)" : ""} · about ${formatDuration(delaySeconds * (selectedPages.length - 1))} total. Keep this page open until it finishes.`
+                      : "No delay — posts to all selected pages back-to-back."}
+                  </span>
+                </div>
+              )}
+
               {/* Per-page progress / results */}
               {Object.keys(progress).length > 0 && (
                 <div className="adm-fb-results" style={{ marginTop: 6 }}>
@@ -470,11 +697,12 @@ export function FacebookShareFlow({
                         <span className="adm-fb-result-msg">
                           {st.status === "posting" ? "Posting…"
                             : st.status === "pending" ? "Waiting…"
-                              : st.status === "ok"
-                                ? st.postId
-                                  ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
-                                  : "Posted ✓"
-                                : (st.error ?? "Failed to post.")}
+                              : st.status === "cancelled" ? "Cancelled"
+                                : st.status === "ok"
+                                  ? st.postId
+                                    ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
+                                    : "Posted ✓"
+                                  : (st.error ?? "Failed to post.")}
                         </span>
                       </div>
                     );
@@ -482,36 +710,121 @@ export function FacebookShareFlow({
                 </div>
               )}
 
-              {done && (
+              {countdown != null && (
+                <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 8 }}>
+                  <span className="adm-spinner" aria-hidden />
+                  Waiting {formatDuration(countdown)} before {waitingFor ? `“${waitingFor}”` : "the next page"}…
+                </p>
+              )}
+
+              {(done || cancelled) && (
                 <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 10 }}>
                   <span className="adm-fb-target-dot" aria-hidden />
-                  Posted to <strong>{okCount}</strong> of <strong>{selectedPages.length}</strong> page{selectedPages.length === 1 ? "" : "s"}.
+                  {cancelled ? "Stopped — posted" : "Posted"} to <strong>{okCount}</strong> of <strong>{selectedPages.length}</strong> page{selectedPages.length === 1 ? "" : "s"}.
                 </p>
               )}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {!done ? (
+                {posting ? (
                   <>
-                    <button type="button" className="adm-btn-primary" onClick={share} disabled={posting || !caption.trim()}>
-                      {posting ? <span className="adm-spinner" aria-hidden /> : <FacebookIcon className="h-4 w-4" />}
-                      {posting ? "Posting…" : `Share to ${selectedPages.length} page${selectedPages.length === 1 ? "" : "s"}`}
+                    <button type="button" className="adm-btn-primary" disabled>
+                      <span className="adm-spinner" aria-hidden /> Posting…
                     </button>
-                    <button type="button" className="adm-btn-ghost" onClick={() => setArticle(null)} disabled={posting}>
-                      Choose a different article
+                    <button type="button" className="adm-btn-ghost adm-fb-danger" onClick={stop}>
+                      Stop
                     </button>
                   </>
-                ) : (
+                ) : done || cancelled ? (
                   <>
-                    <button type="button" className="adm-btn-primary" onClick={() => { setArticle(null); setDone(false); setProgress({}); }}>
+                    <button type="button" className="adm-btn-primary" onClick={() => { setArticle(null); setDone(false); setCancelled(false); setProgress({}); }}>
                       Share another article
                     </button>
                     <button type="button" className="adm-btn-ghost" onClick={() => setStep("pages")}>
                       Back to pages
                     </button>
                   </>
+                ) : (
+                  <>
+                    <button type="button" className="adm-btn-primary" onClick={share} disabled={!caption.trim()}>
+                      <FacebookIcon className="h-4 w-4" />
+                      {selectedPages.length > 1 ? `Share to ${selectedPages.length} pages` : "Share to page"}
+                    </button>
+                    <button type="button" className="adm-btn-ghost" onClick={() => setArticle(null)}>
+                      Choose a different article
+                    </button>
+                  </>
                 )}
               </div>
+                </>
+              ) : (
+                <>
+                  {/* Schedule mode — server-side, fires via cron while offline */}
+                  {scheduledOk ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p className="adm-fb-target" aria-live="polite">
+                        <span className="adm-fb-target-dot" aria-hidden />
+                        Scheduled — these will auto-post even while you’re offline:
+                      </p>
+                      <ul className="adm-fb-sub" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                        {scheduledOk.map((s) => (
+                          <li key={s.pageName}><strong>{s.pageName}</strong> — {s.at}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      {selectedPages.length > 1 && (
+                        <label className="adm-check" style={{ marginBottom: 4 }}>
+                          <input type="checkbox" checked={perPageTime} onChange={(e) => setPerPageTime(e.target.checked)} disabled={scheduling} />
+                          <span>Set a different time per page</span>
+                        </label>
+                      )}
+                      {selectedPages.length > 1 && perPageTime ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+                          {selectedPages.map((p) => (
+                            <label key={p.id} className="adm-field" style={{ marginTop: 0 }}>
+                              <span>{p.pageName} — date &amp; time ({TZ_LABEL})</span>
+                              <input type="datetime-local" className="adm-input" style={{ maxWidth: 260 }} value={perPageAt[p.id] ?? ""} min={nowLocalInput()} onChange={(e) => setPerPageAt((m) => ({ ...m, [p.id]: e.target.value }))} disabled={scheduling} />
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <label className="adm-field" style={{ marginTop: 0 }}>
+                          <span>Date &amp; time ({TZ_LABEL}){selectedPages.length > 1 ? " — same time for all selected pages" : ""}</span>
+                          <input type="datetime-local" className="adm-input" style={{ maxWidth: 260 }} value={scheduleAt} min={nowLocalInput()} onChange={(e) => setScheduleAt(e.target.value)} disabled={scheduling} />
+                        </label>
+                      )}
+                      <span className="adm-field-hint" style={{ marginTop: 6 }}>
+                        Times are {TZ_LABEL}. Scheduled posts fire automatically on the server — you don’t need to keep this open. Requires a connected long-lived token (reconnect in “Facebook Pages” if one expires).
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                    {scheduledOk ? (
+                      <>
+                        <button type="button" className="adm-btn-primary" onClick={() => { setArticle(null); setScheduledOk(null); }}>
+                          Schedule another
+                        </button>
+                        <button type="button" className="adm-btn-ghost" onClick={() => setStep("pages")}>
+                          Back to pages
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="adm-btn-primary" onClick={schedule} disabled={scheduling || !caption.trim()}>
+                          {scheduling ? <span className="adm-spinner" aria-hidden /> : <CalendarIcon className="h-4 w-4" />}
+                          {scheduling ? "Scheduling…" : `Schedule ${selectedPages.length} post${selectedPages.length === 1 ? "" : "s"}`}
+                        </button>
+                        <button type="button" className="adm-btn-ghost" onClick={() => setArticle(null)} disabled={scheduling}>
+                          Choose a different article
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

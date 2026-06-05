@@ -205,6 +205,45 @@ unchanged. The browser-**Sessions** capture card was removed from the Facebook
 tab per request; the runner backend (`lib/fbRunner.ts` + its server actions)
 remains for the article editor's optional runner-posting options.
 
+**Spacing multi-page posts:** when sharing one article to several Pages, the flow
+posts **sequentially with a configurable gap** between pages — presets
+(None / 30s / 1m / 2m / 5m) or a custom seconds value, **default 1 min**, optional
+**±25% jitter** ("Vary a little"), remembered in `localStorage`. It shows a **live
+countdown** before each next page and a **Stop** button to cancel the remaining
+queue; one page failing never stops the rest. It is **client-driven** (the tab
+must stay open until it finishes) — chosen over a server-side queue for the live
+countdown/cancel UX; a single page selected posts immediately (no delay). Honest
+note: a delay **reduces** spam-flag risk but is a **courtesy, not a guarantee** —
+reasonable posting volume + original content are the real protection.
+
+**Server-side scheduling (fires while offline):** Step 2 offers **Post now** or
+**Schedule**. Scheduling writes `ScheduledPost` rows (status `pending`, optional
+`caption`, `scheduledFor` in UTC) via `scheduleArticleShares`; the existing
+**Vercel Cron** `/api/cron/facebook-post` (`vercel.json`; **daily by default** for
+Hobby compatibility — set to `*/5 * * * *` on Pro for at-the-minute firing)
+drains due rows, **atomically claims** each (`pending → posting` via `updateMany`,
+so it never double-posts even if runs overlap), posts via the Graph API with the
+stored page token + caption, and marks `posted` (+`graphPostId`) / `failed`
+(+reason). Times are entered in **Asia/Phnom_Penh** (fixed +07:00, no DST) and
+stored UTC (`lib/fbSchedule.ts`); **same time for all** or **per-page times**. A
+**Scheduled posts** manager (`FacebookScheduledPosts`) lists upcoming/past with a
+status filter and **edit / cancel (→ canceled) / delete** for pending rows.
+Immediate posting (incl. the multi-page delay) is unchanged.
+- **Env:** set **`CRON_SECRET`** in Vercel — the cron is **fail-closed** (refuses
+  to run in production without it; Vercel Cron sends it as `Authorization:
+  Bearer`).
+- ⚠️ **Frequent cron needs Vercel Pro.** Hobby **rejects sub-daily cron at deploy
+  time**, so `vercel.json` ships the daily `0 14 * * *` (deploys everywhere). For
+  scheduled posts to fire at the chosen minute, **upgrade to Pro and set
+  `*/5 * * * *`** — until then the cron only drains due posts once/day.
+- **Migration:** `20260605120000_scheduled_post_caption` adds
+  `ScheduledPost.caption` (auto-applies via `prisma migrate deploy`).
+- Honest: scheduling relies on Vercel Cron + a **long-lived** page token; if the
+  token expires, scheduled posts fail with a "reconnect" reason until you refresh
+  it in **Facebook Pages**. Facebook's own **Meta Business Suite Planner** also
+  offers free native scheduling. This schedules **my own** articles to **my own**
+  pages via the official Graph API — not mass automation.
+
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
 Page is **exact by construction** — there is no shared "logged-in session" or
@@ -523,6 +562,35 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
   `ENCRYPTION_KEY` (already required to encrypt secrets at rest).
 - 🔐 If your AdsKeeper password/token is ever exposed (screenshot/chat), change it
   in AdsKeeper and re-save here.
+
+## Audience analytics (visitor countries)
+
+A privacy-respecting **Audience** admin tab (`/admin/audience`, globe nav item)
+showing which countries article readers come from — a world **bubble map** + a
+ranked **flagged country list** (count + %), **overall or per-article**, with a
+7 / 30-day / all-time range.
+
+- **Tracking:** the public article server component reads Vercel's free
+  **`x-vercel-ip-country`** geo header via `headers()` and passes it to
+  `incrementViews(id, country)`, which adds a 3rd parallel upsert into a new
+  **`ArticleCountryView`** table (articleId, ISO alpha-2 `countryCode`, UTC
+  `date`, `count`). **Privacy: counts only — no IP/UA/PII**; missing/invalid →
+  `"ZZ"` (Unknown). No paid geo-IP service; no extra blocking (same `Promise.all`
+  as the existing view write).
+- **Aggregation:** `getCountryStats({ articleId?, days? })` (groupBy country, sum)
+  + `getAudienceArticles()` (articles that have data); admin-only server action
+  `getAudienceStats` powers the client re-fetch on scope/range change.
+- **Map:** dependency-free SVG **equirectangular bubble map** (`WorldBubbleMap` +
+  `lib/countryCentroids.ts`) — faint base dots trace the continents, visitor
+  countries get volume-sized bubbles + a flag/name/% tooltip. No map
+  library/topojson (light bundle, theme-aware).
+- **Helpers:** `lib/countries.ts` — alpha-2 → flag emoji (regional indicators) +
+  `Intl.DisplayNames` name; `"ZZ"` → 🌐 Unknown.
+- **Migration:** `20260605140000_article_country_view` (auto-applies). **No env
+  needed** — the Vercel header is automatic in production. ⚠️ Real country data
+  only appears once **real visitors hit the deployed site** (localhost/preview
+  with no geo header bucket as Unknown). Existing view tracking + the dashboard
+  views chart are unchanged (the country upsert is additive).
 
 ## Roadmap
 

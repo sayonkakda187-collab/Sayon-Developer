@@ -40,6 +40,7 @@ model Article {
   comments       Comment[]
   scheduledPosts ScheduledPost[]
   dailyViews     DailyView[]
+  countryViews   ArticleCountryView[]
 
   @@index([status, publishedAt])
   @@index([categoryId])
@@ -115,6 +116,23 @@ model DailyView {
   @@index([date])
 }
 
+// Per-country visitor counts for the admin Audience analytics. Privacy-respecting:
+// only an integer count per article per ISO country per UTC day — no IP, UA, or
+// any visitor PII. Country comes from the free Vercel `x-vercel-ip-country`
+// request header; missing/unknown → "ZZ". Incremented alongside the view counters.
+model ArticleCountryView {
+  id          String   @id @default(cuid())
+  date        DateTime // UTC day (midnight) the views were counted on
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  countryCode String // ISO 3166-1 alpha-2 (uppercase); "ZZ" = unknown
+  count       Int      @default(0)
+
+  @@unique([articleId, countryCode, date])
+  @@index([countryCode])
+  @@index([date])
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 model User {
@@ -169,7 +187,8 @@ model FacebookSession {
 model ScheduledPost {
   id             String    @id @default(cuid())
   scheduledFor   DateTime // when it should publish (UTC)
-  status         String    @default("pending") // "pending" | "posting" | "posted" | "failed"
+  status         String    @default("pending") // "pending" | "posting" | "posted" | "failed" | "canceled"
+  caption        String? // optional edited post caption; null → default message
   postedAt       DateTime?
   error          String? // failure reason, if status = "failed"
   graphPostId    String? // the returned Facebook post id ("{page}_{post}")
