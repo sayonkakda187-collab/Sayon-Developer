@@ -17,6 +17,7 @@ import {
   getFacebookUserToken,
 } from "@/lib/facebookSettings";
 import { publishArticleToPage, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
+import { saveAutoShareSettings } from "@/lib/facebookAutoShare";
 import {
   isRunnerConfigured,
   runnerStatus,
@@ -831,5 +832,23 @@ export async function deleteScheduledShare(id: string): Promise<ActionResult> {
     return { ok: true, data: undefined };
   } catch {
     return fail("Couldn’t delete the scheduled post.");
+  }
+}
+
+// ── Auto-share on publish settings ───────────────────────────────────────────
+
+export async function updateAutoShareSettings(input: {
+  enabled?: boolean;
+  delayMinutes?: number;
+  pageIds?: string[] | null;
+  captionTemplate?: string | null;
+}): Promise<ActionResult> {
+  await requireAdmin();
+  try {
+    await saveAutoShareSettings(input);
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save auto-share settings." };
   }
 }

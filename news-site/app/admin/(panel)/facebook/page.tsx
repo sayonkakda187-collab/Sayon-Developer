@@ -9,7 +9,9 @@ import {
   FacebookScheduledPosts,
   type ScheduledPostView,
 } from "@/components/admin/FacebookScheduledPosts";
+import { FacebookAutoShareSettings } from "@/components/admin/FacebookAutoShareSettings";
 import { getFacebookConnectStatus } from "@/lib/facebookSettings";
+import { getAutoShareSettings } from "@/lib/facebookAutoShare";
 
 // Tokens + Graph state are dynamic; never statically cache this screen.
 export const dynamic = "force-dynamic";
@@ -18,7 +20,7 @@ export default async function AdminFacebookPage() {
   // Count posted/pending per page in SQL (groupBy) rather than loading every
   // ScheduledPost row into memory just to count it — keeps this O(pages), not
   // O(all posts ever), as post history grows.
-  const [pages, counts, scheduled, connect] = await Promise.all([
+  const [pages, counts, scheduled, connect, autoShare] = await Promise.all([
     prisma.facebookPage.findMany({
       orderBy: [{ categoryGroup: "asc" }, { pageName: "asc" }],
     }),
@@ -36,6 +38,7 @@ export default async function AdminFacebookPage() {
       },
     }),
     getFacebookConnectStatus(),
+    getAutoShareSettings(),
   ]);
 
   const postedByPage = new Map<string, number>();
@@ -72,6 +75,10 @@ export default async function AdminFacebookPage() {
     <ToastProvider>
       <FacebookShareFlow pages={view} connect={connect} />
       <FacebookScheduledPosts posts={scheduledView} />
+      <FacebookAutoShareSettings
+        settings={autoShare}
+        pages={view.map((p) => ({ id: p.id, pageName: p.pageName, status: p.status }))}
+      />
       <FacebookPagesManager pages={view} connect={connect} />
     </ToastProvider>
   );

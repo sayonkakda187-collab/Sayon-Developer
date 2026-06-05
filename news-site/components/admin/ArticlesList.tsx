@@ -37,6 +37,7 @@ export function ArticlesList({
   categories,
   initialQuery = "",
   initialPublishedId,
+  autoSharedCount = 0,
 }: {
   items: Item[];
   categories: string[];
@@ -44,6 +45,8 @@ export function ArticlesList({
   // When present (from ?published={id} after publishing), auto-open the Share
   // panel with the celebratory header.
   initialPublishedId?: string;
+  // From ?autoshared=N — how many pages the article was auto-queued to.
+  autoSharedCount?: number;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -64,6 +67,21 @@ export function ArticlesList({
       }
     }
   }, [initialPublishedId]);
+
+  // Confirm opt-in auto-share once, then strip ?autoshared so a refresh won't repeat it.
+  useEffect(() => {
+    if (autoSharedCount > 0) {
+      success(`Auto-sharing to ${autoSharedCount} page${autoSharedCount === 1 ? "" : "s"} (staggered) — see Scheduled posts on the Facebook tab.`);
+    }
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("autoshared")) {
+        url.searchParams.delete("autoshared");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<string>("All");
   const [category, setCategory] = useState<string>("All");

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminArticlesPage({
   searchParams,
 }: {
-  searchParams?: { q?: string; published?: string };
+  searchParams?: { q?: string; published?: string; autoshared?: string };
 }) {
   const articles = await prisma.article.findMany({
     orderBy: { createdAt: "desc" },
@@ -30,6 +30,7 @@ export default async function AdminArticlesPage({
   ).sort();
 
   const initialQuery = (searchParams?.q ?? "").trim();
+  const autoSharedCount = Math.max(0, Math.floor(Number(searchParams?.autoshared ?? "") || 0));
 
   // Serialize Dates → strings for the client list component.
   const items = articles.map((a) => ({
@@ -83,6 +84,7 @@ export default async function AdminArticlesPage({
             categories={categories}
             initialQuery={initialQuery}
             initialPublishedId={initialPublishedId}
+            autoSharedCount={autoSharedCount}
           />
         </ToastProvider>
       )}
