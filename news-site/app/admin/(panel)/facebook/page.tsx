@@ -5,11 +5,6 @@ import {
   FacebookPagesManager,
   type FacebookPageView,
 } from "@/components/admin/FacebookPagesManager";
-import {
-  FacebookSessionsManager,
-  type FacebookSessionView,
-} from "@/components/admin/FacebookSessionsManager";
-import { isRunnerConfigured } from "@/lib/fbRunner";
 import { getFacebookConnectStatus } from "@/lib/facebookSettings";
 
 // Tokens + Graph state are dynamic; never statically cache this screen.
@@ -19,7 +14,7 @@ export default async function AdminFacebookPage() {
   // Count posted/pending per page in SQL (groupBy) rather than loading every
   // ScheduledPost row into memory just to count it — keeps this O(pages), not
   // O(all posts ever), as post history grows.
-  const [pages, counts, sessions, connect] = await Promise.all([
+  const [pages, counts, connect] = await Promise.all([
     prisma.facebookPage.findMany({
       orderBy: [{ categoryGroup: "asc" }, { pageName: "asc" }],
     }),
@@ -28,7 +23,6 @@ export default async function AdminFacebookPage() {
       where: { status: { in: ["posted", "pending"] } },
       _count: { _all: true },
     }),
-    prisma.facebookSession.findMany({ orderBy: { createdAt: "desc" } }),
     getFacebookConnectStatus(),
   ]);
 
@@ -50,22 +44,10 @@ export default async function AdminFacebookPage() {
     pendingCount: pendingByPage.get(p.id) ?? 0,
   }));
 
-  // Never expose the encrypted session blob to the client — only safe metadata.
-  const sessionView: FacebookSessionView[] = sessions.map((s) => ({
-    id: s.id,
-    label: s.label,
-    accountName: s.accountName,
-    status: s.status,
-    lastUsedAt: s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
-    lastValidatedAt: s.lastValidatedAt ? s.lastValidatedAt.toISOString() : null,
-    createdAt: s.createdAt.toISOString(),
-  }));
-
   return (
     <ToastProvider>
       <FacebookShareFlow pages={view} connect={connect} />
       <FacebookPagesManager pages={view} connect={connect} />
-      <FacebookSessionsManager sessions={sessionView} runnerConfigured={isRunnerConfigured()} />
     </ToastProvider>
   );
 }
