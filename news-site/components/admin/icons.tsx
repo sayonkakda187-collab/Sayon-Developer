@@ -58,6 +58,13 @@ export const CoinsIcon = (p: P) => (
     <path d="m16.71 13.88.7.71-2.82 2.82" />
   </svg>
 );
+export const GlobeIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M2.6 9h18.8M2.6 15h18.8" />
+    <path d="M12 3a14.5 14.5 0 0 0 0 18 14.5 14.5 0 0 0 0-18Z" />
+  </svg>
+);
 export const DashboardIcon = (p: P) => (
   <svg {...base} className={p.className} aria-hidden>
     <rect x="3" y="3" width="7" height="9" rx="1.5" />

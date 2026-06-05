@@ -40,6 +40,7 @@ model Article {
   comments       Comment[]
   scheduledPosts ScheduledPost[]
   dailyViews     DailyView[]
+  countryViews   ArticleCountryView[]
 
   @@index([status, publishedAt])
   @@index([categoryId])
@@ -112,6 +113,23 @@ model DailyView {
   count     Int      @default(0)
 
   @@unique([articleId, date])
+  @@index([date])
+}
+
+// Per-country visitor counts for the admin Audience analytics. Privacy-respecting:
+// only an integer count per article per ISO country per UTC day — no IP, UA, or
+// any visitor PII. Country comes from the free Vercel `x-vercel-ip-country`
+// request header; missing/unknown → "ZZ". Incremented alongside the view counters.
+model ArticleCountryView {
+  id          String   @id @default(cuid())
+  date        DateTime // UTC day (midnight) the views were counted on
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  countryCode String // ISO 3166-1 alpha-2 (uppercase); "ZZ" = unknown
+  count       Int      @default(0)
+
+  @@unique([articleId, countryCode, date])
+  @@index([countryCode])
   @@index([date])
 }
 

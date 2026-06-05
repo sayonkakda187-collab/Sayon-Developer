@@ -22,10 +22,12 @@ import {
   FacebookIcon,
   TrendingIcon,
   SettingsIcon,
+  GlobeIcon,
 } from "./icons";
 
 const NAV = [
   { tab: "dashboard", label: "Dashboard", drawerLabel: "Dashboard", href: "/admin", Icon: DashboardIcon },
+  { tab: "audience", label: "Audience", drawerLabel: "Audience", href: "/admin/audience", Icon: GlobeIcon },
   { tab: "articles", label: "Articles", drawerLabel: "Articles", href: "/admin/articles", Icon: ArticlesIcon },
   { tab: "trending", label: "Trending", drawerLabel: "Trending News", href: "/admin/trending", Icon: TrendingIcon },
   { tab: "categories", label: "Categories", drawerLabel: "Categories & Tags", href: "/admin/categories", Icon: CategoriesIcon },

@@ -563,6 +563,35 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
 - 🔐 If your AdsKeeper password/token is ever exposed (screenshot/chat), change it
   in AdsKeeper and re-save here.
 
+## Audience analytics (visitor countries)
+
+A privacy-respecting **Audience** admin tab (`/admin/audience`, globe nav item)
+showing which countries article readers come from — a world **bubble map** + a
+ranked **flagged country list** (count + %), **overall or per-article**, with a
+7 / 30-day / all-time range.
+
+- **Tracking:** the public article server component reads Vercel's free
+  **`x-vercel-ip-country`** geo header via `headers()` and passes it to
+  `incrementViews(id, country)`, which adds a 3rd parallel upsert into a new
+  **`ArticleCountryView`** table (articleId, ISO alpha-2 `countryCode`, UTC
+  `date`, `count`). **Privacy: counts only — no IP/UA/PII**; missing/invalid →
+  `"ZZ"` (Unknown). No paid geo-IP service; no extra blocking (same `Promise.all`
+  as the existing view write).
+- **Aggregation:** `getCountryStats({ articleId?, days? })` (groupBy country, sum)
+  + `getAudienceArticles()` (articles that have data); admin-only server action
+  `getAudienceStats` powers the client re-fetch on scope/range change.
+- **Map:** dependency-free SVG **equirectangular bubble map** (`WorldBubbleMap` +
+  `lib/countryCentroids.ts`) — faint base dots trace the continents, visitor
+  countries get volume-sized bubbles + a flag/name/% tooltip. No map
+  library/topojson (light bundle, theme-aware).
+- **Helpers:** `lib/countries.ts` — alpha-2 → flag emoji (regional indicators) +
+  `Intl.DisplayNames` name; `"ZZ"` → 🌐 Unknown.
+- **Migration:** `20260605140000_article_country_view` (auto-applies). **No env
+  needed** — the Vercel header is automatic in production. ⚠️ Real country data
+  only appears once **real visitors hit the deployed site** (localhost/preview
+  with no geo header bucket as Unknown). Existing view tracking + the dashboard
+  views chart are unchanged (the country upsert is additive).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

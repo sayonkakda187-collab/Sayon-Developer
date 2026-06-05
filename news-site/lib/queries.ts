@@ -100,14 +100,22 @@ export function utcDayStart(d: Date = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
+/** Normalize a raw country header to an uppercase ISO alpha-2, or "ZZ" (unknown). */
+function normalizeCountry(raw?: string | null): string {
+  const c = (raw ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) ? c : "ZZ";
+}
+
 /**
- * Fire-and-forget view increment; never blocks rendering on failure. Bumps both
- * the all-time `Article.views` counter and the per-day `DailyView` bucket (for
- * the dashboard's views-over-time chart). Privacy-respecting: only a per-day
- * integer count, no visitor data.
+ * Fire-and-forget view increment; never blocks rendering on failure. Bumps the
+ * all-time `Article.views` counter, the per-day `DailyView` bucket (views-over-
+ * time chart) and the per-country `ArticleCountryView` bucket (Audience map).
+ * Privacy-respecting: only per-day integer counts, no IP/UA/visitor PII — the
+ * country comes from the free Vercel `x-vercel-ip-country` header ("ZZ" = unknown).
  */
-export async function incrementViews(id: string) {
+export async function incrementViews(id: string, countryCode?: string | null) {
   const today = utcDayStart();
+  const code = normalizeCountry(countryCode);
   try {
     await Promise.all([
       prisma.article.update({
@@ -119,10 +127,66 @@ export async function incrementViews(id: string) {
         update: { count: { increment: 1 } },
         create: { articleId: id, date: today, count: 1 },
       }),
+      prisma.articleCountryView.upsert({
+        where: { articleId_countryCode_date: { articleId: id, countryCode: code, date: today } },
+        update: { count: { increment: 1 } },
+        create: { articleId: id, countryCode: code, date: today, count: 1 },
+      }),
     ]);
   } catch {
     // Swallow: a failed counter shouldn't break the page.
   }
+}
+
+export type CountryStat = { countryCode: string; count: number };
+
+/**
+ * Aggregated visitor-country counts for the Audience analytics. Overall (all
+ * articles) or a single article; optional rolling window in days (omit / 0 = all
+ * time). Returns counts sorted desc + the total.
+ */
+export async function getCountryStats(opts?: {
+  articleId?: string;
+  days?: number;
+}): Promise<{ stats: CountryStat[]; total: number }> {
+  const where: { articleId?: string; date?: { gte: Date } } = {};
+  if (opts?.articleId) where.articleId = opts.articleId;
+  if (opts?.days && opts.days > 0) {
+    const start = utcDayStart();
+    start.setUTCDate(start.getUTCDate() - (Math.min(3650, Math.round(opts.days)) - 1));
+    where.date = { gte: start };
+  }
+  const rows = await prisma.articleCountryView.groupBy({
+    by: ["countryCode"],
+    where,
+    _sum: { count: true },
+  });
+  const stats = rows
+    .map((r) => ({ countryCode: r.countryCode, count: r._sum.count ?? 0 }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const total = stats.reduce((s, x) => s + x.count, 0);
+  return { stats, total };
+}
+
+/** Articles that have visitor-country data (for the Audience per-article picker),
+ *  most-viewed first. */
+export async function getAudienceArticles(): Promise<{ id: string; title: string }[]> {
+  const grouped = await prisma.articleCountryView.groupBy({
+    by: ["articleId"],
+    _sum: { count: true },
+  });
+  const ids = grouped
+    .filter((g) => (g._sum.count ?? 0) > 0)
+    .sort((a, b) => (b._sum.count ?? 0) - (a._sum.count ?? 0))
+    .map((g) => g.articleId);
+  if (ids.length === 0) return [];
+  const articles = await prisma.article.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, title: true },
+  });
+  const byId = new Map(articles.map((a) => [a.id, a.title]));
+  return ids.filter((id) => byId.has(id)).map((id) => ({ id, title: byId.get(id)! }));
 }
 
 export const getCategoryBySlug = cache((slug: string) =>

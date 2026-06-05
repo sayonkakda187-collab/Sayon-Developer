@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "next-view-transitions";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import {
   getApprovedComments,
   getArticleBySlug,
@@ -79,7 +80,9 @@ export default async function ArticlePage({ params }: Props) {
   const article = await getArticleBySlug(params.slug);
   if (!article) notFound();
 
-  await incrementViews(article.id);
+  // Visitor country from Vercel's free geo header (privacy-respecting: only an
+  // aggregate per-country count is stored, never the IP). Missing → "Unknown".
+  await incrementViews(article.id, headers().get("x-vercel-ip-country"));
   const [related, comments] = await Promise.all([
     getRelatedArticles({
       categoryId: article.categoryId,
