@@ -188,6 +188,21 @@ Distribute published articles to Facebook Pages from the admin panel using the
 simulation anywhere. All Graph calls are server-side; tokens never touch the
 browser.
 
+**Two-step Share flow (default Facebook tab screen):** `FacebookShareFlow`
+(`components/admin/FacebookShareFlow.tsx`) renders **Step 1 — select Page(s)**
+(selectable cards w/ avatar + status + post counts; multi-select checkboxes,
+pre-selected when only one Page; Connect/Refresh in the header) → **Step 2 —
+pick a published article** (server action `listPublishedArticlesForShare`: search
++ pagination, published-only) with a "Sharing to: […] · Back" bar, then an
+**editable caption + cover preview** → posts to each selected Page **one at a
+time** via the existing `publishArticleNow` (Graph path) with **live per-page
+status** (posting/✓/✗) so one failure never blocks the rest, a summary, and a
+success screen. The detailed **Pages manager** (grouped table, per-page
+refresh/disconnect, category groups) and the **runner Sessions manager** stay
+rendered below, unchanged. `ConnectModal` was extracted to
+`FacebookConnectModal.tsx` and is shared by the flow + the manager. The
+per-article editor panel (`ArticleFacebookPanel`) is also unchanged.
+
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
 Page is **exact by construction** — there is no shared "logged-in session" or

@@ -40,6 +40,69 @@ function fail(error: string): { ok: false; error: string } {
   return { ok: false, error };
 }
 
+// ── Published-article picker (Step 2 of the Share flow) ───────────────────────
+
+export type ShareArticleItem = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  coverImage: string | null;
+  views: number;
+  publishedAt: string | null;
+};
+
+/**
+ * List PUBLISHED articles for the Facebook Share flow's article picker, with
+ * title search + pagination. Drafts are excluded (only published articles have a
+ * public URL for Facebook to scrape).
+ */
+export async function listPublishedArticlesForShare(input: {
+  q?: string;
+  page?: number;
+  perPage?: number;
+}): Promise<ActionResult<{ items: ShareArticleItem[]; total: number; page: number; perPage: number }>> {
+  await requireAdmin();
+  const perPage = Math.min(48, Math.max(1, Math.floor(input.perPage ?? 12)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const q = (input.q ?? "").trim();
+  const where = {
+    status: "published",
+    ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
+  };
+  try {
+    const [rows, total] = await Promise.all([
+      prisma.article.findMany({
+        where,
+        orderBy: { publishedAt: "desc" },
+        skip: (page - 1) * perPage,
+        take: perPage,
+        select: { id: true, title: true, slug: true, excerpt: true, coverImage: true, views: true, publishedAt: true },
+      }),
+      prisma.article.count({ where }),
+    ]);
+    return {
+      ok: true,
+      data: {
+        items: rows.map((a) => ({
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+          excerpt: a.excerpt,
+          coverImage: a.coverImage,
+          views: a.views,
+          publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
+        })),
+        total,
+        page,
+        perPage,
+      },
+    };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Couldn’t load articles.");
+  }
+}
+
 // ── Browser runner status (self-hosted persistent-browser posting) ───────────
 
 /** Reachability + login state of the optional self-hosted browser runner, for
