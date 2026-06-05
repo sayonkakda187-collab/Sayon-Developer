@@ -141,7 +141,8 @@ export async function getAdskeeperStatus(): Promise<AdskeeperStatus> {
 
   const hasLogin = loginSource !== "none" && passwordSource !== "none";
   const hasToken = tokenSource !== "none";
-  const authMode = hasLogin ? "login" : hasToken ? "token" : "none";
+  // Token takes priority: a saved token is used DIRECTLY (no auth call).
+  const authMode = hasToken ? "token" : hasLogin ? "login" : "none";
 
   return {
     authMode,

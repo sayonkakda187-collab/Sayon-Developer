@@ -58,7 +58,8 @@ export function AdskeeperSettings({ status }: { status: Status }) {
   }
 
   const loginConfigured = loginSource !== "none" && passwordSource !== "none";
-  const authMode: Status["authMode"] = loginConfigured ? "login" : tokenSource !== "none" ? "token" : "none";
+  // Token takes priority — a saved token is used directly (no auth call).
+  const authMode: Status["authMode"] = tokenSource !== "none" ? "token" : loginConfigured ? "login" : "none";
   const headPill =
     authMode === "login" ? "Connected via login"
       : authMode === "token" ? "Connected via API token"
@@ -232,32 +233,70 @@ export function AdskeeperSettings({ status }: { status: Status }) {
         </div>
         {probe && (
           <div className="adm-trend-note" role="status" style={{ marginTop: 12 }}>
-            <p style={{ margin: 0 }}>
-              {probe.ok ? (
-                <>
-                  <strong style={{ color: "#16a34a" }}>Connected.</strong>{" "}
-                  {probe.mode === "login" && probe.authPath ? (
-                    <>Auth path: <code className="adm-fb-code">{probe.authPath}</code>. </>
-                  ) : null}
-                  {probe.authId ? (
-                    <>Account (idAuth): <code className="adm-fb-code">{probe.authId}</code>.</>
-                  ) : null}
-                </>
-              ) : (
-                <>
+            {probe.ok ? (
+              <p style={{ margin: 0 }}>
+                <strong style={{ color: "#16a34a" }}>Connected.</strong>{" "}
+                {probe.mode === "token" ? (
+                  <>
+                    Direct token
+                    {probe.headerVariant ? (
+                      <> · header <code className="adm-fb-code">{probe.headerVariant === "bearer" ? "Bearer <token>" : "raw <token>"}</code></>
+                    ) : null}
+                    .{" "}
+                    {typeof probe.sampleRevenue === "number" ? (
+                      <>Sample revenue (today): <code className="adm-fb-code">{probe.currency ?? "USD"} {probe.sampleRevenue.toFixed(2)}</code>. </>
+                    ) : null}
+                  </>
+                ) : probe.mode === "login" && probe.authPath ? (
+                  <>Auth path: <code className="adm-fb-code">{probe.authPath}</code>. </>
+                ) : null}
+                {probe.authId ? (
+                  <>Account (idAuth): <code className="adm-fb-code">{probe.authId}</code>.</>
+                ) : null}
+              </p>
+            ) : (
+              <div style={{ margin: 0 }}>
+                <p style={{ margin: 0 }}>
                   <strong>Not connected.</strong> {probe.error}
-                  {probe.tried?.length ? (
-                    <>
-                      <br />
-                      Tried:{" "}
-                      {probe.tried.map((t) => (
-                        <code key={t} className="adm-fb-code" style={{ marginRight: 4 }}>{t}</code>
-                      ))}
-                    </>
+                  {probe.headerVariant ? (
+                    <> (tried header <code className="adm-fb-code">{probe.headerVariant === "bearer" ? "Bearer" : "raw"}</code>)</>
                   ) : null}
-                </>
-              )}
-            </p>
+                </p>
+                {probe.tried?.length ? (
+                  <p style={{ margin: "6px 0 0" }}>
+                    Tried:{" "}
+                    {probe.tried.map((t) => (
+                      <code key={t} className="adm-fb-code" style={{ marginRight: 4 }}>{t}</code>
+                    ))}
+                  </p>
+                ) : null}
+                {probe.responseBody ? (
+                  <>
+                    <p style={{ margin: "8px 0 4px", fontWeight: 600 }}>
+                      Exact AdsKeeper response{probe.httpStatus ? ` (HTTP ${probe.httpStatus})` : ""} — forward this to support:
+                    </p>
+                    <pre
+                      style={{
+                        margin: 0,
+                        maxHeight: 200,
+                        overflow: "auto",
+                        padding: 10,
+                        borderRadius: 8,
+                        background: "var(--adm-soft, rgba(0,0,0,.05))",
+                        border: "1px solid var(--adm-bd)",
+                        fontSize: 11.5,
+                        lineHeight: 1.45,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        color: "var(--adm-ink)",
+                      }}
+                    >
+                      {probe.responseBody}
+                    </pre>
+                  </>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </div>
