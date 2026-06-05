@@ -249,6 +249,27 @@ Immediate posting (incl. the multi-page delay) is unchanged.
   offers free native scheduling. This schedules **my own** articles to **my own**
   pages via the official Graph API — not mass automation.
 
+**Auto-share on publish (opt-in, DEFAULT OFF):** when an article becomes *newly*
+published — `saveArticle` + bulk publish detect the draft→published transition,
+not re-saves — AND `fb_autoshare_enabled` is on, `autoShareOnPublish`
+(`lib/facebookAutoShare.ts`) enqueues **staggered `ScheduledPost` rows** (page _i_
+at `now + i·delay`, default **5 min**) to the chosen pages (all or a subset) with
+a caption from a template (`{title}` `{hook}` `{link}` `{site}`). The existing
+cron posts them; they appear in the **Scheduled posts** manager. **Idempotent**
+via `Article.autoSharedAt` (set once — never re-enqueues on re-publish/edit).
+Settings live in `AppSetting` (`fb_autoshare_enabled` / `fb_autoshare_delay_min`
+/ `fb_autoshare_page_ids` / `fb_autoshare_caption`); toggle UI
+`FacebookAutoShareSettings` on the Facebook tab; publish confirms via a toast
+(`saveArticle` redirect `?autoshared=N`). Migration
+`20260605160000_article_auto_shared` adds `autoSharedAt` (auto-applies); **no new
+env** (reuses the scheduling cron + `CRON_SECRET`).
+- ⚠️ **Same Hobby-cron limitation:** on **Vercel Hobby the cron runs once/day**,
+  so the per-page stagger does NOT fire at N-minute intervals — all due rows go
+  out in the single daily run; true spacing needs **Pro + `*/5`**. **One page →
+  the delay is moot.** Expired tokens → those rows fail (with a reason) in the
+  manager — reconnect to fix. Meta Business Suite is a free native alternative.
+  Auto-share is **additive** — manual share + manual scheduling are unchanged.
+
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
 Page is **exact by construction** — there is no shared "logged-in session" or

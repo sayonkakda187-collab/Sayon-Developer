@@ -30,6 +30,9 @@ model Article {
   status      String    @default("draft") // "draft" | "published"
   views       Int       @default(0)
   publishedAt DateTime?
+  // When this article was auto-shared to Facebook on publish (opt-in feature).
+  // Set once; guards against re-enqueuing on re-publish/edit.
+  autoSharedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

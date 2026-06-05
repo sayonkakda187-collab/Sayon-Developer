@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, clearSessionCookie } from "@/lib/auth";
 import { slugify, uniqueArticleSlug } from "@/lib/slug";
+import { autoShareOnPublish } from "@/lib/facebookAutoShare";
 
 export async function logout() {
   clearSessionCookie();
@@ -53,11 +54,15 @@ export async function saveArticle(formData: FormData) {
   const slug = await uniqueArticleSlug(title, id || undefined);
 
   let savedId = id;
+  // "Newly published" = a draft (or brand-new article) becoming published. Used
+  // to trigger opt-in auto-share exactly once (not on every re-save/edit).
+  let newlyPublished = false;
   if (id) {
     const existing = await prisma.article.findUnique({
       where: { id },
-      select: { publishedAt: true },
+      select: { status: true, publishedAt: true },
     });
+    newlyPublished = existing?.status !== "published" && status === "published";
     const publishedAt =
       status === "published" ? (existing?.publishedAt ?? new Date()) : null;
     await prisma.article.update({
@@ -77,6 +82,7 @@ export async function saveArticle(formData: FormData) {
       },
     });
   } else {
+    newlyPublished = status === "published";
     const publishedAt = status === "published" ? new Date() : null;
     const created = await prisma.article.create({
       data: {
@@ -97,10 +103,15 @@ export async function saveArticle(formData: FormData) {
     savedId = created.id;
   }
 
+  // Opt-in auto-share: enqueue staggered ScheduledPosts when newly published and
+  // the setting is ON (no-op otherwise; never throws).
+  const autoShared = newlyPublished ? (await autoShareOnPublish(savedId)).enqueued : 0;
+
   // On publish, land on the Articles list with the Share panel auto-opened so
   // the writer can immediately promote the story. Drafts just return to the list.
   if (status === "published") {
-    redirect(`/admin/articles?published=${savedId}`);
+    const extra = autoShared > 0 ? `&autoshared=${autoShared}` : "";
+    redirect(`/admin/articles?published=${savedId}${extra}`);
   }
   redirect("/admin/articles");
 }
@@ -178,7 +189,7 @@ export async function bulkArticleAction(
     // publish: only flip drafts, and stamp publishedAt for those missing one.
     const toPublish = await prisma.article.findMany({
       where: { id: { in: clean } },
-      select: { id: true, publishedAt: true },
+      select: { id: true, status: true, publishedAt: true },
     });
     const now = new Date();
     await prisma.$transaction(
@@ -189,6 +200,11 @@ export async function bulkArticleAction(
         }),
       ),
     );
+    // Opt-in auto-share, only for the ones that were actually drafts (true
+    // newly-published) — re-publishing an already-published article won't re-share.
+    for (const a of toPublish) {
+      if (a.status !== "published") await autoShareOnPublish(a.id);
+    }
     revalidatePath("/admin/articles");
     return { ok: true, count: toPublish.length };
   } catch (e) {
