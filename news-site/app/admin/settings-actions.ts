@@ -11,7 +11,7 @@ import {
   NEWS_SEARCH_PROVIDERS,
   type NewsSearchProviderId,
 } from "@/lib/newsSearch/settings";
-import { saveAdskeeperApiKey, saveAdskeeperClientId } from "@/lib/adskeeper/settings";
+import { saveAdskeeperApiKey, saveAdskeeperClientId, saveAdskeeperLoginCreds } from "@/lib/adskeeper/settings";
 import { clearEarningsCache } from "@/lib/adskeeper/client";
 
 // Server actions for the API Settings page. Each re-checks requireAdmin. Keys
@@ -49,6 +49,22 @@ export async function chooseNewsProvider(
 }
 
 // ── AdsKeeper API credentials ────────────────────────────────────────────────
+
+export async function saveAdskeeperLogin(
+  login: string,
+  password: string,
+): Promise<{ ok: true; cleared: boolean } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    await saveAdskeeperLoginCreds(login, password);
+    clearEarningsCache(); // new login takes effect immediately
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    return { ok: true, cleared: login.trim().length === 0 && password.trim().length === 0 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the AdsKeeper login." };
+  }
+}
 
 export async function saveAdskeeperKey(
   rawKey: string,

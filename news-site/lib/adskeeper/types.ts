@@ -5,12 +5,12 @@
 export type EarningsRange = "today" | "last7" | "last30" | "thisMonth";
 
 export type EarningsTotals = {
-  revenue: number;
+  revenue: number; // AdsKeeper "wage" metric
   impressions: number;
   clicks: number;
   ctr: number; // percent
   ecpm: number; // revenue per 1000 impressions
-  epc: number; // revenue per click
+  cpc: number; // revenue per click (AdsKeeper "cpc")
 };
 
 export type DailyPoint = { date: string; revenue: number };
@@ -36,6 +36,11 @@ export type EarningsResult =
   | { ok: true; data: AdskeeperEarnings }
   | { ok: false; error: string; expired?: boolean }
   | { configured: false };
+
+/** Result of the Settings "Test connection" probe (never carries the token). */
+export type AuthProbe =
+  | { ok: true; mode: "login" | "token"; authPath?: string; authId: string | null }
+  | { ok: false; mode: "login" | "token" | "none"; error: string; tried?: string[] };
 
 export const EARNINGS_RANGES: { id: EarningsRange; label: string }[] = [
   { id: "today", label: "Today" },

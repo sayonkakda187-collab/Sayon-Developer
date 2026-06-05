@@ -1,8 +1,8 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth";
-import { getEarnings } from "@/lib/adskeeper/client";
-import type { EarningsRange, EarningsResult } from "@/lib/adskeeper/types";
+import { getEarnings, probeAuth } from "@/lib/adskeeper/client";
+import type { EarningsRange, EarningsResult, AuthProbe } from "@/lib/adskeeper/types";
 
 // Admin-only data actions for the dashboard Earnings panel. These return mapped
 // metrics only — the AdsKeeper API key is never included in any response.
@@ -22,4 +22,11 @@ export async function getAdskeeperEarnings(range: string): Promise<EarningsResul
 export async function refreshAdskeeperEarnings(range: string): Promise<EarningsResult> {
   await requireAdmin();
   return getEarnings(asRange(range), { force: true });
+}
+
+/** Probe the AdsKeeper connection and report which auth path worked (no secrets
+ *  returned). Powers the Settings "Test connection" button. */
+export async function testAdskeeperConnection(): Promise<AuthProbe> {
+  await requireAdmin();
+  return probeAuth();
 }
