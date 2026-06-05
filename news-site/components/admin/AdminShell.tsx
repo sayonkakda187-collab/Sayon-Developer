@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/actions";
 import { AdminThemeToggle } from "./AdminThemeToggle";
+import { AdskeeperBalancePill } from "./AdskeeperBalancePill";
 import { AdminAvatar } from "./AdminAvatar";
 import { GlobalSearch } from "./GlobalSearch";
 import {
@@ -119,6 +120,7 @@ export function AdminShell({
           <GlobalSearch inputRef={deskSearchRef} showKbd />
         </div>
         <div className="adm-top-actions">
+          <AdskeeperBalancePill />
           <AdminThemeToggle />
           <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
             <BellIcon className="h-5 w-5" />
@@ -191,6 +193,7 @@ export function AdminShell({
                 </button>
               )}
               {brand}
+              <AdskeeperBalancePill />
               <AdminThemeToggle />
               <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
                 <BellIcon className="h-[19px] w-[19px]" />
