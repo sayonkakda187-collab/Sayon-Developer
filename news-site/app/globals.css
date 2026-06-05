@@ -1343,7 +1343,8 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-ai-error p { margin-bottom: 12px; }
 
 /* Model picker (in the modal head) + editor edit-mode controls. */
-.adm-ai-headtools { display: flex; align-items: center; gap: 10px; }
+.adm-ai-headtools { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.adm-ai-usetop { white-space: nowrap; }
 .adm-ai-modelpick { display: inline-flex; align-items: center; gap: 7px; }
 .adm-ai-modelpick-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--adm-muted-2); }
 .adm-ai-modelpick .adm-input { width: auto; min-width: 0; padding: 7px 10px; font-size: 12.5px; }
@@ -1617,6 +1618,11 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   }
   /* Wider custom modals collapse to the full sheet width. */
   .adm-ai-modal, .adm-share-modal, .adm-crop-modal { max-width: 100%; }
+  /* AI panels: stack the header (title row, then a right-aligned tools row) so the
+     top "Use as draft" + model picker never crowd or overlap the title/close. */
+  .adm-ai-modal .adm-modal-head { flex-wrap: wrap; }
+  .adm-ai-modal .adm-ai-title { flex: 1 1 100%; }
+  .adm-ai-modal .adm-ai-headtools { width: 100%; justify-content: flex-end; }
   /* Sticky modal footers get safe-area padding so buttons clear the home bar. */
   .adm-modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
 

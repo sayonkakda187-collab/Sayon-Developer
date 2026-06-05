@@ -123,6 +123,17 @@ export function AiAssistModal({
           </div>
           <div className="adm-ai-headtools">
             <AiModelPicker value={model} onChange={setModel} disabled={phase === "loading"} />
+            {phase === "ready" && result && (
+              <button
+                type="button"
+                className="adm-btn-primary adm-ai-usetop"
+                onClick={() => applyAsDraft(result.headlines[0])}
+                title="Open the editor pre-filled with this draft (unsaved — nothing is published)"
+              >
+                <PencilIcon className="h-4 w-4" />
+                Use as draft
+              </button>
+            )}
             <button type="button" className="adm-iconbtn" aria-label="Close" onClick={onClose}>
               <CloseIcon className="h-5 w-5" />
             </button>
