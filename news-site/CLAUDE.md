@@ -198,10 +198,12 @@ pick a published article** (server action `listPublishedArticlesForShare`: searc
 time** via the existing `publishArticleNow` (Graph path) with **live per-page
 status** (posting/✓/✗) so one failure never blocks the rest, a summary, and a
 success screen. The detailed **Pages manager** (grouped table, per-page
-refresh/disconnect, category groups) and the **runner Sessions manager** stay
-rendered below, unchanged. `ConnectModal` was extracted to
-`FacebookConnectModal.tsx` and is shared by the flow + the manager. The
-per-article editor panel (`ArticleFacebookPanel`) is also unchanged.
+refresh/disconnect, category groups) stays rendered below, unchanged.
+`ConnectModal` was extracted to `FacebookConnectModal.tsx` and is shared by the
+flow + the manager. The per-article editor panel (`ArticleFacebookPanel`) is also
+unchanged. The browser-**Sessions** capture card was removed from the Facebook
+tab per request; the runner backend (`lib/fbRunner.ts` + its server actions)
+remains for the article editor's optional runner-posting options.
 
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
