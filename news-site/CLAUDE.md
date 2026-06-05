@@ -219,7 +219,8 @@ reasonable posting volume + original content are the real protection.
 **Server-side scheduling (fires while offline):** Step 2 offers **Post now** or
 **Schedule**. Scheduling writes `ScheduledPost` rows (status `pending`, optional
 `caption`, `scheduledFor` in UTC) via `scheduleArticleShares`; the existing
-**Vercel Cron** `/api/cron/facebook-post` (now **every 5 min** in `vercel.json`)
+**Vercel Cron** `/api/cron/facebook-post` (`vercel.json`; **daily by default** for
+Hobby compatibility — set to `*/5 * * * *` on Pro for at-the-minute firing)
 drains due rows, **atomically claims** each (`pending → posting` via `updateMany`,
 so it never double-posts even if runs overlap), posts via the Graph API with the
 stored page token + caption, and marks `posted` (+`graphPostId`) / `failed`
@@ -231,8 +232,10 @@ Immediate posting (incl. the multi-page delay) is unchanged.
 - **Env:** set **`CRON_SECRET`** in Vercel — the cron is **fail-closed** (refuses
   to run in production without it; Vercel Cron sends it as `Authorization:
   Bearer`).
-- ⚠️ **Frequent cron needs Vercel Pro.** Hobby caps cron at **once per day** — on
-  Hobby, change the schedule back to daily (e.g. `0 14 * * *`) or upgrade.
+- ⚠️ **Frequent cron needs Vercel Pro.** Hobby **rejects sub-daily cron at deploy
+  time**, so `vercel.json` ships the daily `0 14 * * *` (deploys everywhere). For
+  scheduled posts to fire at the chosen minute, **upgrade to Pro and set
+  `*/5 * * * *`** — until then the cron only drains due posts once/day.
 - **Migration:** `20260605120000_scheduled_post_caption` adds
   `ScheduledPost.caption` (auto-applies via `prisma migrate deploy`).
 - Honest: scheduling relies on Vercel Cron + a **long-lived** page token; if the
