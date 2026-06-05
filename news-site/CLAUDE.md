@@ -557,8 +557,14 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
   `widget-custom-report` **directly** with the token — skipping the auth/login
   step entirely (token takes priority over login+password). The `Authorization`
   header format is tried **`Bearer <token>` then raw `<token>`** on a 401/403, and
-  the working variant is remembered. **Test connection** (token mode) runs a small
-  `today` report and shows the working header + sample revenue, or the **exact
+  the working variant is remembered. **Metric names are negotiated** (`negotiateMetrics`)
+  — the default `metrics` set is sent first; on `VALIDATION_WRONG_PARAM_METRICS`
+  the accepted name/casing per metric is probed (a baseline, then groups in
+  parallel) and cached, self-healing if a combo is later rejected. Only
+  impressions/clicks/revenue are required — CTR/eCPM/CPC are recomputed in
+  `buildEarnings`, and `pick()` maps whatever revenue field returns → Revenue.
+  **Test connection** (token mode) runs a small `today` report and shows the
+  working header + sample revenue/impressions + the metrics used, or the **exact
   HTTP status + raw response body** (never swallowed) to forward to AdsKeeper
   support. `ADSKEEPER_AUTH_PATH` is **not** required for token mode.
 - **⚠️ Auth path (only undocumented bit, login mode):** the help center doesn't

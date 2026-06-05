@@ -25,7 +25,22 @@ import type { AdskeeperEarnings, EarningsRange, EarningsResult, AuthProbe } from
 const API_BASE = (process.env.ADSKEEPER_API_BASE || "https://api.adskeeper.com/v1").replace(/\/+$/, "");
 const REPORT_PATH = process.env.ADSKEEPER_REPORT_PATH || "publishers/{authId}/widget-custom-report";
 const TIMEZONE = process.env.ADSKEEPER_TIMEZONE || "Asia/Phnom_Penh";
-const METRICS = "impressions,clicks,ctr,wage,eCpm,cpc";
+// Default metric set (sent first). If the account rejects it with
+// VALIDATION_WRONG_PARAM_METRICS we negotiate the accepted names (negotiateMetrics).
+const DEFAULT_METRICS = "impressions,clicks,ctr,wage,eCpm,cpc";
+// Per metric: ordered candidate API names/casings to probe. The API returns a
+// generic "wrong metrics" error (not which one), so we confirm a baseline then
+// add one group at a time, keeping the first variant that returns 200. CTR/eCPM/
+// CPC are bonus — buildEarnings recomputes them from totals.
+const METRIC_CANDIDATES: string[][] = [
+  ["impressions", "realShows", "shows", "views", "imps"],
+  ["clicks", "click"],
+  ["ctr", "CTR"],
+  ["wage", "revenue", "earnings", "income", "amount", "payout", "profit"],
+  ["eCpm", "ecpm", "eCPM"],
+  ["cpc", "avgCpc", "CPC"],
+];
+let cachedMetrics: string | null = null;
 
 const RANGE_LABEL: Record<EarningsRange, string> = {
   today: "Today",
@@ -231,16 +246,67 @@ async function resolveAuth(creds: AdskeeperCreds, force = false): Promise<{ toke
 }
 
 // ── reporting ────────────────────────────────────────────────────────────────
-function reportUrl(authId: string, dimension: string, interval: string): string {
+function reportUrl(authId: string, dimension: string, interval: string, metrics: string, perPage = "1000"): string {
   const params = new URLSearchParams({
     dateInterval: interval,
     dimensions: dimension,
-    metrics: METRICS,
-    perPage: "1000",
+    metrics,
+    perPage,
     timeZone: TIMEZONE,
   });
   const path = REPORT_PATH.replace(/\{authId\}/g, encodeURIComponent(authId)).replace(/^\/+/, "");
   return `${API_BASE}/${path}?${params.toString()}`;
+}
+
+/** True when AdsKeeper rejected the request specifically for the metrics param. */
+function isMetricsError(res: FetchResult): boolean {
+  return res.status === 400 && (res.text || "").toUpperCase().includes("METRIC");
+}
+
+/**
+ * Discover the `metrics` names this account accepts (cached in-process). Only
+ * probes when the default set is rejected with a metrics-validation error:
+ * confirm a baseline (impressions), then find each group's accepted variant —
+ * the groups run concurrently to keep it fast. Returns the comma-joined set.
+ */
+async function negotiateMetrics(authId: string, token: string): Promise<string> {
+  if (cachedMetrics) return cachedMetrics;
+  const tryMetrics = (metrics: string) => tokenGet(reportUrl(authId, "date", "today", metrics, "1"), token);
+
+  // Fast path: the full intended set.
+  const full = await tryMetrics(DEFAULT_METRICS);
+  if (full.ok) {
+    cachedMetrics = DEFAULT_METRICS;
+    return DEFAULT_METRICS;
+  }
+  // Not a metrics problem (auth / authId / other) → surface the real error.
+  if (!isMetricsError(full)) return DEFAULT_METRICS;
+
+  // 1. Baseline: which impressions name is accepted (sequential).
+  let baseline: string | null = null;
+  for (const cand of METRIC_CANDIDATES[0]) {
+    const r = await tryMetrics(cand);
+    if (r.ok) { baseline = cand; break; }
+    if (!isMetricsError(r)) return DEFAULT_METRICS;
+  }
+  if (!baseline) {
+    cachedMetrics = "impressions";
+    return cachedMetrics;
+  }
+
+  // 2. Other groups, probed concurrently as `baseline,<candidate>`.
+  const findVariant = async (cands: string[]): Promise<string | null> => {
+    for (const cand of cands) {
+      const r = await tryMetrics(`${baseline},${cand}`);
+      if (r.ok) return cand;
+      if (!isMetricsError(r)) return null;
+    }
+    return null;
+  };
+  const found = await Promise.all(METRIC_CANDIDATES.slice(1).map(findVariant));
+  const accepted = [baseline, ...found.filter((x): x is string => !!x)];
+  cachedMetrics = accepted.join(",");
+  return cachedMetrics;
 }
 
 function ensureReportOk(res: FetchResult & { variant?: HeaderVariant; triedBoth?: boolean }): void {
@@ -270,11 +336,14 @@ async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
     if (!authId) {
       throw new AdskeeperError("AdsKeeper Client ID (idAuth) is required for token mode — add it in Settings.");
     }
-    const dateRes = await tokenGet(reportUrl(authId, "date", interval), creds.apiKey);
+    const metrics = await negotiateMetrics(authId, creds.apiKey);
+    const dateRes = await tokenGet(reportUrl(authId, "date", interval, metrics), creds.apiKey);
+    // Self-heal: a stale negotiated set → clear it so the next call re-negotiates.
+    if (!dateRes.ok && isMetricsError(dateRes) && cachedMetrics !== DEFAULT_METRICS) cachedMetrics = null;
     ensureReportOk(dateRes);
     let siteRows: Record<string, unknown>[] = [];
     try {
-      const siteRes = await tokenGet(reportUrl(authId, "domain", interval), creds.apiKey);
+      const siteRes = await tokenGet(reportUrl(authId, "domain", interval, metrics), creds.apiKey);
       if (siteRes.ok) siteRows = rowsOf(siteRes.json);
     } catch {
       /* breakdown is optional */
@@ -288,8 +357,9 @@ async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
   if (!idAuth) {
     throw new AdskeeperError("AdsKeeper Client ID (idAuth) is required — add it in Settings, or use login + password.");
   }
+  const metrics = await negotiateMetrics(idAuth, token);
   const get = (dimension: string, tok: string) =>
-    fetchJson(reportUrl(idAuth as string, dimension, interval), {
+    fetchJson(reportUrl(idAuth as string, dimension, interval, metrics), {
       method: "GET",
       headers: { Authorization: `Bearer ${tok}`, Accept: "application/json" },
     });
@@ -298,6 +368,7 @@ async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
     ({ token, idAuth } = await resolveAuth(creds, true)); // token expired → re-auth once
     dateRes = await get("date", token);
   }
+  if (!dateRes.ok && isMetricsError(dateRes) && cachedMetrics !== DEFAULT_METRICS) cachedMetrics = null;
   ensureReportOk(dateRes);
   let siteRows: Record<string, unknown>[] = [];
   try {
@@ -388,14 +459,15 @@ export async function probeAuth(): Promise<AuthProbe> {
     const authId = creds.clientId;
     if (!authId) return { ok: false, mode: "token", error: "Add your Client ID (idAuth, e.g. 873028) to use a ready token." };
     try {
-      const probeUrl =
-        `${API_BASE}/${REPORT_PATH.replace(/\{authId\}/g, encodeURIComponent(authId)).replace(/^\/+/, "")}?` +
-        new URLSearchParams({ dateInterval: "today", dimensions: "date", metrics: "impressions,wage", perPage: "10", timeZone: TIMEZONE }).toString();
-      const probe = await tokenGet(probeUrl, creds.apiKey);
+      const metrics = await negotiateMetrics(authId, creds.apiKey);
+      const probe = await tokenGet(reportUrl(authId, "date", "today", metrics, "10"), creds.apiKey);
       if (probe.ok) {
-        const sampleRevenue = rowsOf(probe.json).reduce((s, r) => s + num(pick(r, ["wage", "revenue", "income", "earnings"])), 0);
-        return { ok: true, mode: "token", headerVariant: probe.variant, authId, sampleRevenue, currency: process.env.ADSKEEPER_CURRENCY || "USD" };
+        const rows = rowsOf(probe.json);
+        const sampleRevenue = rows.reduce((s, r) => s + num(pick(r, ["wage", "revenue", "income", "earnings", "amount", "payout", "profit"])), 0);
+        const sampleImpressions = rows.reduce((s, r) => s + num(pick(r, ["impressions", "realShows", "shows", "views", "imps"])), 0);
+        return { ok: true, mode: "token", headerVariant: probe.variant, authId, sampleRevenue, sampleImpressions, metricsUsed: metrics, currency: process.env.ADSKEEPER_CURRENCY || "USD" };
       }
+      if (isMetricsError(probe) && cachedMetrics !== DEFAULT_METRICS) cachedMetrics = null; // re-negotiate next time
       return {
         ok: false,
         mode: "token",
@@ -404,6 +476,7 @@ export async function probeAuth(): Promise<AuthProbe> {
         responseBody: (probe.text || "").trim().slice(0, 1500) || "(empty response body)",
         headerVariant: probe.variant,
         authId,
+        metricsUsed: metrics,
       };
     } catch (e) {
       const err = e instanceof AdskeeperError ? e : null;
@@ -441,6 +514,8 @@ const TTL_MS = 30 * 60 * 1000;
 export function clearEarningsCache(): void {
   CACHE.clear();
   tokenCache = null;
+  cachedMetrics = null;
+  workingTokenHeader = null;
 }
 
 /** Cached earnings for a range. `force` bypasses the cache (Refresh button). */
