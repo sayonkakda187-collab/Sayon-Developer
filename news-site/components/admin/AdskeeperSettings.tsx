@@ -244,8 +244,15 @@ export function AdskeeperSettings({ status }: { status: Status }) {
                     ) : null}
                     .{" "}
                     {typeof probe.sampleRevenue === "number" ? (
-                      <>Sample revenue (today): <code className="adm-fb-code">{probe.currency ?? "USD"} {probe.sampleRevenue.toFixed(2)}</code>. </>
+                      <>
+                        Today — revenue <code className="adm-fb-code">{probe.currency ?? "USD"} {probe.sampleRevenue.toFixed(2)}</code>
+                        {typeof probe.sampleImpressions === "number" ? (
+                          <>, impressions <code className="adm-fb-code">{Math.round(probe.sampleImpressions).toLocaleString("en-US")}</code></>
+                        ) : null}
+                        .{" "}
+                      </>
                     ) : null}
+                    {probe.metricsUsed ? <>Metrics: <code className="adm-fb-code">{probe.metricsUsed}</code>. </> : null}
                   </>
                 ) : probe.mode === "login" && probe.authPath ? (
                   <>Auth path: <code className="adm-fb-code">{probe.authPath}</code>. </>
@@ -262,6 +269,9 @@ export function AdskeeperSettings({ status }: { status: Status }) {
                     <> (tried header <code className="adm-fb-code">{probe.headerVariant === "bearer" ? "Bearer" : "raw"}</code>)</>
                   ) : null}
                 </p>
+                {probe.metricsUsed ? (
+                  <p style={{ margin: "6px 0 0" }}>Sent metrics: <code className="adm-fb-code">{probe.metricsUsed}</code></p>
+                ) : null}
                 {probe.tried?.length ? (
                   <p style={{ margin: "6px 0 0" }}>
                     Tried:{" "}

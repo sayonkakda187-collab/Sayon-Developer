@@ -46,6 +46,8 @@ export type AuthProbe =
       authId: string | null;
       headerVariant?: "bearer" | "raw"; // token mode: which Authorization header worked
       sampleRevenue?: number; // token mode: revenue from the small probe report
+      sampleImpressions?: number; // token mode: impressions from the probe report
+      metricsUsed?: string; // token mode: the accepted metrics that were sent
       currency?: string;
     }
   | {
@@ -57,6 +59,7 @@ export type AuthProbe =
       responseBody?: string; // token mode: exact response body (for support)
       headerVariant?: "bearer" | "raw";
       authId?: string | null;
+      metricsUsed?: string; // token mode: the metrics that were sent
     };
 
 export const EARNINGS_RANGES: { id: EarningsRange; label: string }[] = [
