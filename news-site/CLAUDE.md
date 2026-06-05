@@ -552,8 +552,17 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
   recomputed from summed totals. **30-min earnings cache** (Refresh forces fresh;
   saving creds clears it). Graceful states: not-configured, 401/403 → reconnect,
   429 → rate-limit, no-data, network. **Only ever shows real returned data.**
-- **⚠️ Auth path (only undocumented bit):** the help center doesn't publish the
-  auth-function URL. `authenticate()` tries a small candidate set (`auth`,
+- **Direct-token mode (primary, no auth call):** when a **token + Client ID
+  (idAuth)** are saved, the earnings fetch + Test connection call
+  `widget-custom-report` **directly** with the token — skipping the auth/login
+  step entirely (token takes priority over login+password). The `Authorization`
+  header format is tried **`Bearer <token>` then raw `<token>`** on a 401/403, and
+  the working variant is remembered. **Test connection** (token mode) runs a small
+  `today` report and shows the working header + sample revenue, or the **exact
+  HTTP status + raw response body** (never swallowed) to forward to AdsKeeper
+  support. `ADSKEEPER_AUTH_PATH` is **not** required for token mode.
+- **⚠️ Auth path (only undocumented bit, login mode):** the help center doesn't
+  publish the auth-function URL. `authenticate()` tries a small candidate set (`auth`,
   `token`, `auth/login`, `login`, `publishers/auth`; POST then GET) and locks onto
   whichever returns a token — or, set **`ADSKEEPER_AUTH_PATH`** /
   **`ADSKEEPER_AUTH_METHOD`** to pin it. The Settings **"Test connection"** button

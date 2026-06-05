@@ -39,8 +39,25 @@ export type EarningsResult =
 
 /** Result of the Settings "Test connection" probe (never carries the token). */
 export type AuthProbe =
-  | { ok: true; mode: "login" | "token"; authPath?: string; authId: string | null }
-  | { ok: false; mode: "login" | "token" | "none"; error: string; tried?: string[] };
+  | {
+      ok: true;
+      mode: "login" | "token";
+      authPath?: string;
+      authId: string | null;
+      headerVariant?: "bearer" | "raw"; // token mode: which Authorization header worked
+      sampleRevenue?: number; // token mode: revenue from the small probe report
+      currency?: string;
+    }
+  | {
+      ok: false;
+      mode: "login" | "token" | "none";
+      error: string;
+      tried?: string[]; // login mode: auth endpoints tried
+      httpStatus?: number; // token mode: exact HTTP status AdsKeeper returned
+      responseBody?: string; // token mode: exact response body (for support)
+      headerVariant?: "bearer" | "raw";
+      authId?: string | null;
+    };
 
 export const EARNINGS_RANGES: { id: EarningsRange; label: string }[] = [
   { id: "today", label: "Today" },

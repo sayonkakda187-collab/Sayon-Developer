@@ -45,11 +45,15 @@ const RANGE_INTERVAL: Record<EarningsRange, string> = {
 export class AdskeeperError extends Error {
   readonly expired: boolean;
   readonly tried?: string[];
-  constructor(message: string, opts?: { expired?: boolean; tried?: string[] }) {
+  readonly status?: number;
+  readonly body?: string;
+  constructor(message: string, opts?: { expired?: boolean; tried?: string[]; status?: number; body?: string }) {
     super(message);
     this.name = "AdskeeperError";
     this.expired = opts?.expired ?? false;
     this.tried = opts?.tried;
+    this.status = opts?.status;
+    this.body = opts?.body;
   }
 }
 
@@ -83,7 +87,9 @@ function rowsOf(json: unknown): Record<string, unknown>[] {
   return [];
 }
 
-async function fetchJson(url: string, init: RequestInit, timeoutMs = 15000): Promise<{ status: number; ok: boolean; json: unknown }> {
+type FetchResult = { status: number; ok: boolean; json: unknown; text: string };
+
+async function fetchJson(url: string, init: RequestInit, timeoutMs = 15000): Promise<FetchResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -98,13 +104,39 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs = 15000): Pro
   } finally {
     clearTimeout(timer);
   }
+  // Capture the raw body so callers can surface the EXACT response (for support).
+  const text = await res.text().catch(() => "");
   let json: unknown = null;
   try {
-    json = await res.json();
+    json = text ? JSON.parse(text) : null;
   } catch {
-    /* non-JSON → callers use status */
+    /* non-JSON → callers use status/text */
   }
-  return { status: res.status, ok: res.ok, json };
+  return { status: res.status, ok: res.ok, json, text };
+}
+
+// ── direct-token mode: call the report with the saved token, NO auth step ─────
+type HeaderVariant = "bearer" | "raw";
+function authHeader(token: string, v: HeaderVariant): string {
+  return v === "bearer" ? `Bearer ${token}` : token;
+}
+// AdsKeeper's docs are vague on the header format, so we try "Bearer <token>"
+// first, then the raw token on a 401/403, and remember whichever the API accepts.
+let workingTokenHeader: HeaderVariant | null = null;
+
+async function tokenGet(url: string, token: string): Promise<FetchResult & { variant: HeaderVariant; triedBoth: boolean }> {
+  const primary: HeaderVariant = workingTokenHeader ?? "bearer";
+  const secondary: HeaderVariant = primary === "bearer" ? "raw" : "bearer";
+  const a = await fetchJson(url, { method: "GET", headers: { Authorization: authHeader(token, primary), Accept: "application/json" } });
+  if (a.status !== 401 && a.status !== 403) {
+    if (a.ok) workingTokenHeader = primary;
+    return { ...a, variant: primary, triedBoth: false };
+  }
+  // 401/403 with the primary header → try the other variant.
+  const b = await fetchJson(url, { method: "GET", headers: { Authorization: authHeader(token, secondary), Accept: "application/json" } });
+  if (b.ok) workingTokenHeader = secondary;
+  if (b.status !== 401 && b.status !== 403) return { ...b, variant: secondary, triedBoth: true };
+  return { ...a, variant: primary, triedBoth: true }; // both rejected → report the primary (documented) attempt
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -211,43 +243,62 @@ function reportUrl(authId: string, dimension: string, interval: string): string 
   return `${API_BASE}/${path}?${params.toString()}`;
 }
 
-function ensureOk(res: { status: number; ok: boolean; json: unknown }): void {
-  if (res.status === 401 || res.status === 403) {
-    throw new AdskeeperError("AdsKeeper token expired or invalid — reconnect in Settings.", { expired: true });
-  }
+function ensureReportOk(res: FetchResult & { variant?: HeaderVariant; triedBoth?: boolean }): void {
+  if (res.ok) return;
+  const body = (res.text || "").trim().slice(0, 800);
   if (res.status === 429) {
-    throw new AdskeeperError("AdsKeeper rate limit reached — wait a few minutes and try again.");
+    throw new AdskeeperError("AdsKeeper rate limit reached — wait a few minutes and try again.", { status: 429, body });
   }
-  if (!res.ok) {
-    const msg = res.json && typeof res.json === "object"
-      ? String(pick(res.json as Record<string, unknown>, ["error", "message", "errorMessage", "detail"]) ?? "")
-      : "";
-    throw new AdskeeperError(`AdsKeeper report failed (HTTP ${res.status})${msg ? `: ${msg}` : ""}. Verify the endpoint/credentials in Settings.`);
-  }
+  // Surface the EXACT status + response body (don't swallow) so a failing call
+  // can be forwarded to AdsKeeper support.
+  const variantNote = res.variant ? ` [header: ${res.variant === "bearer" ? "Bearer" : "raw"}${res.triedBoth ? ", both tried" : ""}]` : "";
+  throw new AdskeeperError(
+    `AdsKeeper report failed — HTTP ${res.status}${variantNote}${body ? `: ${body}` : ""}`,
+    { expired: res.status === 401 || res.status === 403, status: res.status, body },
+  );
 }
 
 async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
   const creds = await getAdskeeperCreds();
+  const interval = RANGE_INTERVAL[range];
+
+  // ── DIRECT-TOKEN MODE (priority) ── a saved token + Client ID → call the
+  // report endpoint DIRECTLY with the token (NO auth/login step). Tries the
+  // Bearer header first, then the raw token on a 401/403.
+  if (creds.apiKey) {
+    const authId = creds.clientId;
+    if (!authId) {
+      throw new AdskeeperError("AdsKeeper Client ID (idAuth) is required for token mode — add it in Settings.");
+    }
+    const dateRes = await tokenGet(reportUrl(authId, "date", interval), creds.apiKey);
+    ensureReportOk(dateRes);
+    let siteRows: Record<string, unknown>[] = [];
+    try {
+      const siteRes = await tokenGet(reportUrl(authId, "domain", interval), creds.apiKey);
+      if (siteRes.ok) siteRows = rowsOf(siteRes.json);
+    } catch {
+      /* breakdown is optional */
+    }
+    return buildEarnings(range, rowsOf(dateRes.json), siteRows, dateRes.json);
+  }
+
+  // ── LOGIN + PASSWORD MODE (fallback) ── exchange creds for a token via the
+  // auth function, then call the report with Bearer.
   let { token, idAuth } = await resolveAuth(creds);
   if (!idAuth) {
     throw new AdskeeperError("AdsKeeper Client ID (idAuth) is required — add it in Settings, or use login + password.");
   }
-  const interval = RANGE_INTERVAL[range];
   const get = (dimension: string, tok: string) =>
     fetchJson(reportUrl(idAuth as string, dimension, interval), {
       method: "GET",
       headers: { Authorization: `Bearer ${tok}`, Accept: "application/json" },
     });
-
-  // Date-grouped report → daily chart + totals.
   let dateRes = await get("date", token);
   if ((dateRes.status === 401 || dateRes.status === 403) && creds.login && creds.password) {
     ({ token, idAuth } = await resolveAuth(creds, true)); // token expired → re-auth once
     dateRes = await get("date", token);
   }
-  ensureOk(dateRes);
-
-  // Domain-grouped report → per-website breakdown (optional; tolerate failure).
+  ensureReportOk(dateRes);
   let siteRows: Record<string, unknown>[] = [];
   try {
     const siteRes = await get("domain", token);
@@ -255,7 +306,6 @@ async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
   } catch {
     /* breakdown is optional */
   }
-
   return buildEarnings(range, rowsOf(dateRes.json), siteRows, dateRes.json);
 }
 
@@ -330,6 +380,45 @@ function buildEarnings(
  *  without ever returning the token. */
 export async function probeAuth(): Promise<AuthProbe> {
   const creds = await getAdskeeperCreds();
+
+  // DIRECT-TOKEN MODE (priority) — a small report call (today) with the saved
+  // token; returns the working header variant + sample revenue, or the EXACT
+  // HTTP status + response body so it can be forwarded to AdsKeeper support.
+  if (creds.apiKey) {
+    const authId = creds.clientId;
+    if (!authId) return { ok: false, mode: "token", error: "Add your Client ID (idAuth, e.g. 873028) to use a ready token." };
+    try {
+      const probeUrl =
+        `${API_BASE}/${REPORT_PATH.replace(/\{authId\}/g, encodeURIComponent(authId)).replace(/^\/+/, "")}?` +
+        new URLSearchParams({ dateInterval: "today", dimensions: "date", metrics: "impressions,wage", perPage: "10", timeZone: TIMEZONE }).toString();
+      const probe = await tokenGet(probeUrl, creds.apiKey);
+      if (probe.ok) {
+        const sampleRevenue = rowsOf(probe.json).reduce((s, r) => s + num(pick(r, ["wage", "revenue", "income", "earnings"])), 0);
+        return { ok: true, mode: "token", headerVariant: probe.variant, authId, sampleRevenue, currency: process.env.ADSKEEPER_CURRENCY || "USD" };
+      }
+      return {
+        ok: false,
+        mode: "token",
+        error: `AdsKeeper returned HTTP ${probe.status}${probe.triedBoth ? " (both header formats tried)" : ""}.`,
+        httpStatus: probe.status,
+        responseBody: (probe.text || "").trim().slice(0, 1500) || "(empty response body)",
+        headerVariant: probe.variant,
+        authId,
+      };
+    } catch (e) {
+      const err = e instanceof AdskeeperError ? e : null;
+      return {
+        ok: false,
+        mode: "token",
+        error: err?.message ?? (e instanceof Error ? e.message : "Token call failed."),
+        httpStatus: err?.status,
+        responseBody: err?.body,
+        authId,
+      };
+    }
+  }
+
+  // LOGIN + PASSWORD MODE (fallback) — exchange creds for a token via the auth fn.
   if (creds.login && creds.password) {
     try {
       const got = await authenticate(creds.login, creds.password);
@@ -338,15 +427,6 @@ export async function probeAuth(): Promise<AuthProbe> {
     } catch (e) {
       const err = e instanceof AdskeeperError ? e : null;
       return { ok: false, mode: "login", error: err?.message ?? "AdsKeeper login failed.", tried: err?.tried };
-    }
-  }
-  if (creds.apiKey) {
-    if (!creds.clientId) return { ok: false, mode: "token", error: "Add your Client ID (idAuth) to use a ready token." };
-    try {
-      await fetchReport("today");
-      return { ok: true, mode: "token", authId: creds.clientId };
-    } catch (e) {
-      return { ok: false, mode: "token", error: e instanceof Error ? e.message : "Token validation failed." };
     }
   }
   return { ok: false, mode: "none", error: "AdsKeeper is not configured." };
