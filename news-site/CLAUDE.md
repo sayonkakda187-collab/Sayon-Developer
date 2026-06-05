@@ -205,6 +205,17 @@ unchanged. The browser-**Sessions** capture card was removed from the Facebook
 tab per request; the runner backend (`lib/fbRunner.ts` + its server actions)
 remains for the article editor's optional runner-posting options.
 
+**Spacing multi-page posts:** when sharing one article to several Pages, the flow
+posts **sequentially with a configurable gap** between pages — presets
+(None / 30s / 1m / 2m / 5m) or a custom seconds value, **default 1 min**, optional
+**±25% jitter** ("Vary a little"), remembered in `localStorage`. It shows a **live
+countdown** before each next page and a **Stop** button to cancel the remaining
+queue; one page failing never stops the rest. It is **client-driven** (the tab
+must stay open until it finishes) — chosen over a server-side queue for the live
+countdown/cancel UX; a single page selected posts immediately (no delay). Honest
+note: a delay **reduces** spam-flag risk but is a **courtesy, not a guarantee** —
+reasonable posting volume + original content are the real protection.
+
 **Architecture decision (do NOT replace with browser automation):** posting goes
 directly to `/{pageId}/feed` with that Page's own access token, so the target
 Page is **exact by construction** — there is no shared "logged-in session" or
