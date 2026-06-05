@@ -466,7 +466,7 @@ page to manage keys.
 ## AdsKeeper earnings (publisher REST API — MGID platform)
 
 A dashboard **"Ad Earnings · AdsKeeper"** panel showing **real** ad stats —
-revenue, impressions, clicks, CTR, eCPM, EPC — for a selectable range (Today / 7
+revenue, impressions, clicks, CTR, eCPM, CPC — for a selectable range (Today / 7
 / 30 days / This month), a **revenue-over-time** chart, a **per-website**
 breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
 (only when the API returns a balance). Self-fetching client panel
@@ -482,21 +482,25 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
   `ADSKEEPER_LOGIN` / `ADSKEEPER_PASSWORD` (or `ADSKEEPER_API_KEY` /
   `ADSKEEPER_CLIENT_ID`); **DB beats env**. Secrets are **server-side only**,
   never returned to the browser or logged. Settings UI: `AdskeeperSettings`.
-- **Calls:** `lib/adskeeper/client.ts` (server-only). Reporting via
-  `GET {base}/goodhits/clients/{idAuth}/statistics-reports?startDate&endDate&
-  dimensions=date,website&metrics=pageViews,clicks,ctr,revenue` → mapped to
-  revenue/impressions/clicks/CTR/eCPM/EPC + daily series + per-site + optional
-  payout balance. **30-min earnings cache** (Refresh forces fresh; saving creds
-  clears it). Graceful states: not-configured, 401/403 → reconnect, 404 → set
-  auth path, 429 → rate-limit, no-data, network. `mapReport()` tolerates field
-  variants (e.g. `pageViews`/`impressions`, `revenue`/`income`).
-  **Only ever shows real returned data — never estimates earnings.**
-- **⚠️ Wire-up note:** the help center edge-blocks bots, so the one string not
-  readable verbatim is the **auth function path + login field names**. It defaults
-  to `auth/login` (POST) and is env-overridable: `ADSKEEPER_AUTH_PATH` /
-  `ADSKEEPER_AUTH_METHOD` (also `ADSKEEPER_API_BASE` / `ADSKEEPER_REPORT_PATH`).
-  If login fails on preview, set those from the doc's auth example — one-line fix;
-  UI/caching/states are independent.
+- **Calls (documented endpoint):** `lib/adskeeper/client.ts` (server-only).
+  `GET {base}/publishers/{authId}/widget-custom-report?dateInterval=<today|
+  lastSeven|last30Days|thisMonth>&dimensions=<date|domain>&metrics=impressions,
+  clicks,ctr,wage,eCpm,cpc&perPage=1000&timeZone=Asia/Phnom_Penh`. **`wage` is the
+  revenue metric** (mapped → revenue). Two calls per range: `dimensions=date`
+  (daily chart + totals) and `dimensions=domain` (per-website). CTR/eCPM/CPC are
+  recomputed from summed totals. **30-min earnings cache** (Refresh forces fresh;
+  saving creds clears it). Graceful states: not-configured, 401/403 → reconnect,
+  429 → rate-limit, no-data, network. **Only ever shows real returned data.**
+- **⚠️ Auth path (only undocumented bit):** the help center doesn't publish the
+  auth-function URL. `authenticate()` tries a small candidate set (`auth`,
+  `token`, `auth/login`, `login`, `publishers/auth`; POST then GET) and locks onto
+  whichever returns a token — or, set **`ADSKEEPER_AUTH_PATH`** /
+  **`ADSKEEPER_AUTH_METHOD`** to pin it. The Settings **"Test connection"** button
+  (`testAdskeeperConnection` → `probeAuth`) reports which path worked + the
+  `idAuth`, without exposing the token. Note: this build environment's egress
+  policy blocks `api.adskeeper.com` (`host_not_allowed`), so candidates must be
+  probed from the deployed app, not locally. Other overrides:
+  `ADSKEEPER_API_BASE` / `ADSKEEPER_REPORT_PATH` / `ADSKEEPER_TIMEZONE`.
 - **DB migration:** none (reuses `AppSetting`). **Env:** `ADSKEEPER_LOGIN` /
   `ADSKEEPER_PASSWORD` (or `ADSKEEPER_API_KEY` / `ADSKEEPER_CLIENT_ID`) +
   `ENCRYPTION_KEY` (already required to encrypt secrets at rest).

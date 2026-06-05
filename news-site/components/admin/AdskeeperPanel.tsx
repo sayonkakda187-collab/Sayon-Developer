@@ -150,7 +150,7 @@ function EarningsView({ data }: { data: AdskeeperEarnings }) {
     { label: "Clicks", value: formatNumber(Math.round(t.clicks)) },
     { label: "CTR", value: `${t.ctr.toFixed(2)}%` },
     { label: "eCPM", value: money(t.ecpm, data.currency) },
-    { label: "EPC", value: money(t.epc, data.currency) },
+    { label: "CPC", value: money(t.cpc, data.currency) },
   ];
   const maxSite = Math.max(1, ...data.sites.map((s) => s.revenue));
 

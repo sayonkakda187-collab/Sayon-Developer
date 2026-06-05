@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { saveAdskeeperLogin, saveAdskeeperKey, saveAdskeeperClient } from "@/app/admin/settings-actions";
+import { testAdskeeperConnection } from "@/app/admin/adskeeper-actions";
+import type { AuthProbe } from "@/lib/adskeeper/types";
 import { CoinsIcon, CheckIcon } from "@/components/admin/icons";
 
 type Source = "db" | "env" | "none";
@@ -37,6 +39,23 @@ export function AdskeeperSettings({ status }: { status: Status }) {
   const [clientId, setClientId] = useState("");
   const [tokenSource, setTokenSource] = useState(status.tokenSource);
   const [clientSource, setClientSource] = useState(status.clientIdSource);
+
+  // Connection test (runs against AdsKeeper from the server; reports the auth path)
+  const [testing, setTesting] = useState(false);
+  const [probe, setProbe] = useState<AuthProbe | null>(null);
+
+  async function runTest() {
+    setTesting(true);
+    setProbe(null);
+    try {
+      const res = await testAdskeeperConnection();
+      setProbe(res);
+      if (res.ok) success(`AdsKeeper connected${res.authPath ? ` · auth: ${res.authPath}` : ""}.`);
+      else error(res.error);
+    } finally {
+      setTesting(false);
+    }
+  }
 
   const loginConfigured = loginSource !== "none" && passwordSource !== "none";
   const authMode: Status["authMode"] = loginConfigured ? "login" : tokenSource !== "none" ? "token" : "none";
@@ -198,6 +217,49 @@ export function AdskeeperSettings({ status }: { status: Status }) {
             <button type="button" className="adm-btn-ghost" onClick={() => saveClient(true)} disabled={pending}>Clear</button>
           )}
         </div>
+      </div>
+
+      {/* Test connection — reports which auth path worked (no secrets shown) */}
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--adm-bd)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" className="adm-btn-primary" onClick={runTest} disabled={testing || authMode === "none"}>
+            {testing ? <span className="adm-spinner" aria-hidden /> : null}
+            Test connection
+          </button>
+          <span className="adm-card-sub" style={{ marginTop: 0 }}>
+            Verifies your credentials against AdsKeeper and reports which auth path worked.
+          </span>
+        </div>
+        {probe && (
+          <div className="adm-trend-note" role="status" style={{ marginTop: 12 }}>
+            <p style={{ margin: 0 }}>
+              {probe.ok ? (
+                <>
+                  <strong style={{ color: "#16a34a" }}>Connected.</strong>{" "}
+                  {probe.mode === "login" && probe.authPath ? (
+                    <>Auth path: <code className="adm-fb-code">{probe.authPath}</code>. </>
+                  ) : null}
+                  {probe.authId ? (
+                    <>Account (idAuth): <code className="adm-fb-code">{probe.authId}</code>.</>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <strong>Not connected.</strong> {probe.error}
+                  {probe.tried?.length ? (
+                    <>
+                      <br />
+                      Tried:{" "}
+                      {probe.tried.map((t) => (
+                        <code key={t} className="adm-fb-code" style={{ marginRight: 4 }}>{t}</code>
+                      ))}
+                    </>
+                  ) : null}
+                </>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
       <p className="adm-field-hint" style={{ marginTop: 12 }}>
