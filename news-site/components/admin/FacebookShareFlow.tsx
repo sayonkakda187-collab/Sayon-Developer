@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   publishArticleNow,
   listPublishedArticlesForShare,
-  facebookRefreshPages,
   scheduleArticleShares,
   type ShareArticleItem,
 } from "@/app/admin/facebook-actions";
@@ -17,7 +16,6 @@ import type { FacebookPageView } from "./FacebookPagesManager";
 import {
   FacebookIcon,
   PlusIcon,
-  RefreshIcon,
   SearchIcon,
   CheckIcon,
   CalendarIcon,
@@ -108,10 +106,8 @@ function PageAvatar({ pageId, name, size = 40 }: { pageId: string; name: string;
  */
 export function FacebookShareFlow({
   pages,
-  connect,
 }: {
   pages: FacebookPageView[];
-  connect?: { appConfigured: boolean; userTokenSaved: boolean; userTokenExpiresAt: string | null };
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -121,7 +117,6 @@ export function FacebookShareFlow({
     () => (pages.length === 1 ? new Set([pages[0].id]) : new Set()),
   );
   const [showConnect, setShowConnect] = useState(false);
-  const [refreshingAll, setRefreshingAll] = useState(false);
 
   // Step 2 — article picker
   const [items, setItems] = useState<ShareArticleItem[]>([]);
@@ -240,16 +235,6 @@ export function FacebookShareFlow({
       }
       return next;
     });
-  }
-
-  async function onRefreshPages() {
-    setRefreshingAll(true);
-    const res = await facebookRefreshPages();
-    setRefreshingAll(false);
-    if (!res.ok) return error(res.error);
-    const { refreshed, added } = res.data;
-    success(added > 0 ? `Synced ${refreshed + added} Page${refreshed + added === 1 ? "" : "s"} (${added} new).` : `Refreshed ${refreshed} Page${refreshed === 1 ? "" : "s"}.`);
-    router.refresh();
   }
 
   function goToArticles() {
@@ -403,31 +388,6 @@ export function FacebookShareFlow({
 
   return (
     <div style={{ marginBottom: 22 }}>
-      <div className="adm-pagehead">
-        <div className="adm-page-h" style={{ marginBottom: 0 }}>
-          <h1>Share to Facebook</h1>
-          <p>
-            {step === "pages"
-              ? "Step 1 of 2 — choose the Page(s) to share an article to"
-              : "Step 2 of 2 — pick an article and post it"}
-          </p>
-        </div>
-        {step === "pages" && pages.length > 0 && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {connect?.userTokenSaved && (
-              <button type="button" className="adm-btn-ghost adm-head-cta" onClick={onRefreshPages} disabled={refreshingAll} title="Re-sync Pages from Facebook">
-                <RefreshIcon className={`h-[18px] w-[18px] ${refreshingAll ? "adm-spinning" : ""}`} />
-                {refreshingAll ? "Refreshing…" : "Refresh Pages"}
-              </button>
-            )}
-            <button type="button" className="adm-btn-ghost adm-head-cta" onClick={() => setShowConnect(true)}>
-              <PlusIcon className="h-[18px] w-[18px]" />
-              Connect New Page
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* ───────────────────────── STEP 1 — pages ───────────────────────── */}
       {step === "pages" && (
         pages.length === 0 ? (

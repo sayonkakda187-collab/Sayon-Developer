@@ -130,6 +130,8 @@ export function AdminShell({
         </div>
         <div className="adm-top-actions">
           <AdskeeperBalancePill />
+          {/* Mount point for page-specific top-bar actions (e.g. Facebook tab). */}
+          <span className="adm-top-actions-slot" />
           <AdminThemeToggle />
           <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
             <BellIcon className="h-5 w-5" />
@@ -226,6 +228,7 @@ export function AdminShell({
               )}
               {brand}
               <AdskeeperBalancePill />
+              <span className="adm-top-actions-slot" />
               <AdminThemeToggle />
               <Link href="/admin/comments" className="adm-iconbtn" aria-label="Notifications">
                 <BellIcon className="h-[19px] w-[19px]" />
