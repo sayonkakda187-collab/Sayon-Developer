@@ -612,6 +612,62 @@ ranked **flagged country list** (count + %), **overall or per-article**, with a
   with no geo header bucket as Unknown). Existing view tracking + the dashboard
   views chart are unchanged (the country upsert is additive).
 
+## AI image generation (Google Gemini / Imagen)
+
+Generate illustrations from a text prompt and use them on articles. Available as
+its own **"AI Images"** admin tab AND inside the article editor (generate a cover
+for the piece you're writing). All calls are **server-side** — the key never
+reaches the browser; only the resulting image does.
+
+> ⚠️ **NEWS-IMAGE SAFETY (shown in the UI + here):** this is a news site, so AI
+> images must **NOT** be presented as real photographs of real news events
+> (that's misinformation and risks ad-network approval). The generator UI shows a
+> caution and defaults the **style toward clearly-illustrative output**; use AI
+> images for **illustrations / concept art / stylized graphics** only. For real
+> events, the **Pexels stock-photo search remains the better choice** — it's
+> unchanged; AI images are an additional option, not a replacement.
+
+- **Provider (swappable):** `lib/imageGen.ts` (`server-only`) — one chokepoint
+  `generateImage(prompt, opts)` → `GeneratedImage[]` (base64). It auto-selects the
+  wire format from the model family: **Gemini** (`:generateContent`,
+  `responseModalities:["TEXT","IMAGE"]`, one image/call) or **Imagen**
+  (`:predict`, native `sampleCount` + `aspectRatio`). `isImageGenConfigured()`
+  gates a tidy setup state; a typed `ImageGenError` (auth/quota/safety/network/
+  parse/config) maps to HTTP + a friendly message. **Non-OK provider responses
+  surface Google's verbatim error** (so a wrong model id / quota / safety block is
+  actionable). To swap providers later, add another `generate*()` and branch.
+- **Key + model (env, server-side only):** `GEMINI_API_KEY` (also accepts
+  `IMAGE_API_KEY` / `GOOGLE_AI_API_KEY`). Get it free at **Google AI Studio →
+  https://aistudio.google.com/apikey** (no credit card). Optional
+  **`IMAGE_GEN_MODEL`** overrides the model (default `gemini-2.5-flash-image`; set
+  an `imagen-*` id to use the Imagen API). No DB migration — images live in
+  **Vercel Blob** via the existing upload route.
+- **Route:** `app/api/admin/generate-image/route.ts` (`requireAdmin`, `nodejs`,
+  `maxDuration=60`). GET → `{ configured }`; POST `{ prompt, aspectRatio, count,
+  style }` → `{ ok, images:[{ url:dataURL, mimeType }] }`.
+- **Admin tab** (`/admin/ai-images`, `AiImageGenerator`): prompt + aspect-ratio /
+  style / count controls, Generate, loading, and a results grid. Per image:
+  **Download**, **Save to media** (→ Blob via `/api/admin/upload` → copyable URL),
+  **Copy URL**, **Use in a new article** (saves to Blob, hands the URL to a new
+  draft's cover via a one-shot `sessionStorage` key, then opens the editor).
+  Recent generations stay in memory for the session (data URLs aren't persisted —
+  they'd blow `sessionStorage` quota). Nav: **footer group** (sidebar + mobile
+  drawer, next to Sites/Settings) — deliberately **not** in the 7-item phone
+  bottom bar to avoid crowding it.
+- **Editor integration** (`AiImageModal`, opened by **"Generate with AI"** next to
+  "Search free photos"): prompt → generate → pick a result → it's handed to the
+  **existing `CoverCropModal`** as a **data URL** (data URLs don't taint the crop
+  canvas), cropped to the OG ratio, uploaded to Blob, and set as `coverImage` —
+  the **same pipeline** as uploads/stock photos. The client helpers live in
+  `lib/imageGenClient.ts` (client-safe constants + `requestImages` +
+  `saveImageToBlob`), shared by the tab and the modal. The cropper, manual upload,
+  Pexels search, and `coverImage`/credit fields are all unchanged.
+- **Resilience:** quota/safety/auth/network errors show the real message; an
+  unset key shows "set up" (manual upload + stock still work). Responsive / PWA.
+  Generated Blob URLs are already allow-listed in `next.config.mjs` (same host as
+  cover uploads); the generator previews images via plain `<img>` (data/blob
+  URLs), so no `next/image` host config is needed.
+
 ## Multi-site foundation (database + admin structure only)
 
 Latent groundwork so additional news sites can be added **later** — **not** a
