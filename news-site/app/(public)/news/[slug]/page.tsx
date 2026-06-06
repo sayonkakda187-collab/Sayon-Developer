@@ -28,9 +28,10 @@ type ArticlePart = { type: "md"; content: string } | { type: "ad"; slot: "top" |
  *   • an EARLY slot right AFTER the first paragraph (so an ad is visible as the
  *     reader starts), and
  *   • the existing slot after the opening (~4th paragraph).
- * Both ads appear only on longer pieces (≥6 paragraphs) and stay ≥3 paragraphs
- * apart so they never stack; medium pieces (4–5) keep just the later slot;
- * short pieces (<4) get neither. Cuts never land inside a ``` code fence.
+ * The EARLY slot appears on (almost) every article — any post with ≥2
+ * paragraphs, so short stories get it too. The second slot is added only on long
+ * pieces (≥6 paragraphs) and kept ≥3 paragraphs below the first so they never
+ * stack. A single-paragraph post gets neither. Cuts never split a ``` code fence.
  */
 function buildArticleParts(content: string): ArticlePart[] {
   const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
@@ -47,17 +48,16 @@ function buildArticleParts(content: string): ArticlePart[] {
 
   let topCut = -1;
   let midCut = -1;
-  if (n >= 6) {
-    topCut = balancedCut(1); // after the first paragraph
-    midCut = balancedCut(4); // after the opening, ≥3 paragraphs later
-  } else if (n >= 4) {
-    midCut = balancedCut(3); // existing behaviour for medium articles
-  }
+  // Early slot after the first paragraph on (almost) every article; the second
+  // slot only on long pieces.
+  if (n >= 2) topCut = balancedCut(1);
+  if (n >= 6) midCut = balancedCut(4);
 
-  // Keep cuts strictly inside the body; drop the early one if the two would crowd.
+  // Keep cuts strictly inside the body; PRIORITISE the early slot and drop the
+  // later one if the two would crowd (they must stay ≥3 paragraphs apart).
   if (topCut < 1 || topCut >= n) topCut = -1;
   if (midCut < 1 || midCut >= n) midCut = -1;
-  if (topCut !== -1 && midCut !== -1 && midCut - topCut < 3) topCut = -1;
+  if (topCut !== -1 && midCut !== -1 && midCut - topCut < 3) midCut = -1;
 
   const cuts = [
     ...(topCut !== -1 ? [{ at: topCut, slot: "top" as const }] : []),
