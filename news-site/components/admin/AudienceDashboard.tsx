@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getAudienceStats } from "@/app/admin/audience-actions";
 import { WorldBubbleMap } from "./WorldBubbleMap";
-import { countryFlag, countryName } from "@/lib/countries";
+import { CountryFlag } from "./CountryFlag";
+import { countryColor, countryName } from "@/lib/countries";
 import { GlobeIcon } from "./icons";
 import { formatNumber } from "@/lib/site";
 
@@ -120,7 +121,15 @@ export function AudienceDashboard({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 16 }}>
             <SummaryTile label="Visitors" value={formatNumber(total)} sub={scopeLabel} />
             <SummaryTile label="Countries" value={formatNumber(stats.length)} sub={days ? `last ${days} days` : "all time"} />
-            <SummaryTile label="Top country" value={`${countryFlag(stats[0].countryCode)} ${countryName(stats[0].countryCode)}`} sub={`${formatNumber(stats[0].count)} · ${total ? Math.round((stats[0].count / total) * 100) : 0}%`} />
+            <SummaryTile
+              label="Top country"
+              value={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <CountryFlag code={stats[0].countryCode} width={24} /> {countryName(stats[0].countryCode)}
+                </span>
+              }
+              sub={`${formatNumber(stats[0].count)} · ${total ? Math.round((stats[0].count / total) * 100) : 0}%`}
+            />
           </div>
 
           <div className="adm-grid-2">
@@ -139,12 +148,12 @@ export function AudienceDashboard({
                   return (
                     <div key={s.countryCode} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--adm-bd)" }}>
                       <span style={{ width: 18, textAlign: "right", color: "var(--adm-muted-2)", fontSize: 11.5, flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                      <span style={{ fontSize: 18, width: 24, textAlign: "center", flex: "none" }} aria-hidden>{countryFlag(s.countryCode)}</span>
+                      <span style={{ width: 24, display: "inline-flex", justifyContent: "center", flex: "none" }}><CountryFlag code={s.countryCode} width={22} /></span>
                       <span style={{ flex: 1, minWidth: 0, fontWeight: 600, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13.5 }}>
                         {countryName(s.countryCode)}
                       </span>
                       <div className="adm-bar-track" style={{ flex: "0 0 80px", maxWidth: 80 }}>
-                        <div className="adm-bar-fill" style={{ width: `${Math.round((s.count / max) * 100)}%`, background: "rgb(var(--accent))" }} />
+                        <div className="adm-bar-fill" style={{ width: `${Math.round((s.count / max) * 100)}%`, background: countryColor(s.countryCode, i) }} />
                       </div>
                       <span style={{ flex: "none", width: 92, textAlign: "right", color: "var(--adm-muted)", fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>
                         <b style={{ color: "var(--adm-ink)" }}>{formatNumber(s.count)}</b> · {pct}%
@@ -161,7 +170,7 @@ export function AudienceDashboard({
   );
 }
 
-function SummaryTile({ label, value, sub }: { label: string; value: string; sub: string }) {
+function SummaryTile({ label, value, sub }: { label: string; value: ReactNode; sub: string }) {
   return (
     <div className="adm-card adm-card-pad" style={{ padding: "12px 14px" }}>
       <div className="adm-card-sub" style={{ marginTop: 0 }}>{label}</div>
