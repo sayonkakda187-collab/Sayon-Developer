@@ -19,30 +19,62 @@ import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
+type ArticlePart = { type: "md"; content: string } | { type: "ad"; slot: "top" | "mid" };
+
 /**
- * Split markdown after roughly the first 3 paragraphs so the in-article ad sits
- * between paragraphs once the reader has started the story (never above it or
- * mid-sentence). Returns null for short articles (fewer than 4 blocks) to avoid
- * crowding, and keeps fenced code blocks intact by only cutting where the ```
- * fences are balanced.
+ * Split the article body into segments interleaved with in-article ads, keeping
+ * the reader-first layout (headline + cover + opening render first — never an ad
+ * above the story):
+ *   • an EARLY slot right AFTER the first paragraph (so an ad is visible as the
+ *     reader starts), and
+ *   • the existing slot after the opening (~4th paragraph).
+ * Both ads appear only on longer pieces (≥6 paragraphs) and stay ≥3 paragraphs
+ * apart so they never stack; medium pieces (4–5) keep just the later slot;
+ * short pieces (<4) get neither. Cuts never land inside a ``` code fence.
  */
-function splitForMidAd(content: string): [string, string] | null {
-  const blocks = content.split(/\n{2,}/);
-  if (blocks.length < 4) return null;
+function buildArticleParts(content: string): ArticlePart[] {
+  const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
+  const n = blocks.length;
+  if (n === 0) return [{ type: "md", content }];
 
   const fenceCount = (s: string) => (s.match(/```/g) || []).length;
+  // Move a cut forward until the leading slice has balanced code fences; -1 = none.
+  const balancedCut = (idx: number): number => {
+    let i = idx;
+    while (i < n && fenceCount(blocks.slice(0, i).join("\n\n")) % 2 !== 0) i++;
+    return i < n ? i : -1;
+  };
 
-  // After the first ~3 paragraphs — readers have started the story — but never
-  // on the very last block.
-  let idx = Math.min(3, blocks.length - 1);
-
-  // If the cut would land inside a code fence, walk forward until balanced.
-  while (idx < blocks.length && fenceCount(blocks.slice(0, idx).join("\n\n")) % 2 !== 0) {
-    idx++;
+  let topCut = -1;
+  let midCut = -1;
+  if (n >= 6) {
+    topCut = balancedCut(1); // after the first paragraph
+    midCut = balancedCut(4); // after the opening, ≥3 paragraphs later
+  } else if (n >= 4) {
+    midCut = balancedCut(3); // existing behaviour for medium articles
   }
-  if (idx >= blocks.length) return null;
 
-  return [blocks.slice(0, idx).join("\n\n"), blocks.slice(idx).join("\n\n")];
+  // Keep cuts strictly inside the body; drop the early one if the two would crowd.
+  if (topCut < 1 || topCut >= n) topCut = -1;
+  if (midCut < 1 || midCut >= n) midCut = -1;
+  if (topCut !== -1 && midCut !== -1 && midCut - topCut < 3) topCut = -1;
+
+  const cuts = [
+    ...(topCut !== -1 ? [{ at: topCut, slot: "top" as const }] : []),
+    ...(midCut !== -1 ? [{ at: midCut, slot: "mid" as const }] : []),
+  ].sort((a, b) => a.at - b.at);
+
+  if (cuts.length === 0) return [{ type: "md", content }];
+
+  const parts: ArticlePart[] = [];
+  let prev = 0;
+  for (const c of cuts) {
+    parts.push({ type: "md", content: blocks.slice(prev, c.at).join("\n\n") });
+    parts.push({ type: "ad", slot: c.slot });
+    prev = c.at;
+  }
+  parts.push({ type: "md", content: blocks.slice(prev).join("\n\n") });
+  return parts;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -97,7 +129,7 @@ export default async function ArticlePage({ params }: Props) {
     </>
   );
 
-  const midSplit = splitForMidAd(article.content);
+  const parts = buildArticleParts(article.content);
 
   return (
     <main>
@@ -178,15 +210,19 @@ export default async function ArticlePage({ params }: Props) {
             {article.excerpt}
           </p>
 
-          {midSplit ? (
-            <>
-              <Markdown content={midSplit[0]} />
-              {/* IN-ARTICLE ad — between paragraphs, near the middle. */}
-              <AdSlot name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
-              <Markdown content={midSplit[1]} />
-            </>
-          ) : (
-            <Markdown content={article.content} />
+          {/* Body interleaved with in-article ads. EARLY slot right after the
+              first paragraph (visible as the reader starts), the existing slot
+              after the opening — both kept apart so they never stack; short
+              articles get fewer/none. The story always renders first; ads
+              lazy-load and collapse cleanly when unfilled. */}
+          {parts.map((p, i) =>
+            p.type === "md" ? (
+              <Markdown key={i} content={p.content} />
+            ) : p.slot === "top" ? (
+              <AdSlot key={i} name="IN_ARTICLE_TOP" widgetId={ADS.IN_ARTICLE_TOP} minHeight={300} />
+            ) : (
+              <AdSlot key={i} name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
+            ),
           )}
 
           {article.tags.length > 0 && (
