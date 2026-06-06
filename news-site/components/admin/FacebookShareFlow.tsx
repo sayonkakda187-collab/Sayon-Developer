@@ -61,8 +61,9 @@ function formatDuration(secs: number): string {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
-/** Page avatar: best-effort public Page picture with a tidy initials fallback. */
-function PageAvatar({ pageId, name, size = 40 }: { pageId: string; name: string; size?: number }) {
+/** Page avatar: the real Page picture (resolved server-side with the Page token
+ *  via the avatar proxy) over a tidy coloured-initial fallback. */
+function PageAvatar({ dbId, name, size = 40 }: { dbId: string; name: string; size?: number }) {
   const [imgOk, setImgOk] = useState(true);
   const initial = (name.trim()[0] ?? "?").toUpperCase();
   return (
@@ -75,7 +76,7 @@ function PageAvatar({ pageId, name, size = 40 }: { pageId: string; name: string;
         flex: "none",
         borderRadius: 999,
         overflow: "hidden",
-        background: avatarColor(pageId || name),
+        background: avatarColor(dbId || name),
         display: "inline-block",
       }}
     >
@@ -85,7 +86,7 @@ function PageAvatar({ pageId, name, size = 40 }: { pageId: string; name: string;
       {imgOk && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`https://graph.facebook.com/${encodeURIComponent(pageId)}/picture?type=square&width=${size * 2}&height=${size * 2}`}
+          src={`/api/admin/facebook/${encodeURIComponent(dbId)}/picture?size=${size * 2}`}
           alt=""
           onError={() => setImgOk(false)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
@@ -448,7 +449,7 @@ export function FacebookShareFlow({
                       transition: "border-color .12s, box-shadow .12s",
                     }}
                   >
-                    <PageAvatar pageId={p.pageId} name={p.pageName} />
+                    <PageAvatar dbId={p.id} name={p.pageName} />
                     <span style={{ minWidth: 0, flex: 1 }}>
                       <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {p.pageName}
