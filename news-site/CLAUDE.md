@@ -177,21 +177,21 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   cleanly** (renders nothing) if the network doesn't fill the slot within ~8s —
   so an unfilled unit never leaves an empty box (important now that a slot sits
   above the headline).
-- **Placement on `/news/[slug]`:** a **TOP-of-page banner ABOVE the headline +
-  cover** (just under the site header) — **IN_ARTICLE_TOP** (`2029928`) — for
-  maximum visibility, per the owner's requested layout. Then an optional in-body
+- **Placement on `/news/[slug]`:** a **TOP-of-page unit ABOVE the headline +
+  cover** (just under the site header) — **IN_ARTICLE_TOP** — for maximum
+  visibility, per the owner's requested layout. It uses **`2019769`** (the widget
+  known to fill) so the top slot actually shows. Then an optional in-body
   **IN_ARTICLE** unit after the opening (~4th paragraph; short pieces, <4
   paragraphs, skip it; placeholder until you add a widget id), and at the end the
-  **RECOMMENDED** "Interesting for you" grid (`2019769`) after the body, before
-  comments. Single-column (no sidebar). ⚠️ A top-of-content ad maximises
-  visibility but pushes the story down — this **reverses** the earlier
-  reader-first "no ad above the story" choice **at the owner's request**.
+  **RECOMMENDED** unit (`2029928`) after the body, before comments — it fills once
+  that widget is Active in AdsKeeper, else it collapses. A widget fills only ONE
+  slot per page, so the top and end units must use **different** ids. Single-column
+  (no sidebar). ⚠️ A top-of-content ad maximises visibility but pushes the story
+  down — this **reverses** the earlier reader-first "no ad above the story" choice
+  **at the owner's request**.
 - Placement on `/` (homepage): **HOME** at the **very top, above the featured
-  hero** (the first thing on landing). Each placement needs its **own** widget id —
-  AdsKeeper won't fill the same id in two containers on one page — so `IN_ARTICLE`
+  hero** (the first thing on landing). Needs its **own** widget id — `IN_ARTICLE`
   / `HOME` stay placeholders (render nothing in prod) until you add widget ids.
-  Note: `IN_ARTICLE_TOP` (`2029928`) only fills once that widget is active/filling
-  in the AdsKeeper dashboard; until then the top slot collapses to nothing.
 
 ## Facebook Pages integration (Graph API)
 

@@ -113,7 +113,7 @@ export default async function ArticlePage({ params }: Props) {
           header) for maximum visibility, per the requested layout. It collapses
           cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
       <div className="px-4 sm:px-6">
-        <AdSlot name="IN_ARTICLE_TOP" widgetId={ADS.IN_ARTICLE_TOP} minHeight={110} />
+        <AdSlot name="IN_ARTICLE_TOP" widgetId={ADS.IN_ARTICLE_TOP} minHeight={300} />
       </div>
 
       {/* Immersive hero (headline over cover) */}

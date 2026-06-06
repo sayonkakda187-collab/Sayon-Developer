@@ -37,20 +37,20 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    (reusing 2019769 in another slot is not supported and would leave it unfilled).
 export const ADS = {
   /** TOP-of-page article unit — rendered ABOVE the headline + cover (just under
-   *  the site header) for maximum visibility. Its own widget id (distinct from
-   *  RECOMMENDED, since a widget fills only ONE slot per page). LIVE — but if
-   *  AdsKeeper hasn't activated/filled this widget yet the slot collapses to
-   *  nothing (no empty box). For a clean top banner, use a banner/in-page
-   *  AdsKeeper widget format here rather than a recommendation grid. */
-  IN_ARTICLE_TOP: "2029928",
+   *  the site header) for maximum visibility. Uses 2019769 — the widget known to
+   *  FILL — so the top slot actually shows an ad (it's a recommendation-style
+   *  grid, not a banner). A widget fills only ONE slot per page, so RECOMMENDED
+   *  below uses a different id. */
+  IN_ARTICLE_TOP: "2019769",
   /** Optional in-article unit, injected between paragraphs AFTER the opening
    *  (~4th paragraph) on longer pieces. Placeholder until you add one. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
-  /** End-of-article "Interesting for you" recommendation widget (what to read
-   *  next) — rendered AFTER the story body. The one widget known to fill. */
-  RECOMMENDED: "2019769",
-  /** Homepage — rendered at the VERY TOP, above the featured hero. Needs its own
-   *  widget id (placeholder renders nothing in prod until you add one). */
+  /** End-of-article unit AFTER the story body. Uses 2029928 (since 2019769 moved
+   *  to the top). Fills once that widget is Active/serving in AdsKeeper; until
+   *  then the slot collapses cleanly (no empty box). */
+  RECOMMENDED: "2029928",
+  /** Homepage — rendered at the VERY TOP, above the featured hero. Paste your new
+   *  homepage widget id here (placeholder renders nothing in prod until set). */
   HOME: "REPLACE_WITH_WIDGET_ID",
 } as const;
 
