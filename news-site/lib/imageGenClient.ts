@@ -16,8 +16,10 @@ export const GEN_ASPECTS: GenAspect[] = [
 /** Cover crops are ~1.91:1 — 16:9 is the closest offered ratio, so default to it. */
 export const DEFAULT_ASPECT = "16:9";
 
-/** Style hints. Defaults nudge toward clearly-ILLUSTRATIVE output (news safety);
- *  "Photographic" stays available for legitimate non-event illustrative use. */
+/** Style hints. The DEFAULT (first entry) nudges toward clearly-ILLUSTRATIVE
+ *  output for news safety; the "Photo — …" presets are for legitimate realistic
+ *  people / action / portrait imagery (illustrative/stock-style use, not passing
+ *  AI off as documentary photos of real, specific people or events). */
 export const GEN_STYLES: { id: string; label: string }[] = [
   { id: "editorial illustration, clean vector-style, conceptual", label: "Editorial illustration" },
   { id: "digital art, painterly, concept art", label: "Digital art" },
@@ -25,13 +27,15 @@ export const GEN_STYLES: { id: string; label: string }[] = [
   { id: "flat minimal vector graphic, bold shapes", label: "Flat vector" },
   { id: "watercolor illustration, soft washes", label: "Watercolor" },
   { id: "infographic / diagram style, labeled, schematic", label: "Diagram / infographic" },
-  { id: "photographic, realistic lighting", label: "Photographic" },
+  { id: "photorealistic photograph, candid, natural lighting, sharp focus, lifelike skin texture, realistic people, high detail, 50mm lens", label: "Photo — realistic" },
+  { id: "photorealistic action photograph, real people in dynamic motion, frozen mid-action, fast shutter, motion blur, telephoto sports photography, high detail", label: "Photo — action / sports" },
+  { id: "photorealistic portrait photograph, real person, natural skin texture, catchlight in eyes, soft window light, 85mm lens, shallow depth of field", label: "Photo — portrait" },
   { id: "", label: "No style hint" },
 ];
 
 /** Shown in BOTH the tab and the editor modal — keep the wording aligned with CLAUDE.md. */
 export const NEWS_IMAGE_CAUTION =
-  "AI-generated images are for illustrations, concept art, or stylized graphics — don’t present them as real photographs of real news events. For real events, use the free stock-photo search instead.";
+  "AI images — even photorealistic ones — are illustrations. Don’t present them as genuine photographs of real, specific people or news events (that’s misinformation and risks ad-network approval). For real events, use the free stock-photo search instead.";
 
 /** Human label per provider id (from /api/admin/generate-image GET). */
 export const PROVIDER_LABELS: Record<string, string> = {
