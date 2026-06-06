@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ADS, adSlotLive } from "@/lib/ads";
 
 declare global {
@@ -19,7 +19,10 @@ type AdName = keyof typeof ADS;
  *
  * - Live (ADS_ENABLED + a real widget id): renders the AdsKeeper body container
  *   and triggers the loader when the slot nears the viewport (lazy, no layout
- *   shift — height is reserved via `minHeight`).
+ *   shift — height is reserved via `minHeight`). If the network does NOT fill
+ *   the slot within a short grace period, the whole unit collapses (renders
+ *   nothing) so it never leaves an empty "Advertisement" box — important now
+ *   that a slot can sit above the headline.
  * - Not live: a labeled dashed placeholder box where it's useful for review
  *   (local dev + Vercel *preview* deployments) so you can see where ads will go,
  *   and NOTHING on the real production site so visitors see a clean page.
@@ -34,7 +37,7 @@ export function AdSlot({
   className,
 }: {
   widgetId: string;
-  /** Config key (e.g. "TOP"); only used to label the dev placeholder. */
+  /** Config key (e.g. "HOME"); only used to label the dev placeholder. */
   name?: AdName;
   /** Reserved height (px) to prevent layout shift while the ad loads. */
   minHeight?: number;
@@ -48,37 +51,57 @@ export function AdSlot({
     !live &&
     (process.env.NODE_ENV !== "production" ||
       process.env.NEXT_PUBLIC_VERCEL_ENV === "preview");
-  const ref = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  // Flips true when the network returns no ad, collapsing the slot cleanly.
+  const [unfilled, setUnfilled] = useState(false);
 
   useEffect(() => {
-    if (!live || !ref.current) return;
-    const el = ref.current;
+    if (!live || !wrapRef.current) return;
+    const wrap = wrapRef.current;
+    let triggered = false;
+    let timer: number | undefined;
+    let io: IntersectionObserver | undefined;
 
     const load = () => {
       window._mgq = window._mgq || [];
       window._mgq.push(["_mgc.load"]);
+      // Grace period for AdsKeeper to fill the slot. If the inner widget
+      // container is still effectively empty afterwards, collapse the unit so
+      // no orphan "Advertisement" box is left behind.
+      timer = window.setTimeout(() => {
+        const el = slotRef.current;
+        if (el && el.isConnected && el.offsetHeight < 30) setUnfilled(true);
+      }, 8000);
     };
 
     // Lazy: only ask the loader to fill this slot once it's near the viewport.
     if (typeof IntersectionObserver === "undefined") {
       load();
-      return;
+    } else {
+      io = new IntersectionObserver(
+        (entries) => {
+          if (!triggered && entries.some((e) => e.isIntersecting)) {
+            triggered = true;
+            load();
+            io?.disconnect();
+          }
+        },
+        { rootMargin: "200px" }
+      );
+      io.observe(wrap);
     }
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          load();
-          io.disconnect();
-        }
-      },
-      { rootMargin: "200px" }
-    );
-    io.observe(el);
-    return () => io.disconnect();
+
+    return () => {
+      io?.disconnect();
+      if (timer) window.clearTimeout(timer);
+    };
   }, [live, widgetId]);
 
   // Not live and not in a review context → render nothing (clean page).
   if (!live && !showPlaceholder) return null;
+  // Live but the network returned no ad → collapse cleanly.
+  if (unfilled) return null;
 
   return (
     <div
@@ -91,11 +114,11 @@ export function AdSlot({
       </p>
       {live ? (
         <div
-          ref={ref}
+          ref={wrapRef}
           className="overflow-hidden rounded-xl border border-border bg-surface"
           style={{ minHeight }}
         >
-          <div data-type="_mgwidget" data-widget-id={widgetId} />
+          <div ref={slotRef} data-type="_mgwidget" data-widget-id={widgetId} />
         </div>
       ) : (
         // Placeholder (dev + preview only) so you can see the slot before IDs.

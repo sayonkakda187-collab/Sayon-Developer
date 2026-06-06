@@ -173,18 +173,25 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
 - `components/AdSlot.tsx` — `<AdSlot widgetId={…} />` renders the AdsKeeper body
   container (`data-type="_mgwidget"`) and lazily triggers `_mgq.push(["_mgc.load"])`
   via IntersectionObserver. Reserves `minHeight` (no layout shift), carries an
-  "Advertisement" label, and matches the site tokens in light/dark.
-- **Reader-first placement on `/news/[slug]`:** the **headline + cover + byline
-  lead — no ad above the story.** Then **IN_ARTICLE** (a native unit injected
-  between paragraphs *after the first ~3 paragraphs*) and, at the end, the main
-  **RECOMMENDED** "Interesting for you" widget *after the story body* (before
-  comments) — this is the one live widget (`2019769`), moved here from the old
-  top slot so it never blocks the read. Short articles (<4 paragraphs) skip the
-  in-article unit. No sidebar (single-column layout).
-- Placement on `/` (homepage): **HOME** (between the featured hero and the first
-  content block / "Latest News"). Each placement needs its **own** widget id —
-  AdsKeeper won't fill the same id in two containers, so `IN_ARTICLE` / `HOME`
-  stay placeholders (render nothing in prod) until you add separate widget ids.
+  "Advertisement" label, and matches the site tokens in light/dark. **Collapses
+  cleanly** (renders nothing) if the network doesn't fill the slot within ~8s —
+  so an unfilled unit never leaves an empty box (important now that a slot sits
+  above the headline).
+- **Placement on `/news/[slug]`:** a **TOP-of-page unit ABOVE the headline +
+  cover** (just under the site header) — **IN_ARTICLE_TOP** — for maximum
+  visibility, per the owner's requested layout. It uses **`2019769`** (the widget
+  known to fill) so the top slot actually shows. Then an optional in-body
+  **IN_ARTICLE** unit after the opening (~4th paragraph; short pieces, <4
+  paragraphs, skip it; placeholder until you add a widget id), and at the end the
+  **RECOMMENDED** unit (`2029928`) after the body, before comments — it fills once
+  that widget is Active in AdsKeeper, else it collapses. A widget fills only ONE
+  slot per page, so the top and end units must use **different** ids. Single-column
+  (no sidebar). ⚠️ A top-of-content ad maximises visibility but pushes the story
+  down — this **reverses** the earlier reader-first "no ad above the story" choice
+  **at the owner's request**.
+- Placement on `/` (homepage): **HOME** at the **very top, above the featured
+  hero** (the first thing on landing). Needs its **own** widget id — `IN_ARTICLE`
+  / `HOME` stay placeholders (render nothing in prod) until you add widget ids.
 
 ## Facebook Pages integration (Graph API)
 

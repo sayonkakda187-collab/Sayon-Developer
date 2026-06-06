@@ -36,18 +36,21 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    now; create a separate widget for IN_ARTICLE / HOME before they fill
 //    (reusing 2019769 in another slot is not supported and would leave it unfilled).
 export const ADS = {
-  /** EARLY in-article unit, injected right AFTER the first paragraph so a reader
-   *  sees one ad as they start — without pushing the headline/opening down or
-   *  stacking ads before the story. Its own widget id (distinct from RECOMMENDED,
-   *  since a widget fills only ONE slot per page). LIVE. */
-  IN_ARTICLE_TOP: "2029928",
-  /** In-article unit, injected between paragraphs AFTER the opening (~3rd–4th
-   *  paragraph) so readers reach the story first. Placeholder until you add one. */
+  /** TOP-of-page article unit — rendered ABOVE the headline + cover (just under
+   *  the site header) for maximum visibility. Uses 2019769 — the widget known to
+   *  FILL — so the top slot actually shows an ad (it's a recommendation-style
+   *  grid, not a banner). A widget fills only ONE slot per page, so RECOMMENDED
+   *  below uses a different id. */
+  IN_ARTICLE_TOP: "2019769",
+  /** Optional in-article unit, injected between paragraphs AFTER the opening
+   *  (~4th paragraph) on longer pieces. Placeholder until you add one. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
-  /** End-of-article "Interesting for you" recommendation widget (what to read
-   *  next) — rendered AFTER the story body, never above it. The one live widget. */
-  RECOMMENDED: "2019769",
-  /** Homepage — between the featured hero and the first content block. */
+  /** End-of-article unit AFTER the story body. Uses 2029928 (since 2019769 moved
+   *  to the top). Fills once that widget is Active/serving in AdsKeeper; until
+   *  then the slot collapses cleanly (no empty box). */
+  RECOMMENDED: "2029928",
+  /** Homepage — rendered at the VERY TOP, above the featured hero. Paste your new
+   *  homepage widget id here (placeholder renders nothing in prod until set). */
   HOME: "REPLACE_WITH_WIDGET_ID",
 } as const;
 
