@@ -51,7 +51,7 @@ export default function AdminRootLayout({
   return (
     <div
       className={`${newsreader.variable} ${hanken.variable}`}
-      style={{ display: "flex", minHeight: "100dvh", flexDirection: "column" }}
+      style={{ display: "flex", height: "100dvh", flexDirection: "column", overflow: "hidden" }}
     >
       <script dangerouslySetInnerHTML={{ __html: admThemeInit }} />
       {children}
