@@ -6,6 +6,7 @@ import {
   GEN_STYLES,
   DEFAULT_ASPECT,
   NEWS_IMAGE_CAUTION,
+  IMAGE_PROVIDERS_HELP,
   requestImages,
   type GenImage,
 } from "@/lib/imageGenClient";
@@ -81,13 +82,16 @@ export function AiImageModal({
             <div className="adm-stock-setup">
               <div className="adm-ill" style={{ margin: "0 auto 14px" }}><AiImageIcon className="h-[30px] w-[30px]" /></div>
               <h3 className="adm-serif">Set up AI image generation</h3>
-              <p>
-                Create a free key at{" "}
-                <a className="adm-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>,
-                then set <code className="adm-fb-code">GEMINI_API_KEY</code> in your environment
-                (Vercel → Settings → Environment Variables) and redeploy. Stock photos &amp; manual upload still work without it.
-              </p>
-              <button type="button" className="adm-btn-ghost" style={{ marginTop: 14 }} onClick={onClose}>Close</button>
+              <p>Pick <strong>any one</strong> provider, set its key (Vercel → Settings → Environment Variables), and redeploy. Stock photos &amp; manual upload still work without it.</p>
+              <ul className="adm-aiimg-providers" style={{ textAlign: "left", maxWidth: 460, margin: "10px auto 0" }}>
+                {IMAGE_PROVIDERS_HELP.map((p) => (
+                  <li key={p.name}>
+                    <a className="adm-link" href={p.href} target="_blank" rel="noopener noreferrer">{p.name}</a>
+                    {" — "}<code className="adm-fb-code">{p.env}</code>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="adm-btn-ghost" style={{ marginTop: 16 }} onClick={onClose}>Close</button>
             </div>
           </div>
         ) : (

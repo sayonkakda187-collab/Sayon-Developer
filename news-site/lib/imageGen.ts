@@ -1,32 +1,32 @@
 import "server-only";
 
-// Server-only AI image generator. Calls Google's Gemini / Imagen image API via
-// raw fetch (no SDK). The key (GEMINI_API_KEY / IMAGE_API_KEY) is read here only
-// and is NEVER sent to the browser.
+// Server-only AI image generator with SWAPPABLE providers. The key(s) are read
+// here only and are NEVER sent to the browser — the browser only ever receives
+// the resulting image.
 //
-// PROVIDER-SWAPPABLE: there is ONE chokepoint, generateImage(prompt, opts). To
-// switch providers later, add another generate*() implementation and branch in
-// generateImage — the API route + UI only depend on the GeneratedImage shape.
+// PROVIDERS (pick with IMAGE_PROVIDER, else auto-detected from the keys present):
+//   • "gemini"      — Google Gemini / Imagen (GEMINI_API_KEY). Note: Google's
+//                     free image tier is limited in 2026 — may require billing.
+//   • "cloudflare"  — Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID + _API_TOKEN).
+//                     Free daily quota, no card. Default model FLUX.1 [schnell].
+//   • "huggingface" — Hugging Face Inference (HF_API_TOKEN). Free tier, no card.
 //
-// MODEL is configurable via IMAGE_GEN_MODEL. Because Google's exact free image-
-// model naming/limits shift over time, non-OK responses surface the provider's
-// VERBATIM error message so the admin can adjust the model env if needed. The
-// request auto-selects the right wire format from the model family:
-//   • imagen-*  → POST :predict   { instances, parameters{ sampleCount, aspectRatio } }
-//   • gemini-*  → POST :generateContent { contents, generationConfig{ responseModalities } }
+// There is ONE chokepoint, generateImage(prompt, opts) → GeneratedImage[]. To add
+// another provider, write a generate*() and branch in generateImage — the route +
+// UI only depend on the GeneratedImage shape.
 //
 // NEWS SAFETY: AI images are illustrations/concept art. The admin UI warns they
 // must NOT be presented as real photos of real events; the generator UI defaults
-// the style toward clearly-illustrative output. This module does not force a
-// style (legitimate illustrative/photographic use is the admin's call).
+// the style toward clearly-illustrative output.
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-// "Nano Banana" — Gemini's current flash image model. Override with IMAGE_GEN_MODEL
-// (e.g. "imagen-3.0-generate-002") if your key/account uses a different one.
-const DEFAULT_MODEL = "gemini-2.5-flash-image";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image";
+const DEFAULT_CF_MODEL = "@cf/black-forest-labs/flux-1-schnell";
+const DEFAULT_HF_MODEL = "black-forest-labs/FLUX.1-schnell";
 
-/** Aspect ratios offered in the UI. Imagen takes these natively; for Gemini we
- *  also fold the ratio into the prompt as a textual hint. */
+/** Aspect ratios offered in the UI. Imagen takes these natively; the other
+ *  providers fold the ratio into the prompt as a textual hint (their output size
+ *  is fixed, so the editor cropper handles final framing). */
 export const IMAGE_ASPECTS = [
   { id: "1:1", label: "Square · 1:1" },
   { id: "16:9", label: "Wide · 16:9" },
@@ -60,8 +60,10 @@ export class ImageGenError extends Error {
   }
 }
 
-/** The image-gen API key, from any of the accepted env vars (server-side only). */
-function apiKey(): string | undefined {
+export type Provider = "gemini" | "cloudflare" | "huggingface";
+
+// ── Keys (server-side only) ──────────────────────────────────────────────────
+function geminiKey(): string | undefined {
   return (
     process.env.GEMINI_API_KEY ||
     process.env.IMAGE_API_KEY ||
@@ -70,15 +72,41 @@ function apiKey(): string | undefined {
     undefined
   );
 }
-
-/** Whether image generation is set up (a key is present). Used by the UI to show
- *  a tidy "set up" state instead of erroring. */
-export function isImageGenConfigured(): boolean {
-  return Boolean(apiKey());
+function hfKey(): string | undefined {
+  return process.env.HF_API_TOKEN || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || undefined;
+}
+function cfAccount(): string | undefined {
+  return process.env.CLOUDFLARE_ACCOUNT_ID || undefined;
+}
+function cfToken(): string | undefined {
+  return process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFLARE_AI_TOKEN || undefined;
+}
+function cloudflareConfigured(): boolean {
+  return Boolean(cfAccount() && cfToken());
 }
 
-function modelName(): string {
-  return (process.env.IMAGE_GEN_MODEL || DEFAULT_MODEL).trim();
+/** The active provider: an explicit IMAGE_PROVIDER wins; otherwise auto-detect
+ *  from whichever keys are present (gemini first, for backward compatibility). */
+export function activeImageProvider(): Provider {
+  const explicit = (process.env.IMAGE_PROVIDER || "").trim().toLowerCase();
+  if (explicit === "cloudflare" || explicit === "huggingface" || explicit === "gemini") return explicit;
+  if (geminiKey()) return "gemini";
+  if (cloudflareConfigured()) return "cloudflare";
+  if (hfKey()) return "huggingface";
+  return "gemini";
+}
+
+/** Whether the ACTIVE provider has its key(s) set. The UI uses this to show a
+ *  tidy "set up" state instead of erroring. */
+export function isImageGenConfigured(): boolean {
+  switch (activeImageProvider()) {
+    case "cloudflare":
+      return cloudflareConfigured();
+    case "huggingface":
+      return Boolean(hfKey());
+    default:
+      return Boolean(geminiKey());
+  }
 }
 
 export type GenerateOpts = {
@@ -94,7 +122,7 @@ function normalizeAspect(a?: string): AspectId {
 }
 
 /** Compose the final text prompt: the admin's prompt + optional style, and (for
- *  Gemini, which has no structured aspect param) a textual aspect hint. */
+ *  providers with no structured aspect param) a textual aspect hint. */
 function composePrompt(prompt: string, style: string | undefined, aspect: AspectId, withAspectHint: boolean): string {
   let p = prompt;
   if (style && style.trim()) p += `\n\nStyle: ${style.trim()}.`;
@@ -102,38 +130,44 @@ function composePrompt(prompt: string, style: string | undefined, aspect: Aspect
   return p;
 }
 
+function bufToB64(buf: ArrayBuffer): string {
+  return Buffer.from(buf).toString("base64");
+}
+
 /** Map a non-OK HTTP response to a typed error, preserving the provider message. */
-async function httpError(res: Response): Promise<ImageGenError> {
+async function httpError(res: Response, label: string): Promise<ImageGenError> {
   let providerMsg = "";
   try {
-    const data = (await res.json()) as { error?: { message?: string; status?: string } };
-    providerMsg = data?.error?.message?.trim() || "";
+    const data = (await res.json()) as {
+      error?: { message?: string } | string;
+      errors?: { message?: string }[];
+    };
+    if (typeof data?.error === "string") providerMsg = data.error;
+    else if (data?.error?.message) providerMsg = data.error.message;
+    else if (Array.isArray(data?.errors) && data.errors[0]?.message) providerMsg = data.errors[0].message as string;
   } catch {
     /* non-JSON body */
   }
-  const msg = providerMsg ? ` ${providerMsg}` : "";
+  const msg = providerMsg ? ` ${providerMsg.trim()}` : "";
   if (res.status === 401 || res.status === 403) {
-    return new ImageGenError("auth", `The image API key was rejected (HTTP ${res.status}).${msg}`, res.status);
+    return new ImageGenError("auth", `${label} rejected the key (HTTP ${res.status}).${msg}`, res.status);
   }
   if (res.status === 429) {
-    return new ImageGenError("quota", `Image generation rate limit / quota reached (HTTP 429).${msg}`, 429);
+    return new ImageGenError("quota", `${label} rate limit / quota reached (HTTP 429).${msg}`, 429);
   }
-  if (res.status === 400) {
-    // 400 covers bad prompt, unsupported model, or a safety rejection — the
-    // provider message is the useful part, so surface it verbatim.
-    return new ImageGenError("parse", `The image request was rejected (HTTP 400).${msg}`, 400);
+  if (res.status === 400 || res.status === 422) {
+    return new ImageGenError("parse", `${label} rejected the request (HTTP ${res.status}).${msg}`, res.status);
   }
-  return new ImageGenError("unknown", `Image service error (HTTP ${res.status}).${msg}`, res.status);
+  return new ImageGenError("unknown", `${label} error (HTTP ${res.status}).${msg}`, res.status);
 }
 
+// ── Provider: Google Gemini (:generateContent) ───────────────────────────────
 type GeminiPart = { text?: string; inlineData?: { mimeType?: string; data?: string } };
 type GeminiResp = {
   candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
   promptFeedback?: { blockReason?: string };
 };
 
-/** Gemini flash image generation (:generateContent). One image per call, so for
- *  count>1 we issue sequential calls (bounded by the route's maxDuration). */
 async function generateGemini(
   key: string,
   model: string,
@@ -161,7 +195,7 @@ async function generateGemini(
     } catch {
       throw new ImageGenError("network", "Could not reach the image service.");
     }
-    if (!res.ok) throw await httpError(res);
+    if (!res.ok) throw await httpError(res, "Google");
 
     const data = (await res.json().catch(() => ({}))) as GeminiResp;
     if (data.promptFeedback?.blockReason) {
@@ -174,7 +208,6 @@ async function generateGemini(
       if (reason && reason !== "STOP") {
         throw new ImageGenError("safety", `No image was produced (${reason}). Try a different prompt.`);
       }
-      // First call returned nothing usable → real failure; later calls → partial.
       if (out.length === 0) throw new ImageGenError("parse", "The image service returned no image.");
       break;
     }
@@ -183,11 +216,11 @@ async function generateGemini(
   return out;
 }
 
+// ── Provider: Google Imagen (:predict) ───────────────────────────────────────
 type ImagenResp = {
   predictions?: { bytesBase64Encoded?: string; mimeType?: string; raiFilteredReason?: string }[];
 };
 
-/** Imagen image generation (:predict) — native sampleCount + aspectRatio. */
 async function generateImagen(
   key: string,
   model: string,
@@ -211,7 +244,7 @@ async function generateImagen(
   } catch {
     throw new ImageGenError("network", "Could not reach the image service.");
   }
-  if (!res.ok) throw await httpError(res);
+  if (!res.ok) throw await httpError(res, "Google");
 
   const data = (await res.json().catch(() => ({}))) as ImagenResp;
   const preds = data.predictions ?? [];
@@ -226,24 +259,132 @@ async function generateImagen(
   return images;
 }
 
+// ── Provider: Cloudflare Workers AI ──────────────────────────────────────────
+// FLUX returns JSON { result: { image: "<base64>" } }; SD-style models stream raw
+// image bytes. We handle both by content-type. One image per call → loop.
+type CfResp = { result?: { image?: string }; errors?: { message?: string }[] };
+
+async function generateCloudflare(
+  prompt: string,
+  aspect: AspectId,
+  style: string | undefined,
+  count: number,
+): Promise<GeneratedImage[]> {
+  const acct = cfAccount();
+  const token = cfToken();
+  if (!acct || !token) throw new ImageGenError("config", "Cloudflare Workers AI isn’t configured.");
+  const model = (process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_CF_MODEL).trim();
+  const url = `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/run/${model}`;
+  const text = composePrompt(prompt, style, aspect, true);
+  const out: GeneratedImage[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt: text, steps: 4 }),
+        cache: "no-store",
+      });
+    } catch {
+      throw new ImageGenError("network", "Could not reach Cloudflare Workers AI.");
+    }
+    if (!res.ok) throw await httpError(res, "Cloudflare");
+
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      const data = (await res.json().catch(() => ({}))) as CfResp;
+      const b64 = data.result?.image;
+      if (!b64) {
+        const m = data.errors?.[0]?.message;
+        if (out.length === 0) throw new ImageGenError("parse", `Cloudflare returned no image.${m ? ` ${m}` : ""}`);
+        break;
+      }
+      out.push({ b64, mimeType: "image/jpeg" });
+    } else if (ct.startsWith("image/")) {
+      out.push({ b64: bufToB64(await res.arrayBuffer()), mimeType: ct });
+    } else {
+      if (out.length === 0) throw new ImageGenError("parse", "Cloudflare returned an unexpected response.");
+      break;
+    }
+  }
+  return out;
+}
+
+// ── Provider: Hugging Face Inference ─────────────────────────────────────────
+// Returns raw image bytes on success; JSON (often a "loading" notice) otherwise.
+async function generateHuggingFace(
+  prompt: string,
+  aspect: AspectId,
+  style: string | undefined,
+  count: number,
+): Promise<GeneratedImage[]> {
+  const key = hfKey();
+  if (!key) throw new ImageGenError("config", "Hugging Face isn’t configured.");
+  const model = (process.env.HF_IMAGE_MODEL || DEFAULT_HF_MODEL).trim();
+  const url = `https://api-inference.huggingface.co/models/${model}`;
+  const text = composePrompt(prompt, style, aspect, true);
+  const out: GeneratedImage[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${key}`, accept: "image/png" },
+        body: JSON.stringify({ inputs: text }),
+        cache: "no-store",
+      });
+    } catch {
+      throw new ImageGenError("network", "Could not reach Hugging Face.");
+    }
+
+    const ct = res.headers.get("content-type") || "";
+    if (res.ok && ct.startsWith("image/")) {
+      out.push({ b64: bufToB64(await res.arrayBuffer()), mimeType: ct });
+      continue;
+    }
+    // Non-image: parse the JSON notice (loading / error) ONCE (don't re-read it).
+    const data = (await res.json().catch(() => ({}))) as { error?: string; estimated_time?: number };
+    const msg = typeof data.error === "string" ? data.error.trim() : "";
+    const tail = msg ? ` ${msg}` : "";
+    if (res.status === 503 || data.estimated_time != null || /loading/i.test(msg)) {
+      throw new ImageGenError("quota", `The model is warming up${msg ? ` (${msg})` : ""}. Try again in ~30s.`);
+    }
+    if (res.status === 401 || res.status === 403) throw new ImageGenError("auth", `Hugging Face rejected the key (HTTP ${res.status}).${tail}`, res.status);
+    if (res.status === 429) throw new ImageGenError("quota", `Hugging Face rate limit reached (HTTP 429).${tail}`, 429);
+    if (!res.ok) throw new ImageGenError("unknown", `Hugging Face error (HTTP ${res.status}).${tail}`, res.status);
+    if (out.length === 0) throw new ImageGenError("parse", `Hugging Face returned no image.${tail}`);
+    break;
+  }
+  return out;
+}
+
 /**
- * Generate one or more images from a text prompt. The single public entry point;
- * picks the wire format from the configured model family. Throws ImageGenError
- * with a friendly code (the route maps it to an HTTP status + message).
+ * Generate one or more images from a text prompt via the active provider.
+ * Throws ImageGenError with a friendly code (the route maps it to HTTP + message).
  */
 export async function generateImage(promptRaw: string, opts: GenerateOpts = {}): Promise<GeneratedImage[]> {
-  const key = apiKey();
-  if (!key) throw new ImageGenError("config", "Image generation is not configured.");
-
   const prompt = promptRaw.trim().slice(0, 1500);
   if (prompt.length < 3) throw new ImageGenError("unknown", "A longer prompt is required.");
 
   const aspect = normalizeAspect(opts.aspectRatio);
   const style = opts.style?.slice(0, 120);
   const count = Math.min(4, Math.max(1, Math.floor(opts.count ?? 1)));
-  const model = modelName();
 
-  return model.toLowerCase().includes("imagen")
-    ? generateImagen(key, model, prompt, aspect, style, count)
-    : generateGemini(key, model, prompt, aspect, style, count);
+  switch (activeImageProvider()) {
+    case "cloudflare":
+      return generateCloudflare(prompt, aspect, style, count);
+    case "huggingface":
+      return generateHuggingFace(prompt, aspect, style, count);
+    default: {
+      const key = geminiKey();
+      if (!key) throw new ImageGenError("config", "Image generation is not configured.");
+      const model = (process.env.IMAGE_GEN_MODEL || DEFAULT_GEMINI_MODEL).trim();
+      return model.toLowerCase().includes("imagen")
+        ? generateImagen(key, model, prompt, aspect, style, count)
+        : generateGemini(key, model, prompt, aspect, style, count);
+    }
+  }
 }

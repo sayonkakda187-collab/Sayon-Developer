@@ -1585,6 +1585,10 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-aiimg-setup { text-align: center; color: var(--adm-muted); }
 .adm-aiimg-setup h3 { font-size: 16px; font-weight: 700; color: var(--adm-ink); margin-bottom: 8px; }
 .adm-aiimg-setup p { font-size: 13px; line-height: 1.55; max-width: 480px; margin: 0 auto; }
+.adm-aiimg-providers { list-style: none; margin: 10px auto 0; padding: 0; max-width: 480px; text-align: left; display: flex; flex-direction: column; gap: 7px; }
+.adm-aiimg-providers li { font-size: 13px; line-height: 1.45; color: var(--adm-ink); }
+.adm-aiimg-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.adm-aiimg-provider { flex: none; font-size: 11.5px; font-weight: 700; color: var(--adm-muted); background: rgba(120, 140, 175, 0.12); border: 1px solid var(--adm-bd); padding: 3px 9px; border-radius: 999px; }
 
 /* The two cover-source buttons (free photos / generate AI) in the empty state. */
 .adm-cover-srcbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
