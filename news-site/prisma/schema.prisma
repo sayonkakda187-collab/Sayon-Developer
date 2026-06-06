@@ -46,6 +46,7 @@ model Article {
   scheduledPosts ScheduledPost[]
   dailyViews     DailyView[]
   countryViews   ArticleCountryView[]
+  recentViews    RecentView[]
 
   @@index([status, publishedAt])
   @@index([categoryId])
@@ -160,6 +161,21 @@ model ArticleCountryView {
   @@unique([articleId, countryCode, date])
   @@index([countryCode])
   @@index([date])
+}
+
+// Short-lived real-time read log powering the Audience "Live readers" panel: one
+// row per article view (timestamp + country), pruned to a ~15-minute window on
+// write so it stays tiny. This is NOT analytics history (that's DailyView /
+// ArticleCountryView) — just "who's reading right now". Privacy-respecting: an
+// aggregate country code only (free Vercel geo header), never IP/UA/PII.
+model RecentView {
+  id          String   @id @default(cuid())
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  countryCode String   @default("ZZ") // ISO 3166-1 alpha-2; "ZZ" = unknown
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
