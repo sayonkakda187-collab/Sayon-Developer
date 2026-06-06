@@ -911,6 +911,18 @@ body {
 .adm-pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .adm-head-cta { flex: none; }
 
+/* Facebook-tab actions portaled into the top bar (next to the theme toggle).
+   The mount slot collapses on pages that don't fill it; labels hide on the
+   narrow mobile bar so the buttons become icon-only. */
+.adm-top-actions-slot { display: inline-flex; align-items: center; }
+.adm-top-actions-slot:empty { display: none; }
+.adm-fb-topactions { display: inline-flex; align-items: center; gap: 8px; }
+.adm-fb-topbtn { flex: none; height: 38px; padding: 0 13px; font-size: 13.5px; white-space: nowrap; }
+@media (max-width: 1023px) {
+  .adm-fb-topbtn { height: 36px; padding: 0 9px; }
+  .adm-fb-topbtn-label { display: none; }
+}
+
 /* Group header inside each grouped card. */
 .adm-fb-grouphd { display: flex; align-items: center; gap: 9px; padding: 2px 2px 10px; }
 .adm-fb-groupname { font-size: 13px; font-weight: 700; letter-spacing: 0.3px; color: var(--adm-ink); text-transform: uppercase; }

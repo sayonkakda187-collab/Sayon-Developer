@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   disconnectFacebookPage,
   refreshFacebookPage,
-  facebookRefreshPages,
 } from "@/app/admin/facebook-actions";
 import { sortCategoryGroups } from "@/lib/facebookGroups";
 import { useToast } from "@/components/admin/Toast";
@@ -54,7 +53,6 @@ export function FacebookPagesManager({
   const { success, error } = useToast();
   const [showConnect, setShowConnect] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [refreshingAll, setRefreshingAll] = useState(false);
   const [query, setQuery] = useState("");
   const [, startTransition] = useTransition();
 
@@ -107,22 +105,6 @@ export function FacebookPagesManager({
     refresh();
   }
 
-  // Re-sync every Page from Facebook: refresh existing tokens + pull in any
-  // Pages added on Facebook since last time (no re-pasting credentials).
-  async function onRefreshPages() {
-    setRefreshingAll(true);
-    const res = await facebookRefreshPages();
-    setRefreshingAll(false);
-    if (!res.ok) return error(res.error);
-    const { refreshed, added } = res.data;
-    success(
-      added > 0
-        ? `Synced ${refreshed + added} Page${refreshed + added === 1 ? "" : "s"} (${added} new).`
-        : `Refreshed ${refreshed} Page${refreshed === 1 ? "" : "s"}.`,
-    );
-    refresh();
-  }
-
   return (
     <div>
       <div className="adm-pagehead">
@@ -144,24 +126,6 @@ export function FacebookPagesManager({
                 Connection expired {formatDate(connect.userTokenExpiresAt)} — reconnect to refresh Pages.
               </p>
             ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {connect?.userTokenSaved && (
-            <button
-              type="button"
-              className="adm-btn-ghost adm-head-cta"
-              onClick={onRefreshPages}
-              disabled={refreshingAll}
-              title="Re-sync Pages from Facebook (refresh tokens + pull in newly-added Pages)"
-            >
-              <RefreshIcon className={`h-[18px] w-[18px] ${refreshingAll ? "adm-spinning" : ""}`} />
-              {refreshingAll ? "Refreshing…" : "Refresh Pages"}
-            </button>
-          )}
-          <button type="button" className="adm-btn-primary adm-head-cta" onClick={() => setShowConnect(true)}>
-            <PlusIcon className="h-[18px] w-[18px]" />
-            Connect New Page
-          </button>
         </div>
       </div>
 
