@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getAudienceStats } from "@/app/admin/audience-actions";
 import { WorldBubbleMap } from "./WorldBubbleMap";
 import { CountryFlag } from "./CountryFlag";
+import { LiveReaders } from "./LiveReaders";
 import { countryColor, countryName } from "@/lib/countries";
 import { GlobeIcon } from "./icons";
 import { formatNumber } from "@/lib/site";
@@ -65,6 +66,9 @@ export function AudienceDashboard({
         <h1>Audience</h1>
         <p>Which countries your article readers come from (privacy-respecting — country counts only, via Vercel’s free geo header).</p>
       </div>
+
+      {/* Real-time readers (always on, independent of the scope/range filters) */}
+      <LiveReaders />
 
       {/* Controls */}
       <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>

@@ -132,7 +132,15 @@ export async function incrementViews(id: string, countryCode?: string | null) {
         update: { count: { increment: 1 } },
         create: { articleId: id, countryCode: code, date: today, count: 1 },
       }),
+      // Real-time read log for the Audience "Live readers" panel.
+      prisma.recentView.create({ data: { articleId: id, countryCode: code } }),
     ]);
+    // Keep the live log tiny: occasionally drop rows older than the live window.
+    if (Math.random() < 0.1) {
+      await prisma.recentView.deleteMany({
+        where: { createdAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+      });
+    }
   } catch {
     // Swallow: a failed counter shouldn't break the page.
   }
