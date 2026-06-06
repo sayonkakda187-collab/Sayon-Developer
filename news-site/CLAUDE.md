@@ -612,12 +612,12 @@ ranked **flagged country list** (count + %), **overall or per-article**, with a
   with no geo header bucket as Unknown). Existing view tracking + the dashboard
   views chart are unchanged (the country upsert is additive).
 
-## AI image generation (Google Gemini / Imagen)
+## AI image generation (swappable provider: Cloudflare / Hugging Face / Gemini)
 
 Generate illustrations from a text prompt and use them on articles. Available as
 its own **"AI Images"** admin tab AND inside the article editor (generate a cover
-for the piece you're writing). All calls are **server-side** — the key never
-reaches the browser; only the resulting image does.
+for the piece you're writing). All calls are **server-side** — keys never reach
+the browser; only the resulting image does.
 
 > ⚠️ **NEWS-IMAGE SAFETY (shown in the UI + here):** this is a news site, so AI
 > images must **NOT** be presented as real photographs of real news events
@@ -627,21 +627,33 @@ reaches the browser; only the resulting image does.
 > events, the **Pexels stock-photo search remains the better choice** — it's
 > unchanged; AI images are an additional option, not a replacement.
 
-- **Provider (swappable):** `lib/imageGen.ts` (`server-only`) — one chokepoint
-  `generateImage(prompt, opts)` → `GeneratedImage[]` (base64). It auto-selects the
-  wire format from the model family: **Gemini** (`:generateContent`,
-  `responseModalities:["TEXT","IMAGE"]`, one image/call) or **Imagen**
-  (`:predict`, native `sampleCount` + `aspectRatio`). `isImageGenConfigured()`
-  gates a tidy setup state; a typed `ImageGenError` (auth/quota/safety/network/
-  parse/config) maps to HTTP + a friendly message. **Non-OK provider responses
-  surface Google's verbatim error** (so a wrong model id / quota / safety block is
-  actionable). To swap providers later, add another `generate*()` and branch.
-- **Key + model (env, server-side only):** `GEMINI_API_KEY` (also accepts
-  `IMAGE_API_KEY` / `GOOGLE_AI_API_KEY`). Get it free at **Google AI Studio →
-  https://aistudio.google.com/apikey** (no credit card). Optional
-  **`IMAGE_GEN_MODEL`** overrides the model (default `gemini-2.5-flash-image`; set
-  an `imagen-*` id to use the Imagen API). No DB migration — images live in
-  **Vercel Blob** via the existing upload route.
+- **Providers (swappable):** `lib/imageGen.ts` (`server-only`) — one chokepoint
+  `generateImage(prompt, opts)` → `GeneratedImage[]` (base64). Three providers,
+  selected by **`IMAGE_PROVIDER`** (`cloudflare` | `huggingface` | `gemini`) or
+  **auto-detected** from whichever keys are present (`activeImageProvider()`):
+  - **Cloudflare Workers AI** (recommended free) — `accounts/{id}/ai/run/{model}`,
+    default **FLUX.1 [schnell]** (`@cf/black-forest-labs/flux-1-schnell`); handles
+    both JSON-base64 and raw-bytes responses.
+  - **Hugging Face Inference** (free) — `api-inference.huggingface.co/models/{model}`,
+    default `black-forest-labs/FLUX.1-schnell`; a cold model → a "warming up, try
+    again" message.
+  - **Google Gemini / Imagen** — `:generateContent` (default
+    `gemini-2.5-flash-image`) or `:predict` for an `imagen-*` `IMAGE_GEN_MODEL`.
+  `isImageGenConfigured()` gates a tidy setup state; a typed `ImageGenError`
+  (auth/quota/safety/network/parse/config) maps to HTTP + a friendly message, and
+  **non-OK provider responses surface the verbatim error**. To add a provider,
+  write another `generate*()` and branch in `generateImage`.
+- **Keys (env, server-side only):** **Cloudflare** = `CLOUDFLARE_ACCOUNT_ID` +
+  `CLOUDFLARE_API_TOKEN` (+ `CLOUDFLARE_IMAGE_MODEL`); **Hugging Face** =
+  `HF_API_TOKEN` (+ `HF_IMAGE_MODEL`); **Gemini** = `GEMINI_API_KEY` (also
+  `IMAGE_API_KEY`/`GOOGLE_AI_API_KEY`) + `IMAGE_GEN_MODEL`. See `.env.example` for
+  where to get each. **No DB migration** — images live in **Vercel Blob** via the
+  existing upload route.
+- ⚠️ **Google free-tier caveat (2026):** Google tightened the free image tier —
+  many keys return HTTP 429 **"limit: 0"** for image models (incl.
+  `gemini-2.5-flash-image`) unless **billing** is enabled (then ~$0.039/image);
+  **Imagen has no free tier**. So **Cloudflare Workers AI** or **Hugging Face** are
+  the genuinely-free defaults; Gemini works best with billing on.
 - **Route:** `app/api/admin/generate-image/route.ts` (`requireAdmin`, `nodejs`,
   `maxDuration=60`). GET → `{ configured }`; POST `{ prompt, aspectRatio, count,
   style }` → `{ ok, images:[{ url:dataURL, mimeType }] }`.

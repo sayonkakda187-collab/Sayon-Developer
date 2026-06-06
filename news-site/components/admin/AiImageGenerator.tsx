@@ -9,6 +9,8 @@ import {
   DEFAULT_ASPECT,
   NEWS_IMAGE_CAUTION,
   COVER_HANDOFF_KEY,
+  IMAGE_PROVIDERS_HELP,
+  PROVIDER_LABELS,
   requestImages,
   saveImageToBlob,
 } from "@/lib/imageGenClient";
@@ -44,6 +46,7 @@ export function AiImageGenerator() {
   const { success, error: toastError } = useToast();
 
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState<string>("");
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState(DEFAULT_ASPECT);
   const [style, setStyle] = useState(GEN_STYLES[0].id);
@@ -58,7 +61,7 @@ export function AiImageGenerator() {
     let cancelled = false;
     fetch("/api/admin/generate-image")
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setConfigured(Boolean(d?.configured)); })
+      .then((d) => { if (!cancelled) { setConfigured(Boolean(d?.configured)); setProvider(String(d?.provider ?? "")); } })
       .catch(() => { if (!cancelled) setConfigured(true); /* assume set; POST will report */ });
     return () => { cancelled = true; };
   }, []);
@@ -146,15 +149,17 @@ export function AiImageGenerator() {
       <div className="adm-card adm-card-pad adm-aiimg-setup">
         <div className="adm-ill" style={{ margin: "0 auto 14px" }}><AiImageIcon className="h-[30px] w-[30px]" /></div>
         <h3 className="adm-serif">Set up AI image generation</h3>
-        <p>
-          AI Images uses Google’s Gemini image API. Create a free key at{" "}
-          <a className="adm-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>{" "}
-          (no credit card), then set{" "}
-          <code className="adm-fb-code">GEMINI_API_KEY</code> in your environment
-          (Vercel → Settings → Environment Variables, Production &amp; Preview) and redeploy.
-        </p>
-        <p className="adm-card-sub" style={{ marginTop: 8 }}>
-          Optional: override the model with <code className="adm-fb-code">IMAGE_GEN_MODEL</code> if your account uses a different image model.
+        <p>Pick <strong>any one</strong> provider and set its key in your environment (Vercel → Settings → Environment Variables, Production &amp; Preview), then redeploy. All keys stay server-side.</p>
+        <ul className="adm-aiimg-providers">
+          {IMAGE_PROVIDERS_HELP.map((p) => (
+            <li key={p.name}>
+              <a className="adm-link" href={p.href} target="_blank" rel="noopener noreferrer">{p.name}</a>
+              {" — "}<code className="adm-fb-code">{p.env}</code> <span className="adm-card-sub">({p.note})</span>
+            </li>
+          ))}
+        </ul>
+        <p className="adm-card-sub" style={{ marginTop: 10 }}>
+          Set <code className="adm-fb-code">IMAGE_PROVIDER</code> to <code className="adm-fb-code">cloudflare</code>, <code className="adm-fb-code">huggingface</code>, or <code className="adm-fb-code">gemini</code> to force one (otherwise it’s auto-detected from the keys present).
         </p>
       </div>
     );
@@ -170,8 +175,13 @@ export function AiImageGenerator() {
 
       {/* Composer */}
       <div className="adm-card adm-card-pad">
-        <div className="adm-card-title">Generate an image</div>
-        <div className="adm-card-sub" style={{ marginBottom: 12 }}>
+        <div className="adm-aiimg-titlerow">
+          <span className="adm-card-title">Generate an image</span>
+          {provider && PROVIDER_LABELS[provider] && (
+            <span className="adm-aiimg-provider" title="Active image provider">{PROVIDER_LABELS[provider]}</span>
+          )}
+        </div>
+        <div className="adm-card-sub" style={{ margin: "4px 0 12px" }}>
           Describe the illustration you want. Be specific about subject, mood, and composition.
         </div>
 

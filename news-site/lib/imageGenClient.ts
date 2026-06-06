@@ -33,6 +33,20 @@ export const GEN_STYLES: { id: string; label: string }[] = [
 export const NEWS_IMAGE_CAUTION =
   "AI-generated images are for illustrations, concept art, or stylized graphics — don’t present them as real photographs of real news events. For real events, use the free stock-photo search instead.";
 
+/** Human label per provider id (from /api/admin/generate-image GET). */
+export const PROVIDER_LABELS: Record<string, string> = {
+  gemini: "Google Gemini",
+  cloudflare: "Cloudflare Workers AI",
+  huggingface: "Hugging Face",
+};
+
+/** Setup options shown when no provider is configured — pick ANY one. */
+export const IMAGE_PROVIDERS_HELP: { name: string; env: string; href: string; note: string }[] = [
+  { name: "Cloudflare Workers AI", env: "CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN", href: "https://dash.cloudflare.com/profile/api-tokens", note: "free daily quota, no card" },
+  { name: "Hugging Face", env: "HF_API_TOKEN", href: "https://huggingface.co/settings/tokens", note: "free tier, no card" },
+  { name: "Google Gemini", env: "GEMINI_API_KEY", href: "https://aistudio.google.com/apikey", note: "free image tier is limited in 2026 — may need billing" },
+];
+
 export type GenImage = { url: string; mimeType: string };
 export type GenResponse =
   | { ok: true; images: GenImage[] }

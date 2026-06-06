@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { generateImage, isImageGenConfigured, ImageGenError } from "@/lib/imageGen";
+import { generateImage, isImageGenConfigured, activeImageProvider, ImageGenError } from "@/lib/imageGen";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,8 +13,8 @@ export const maxDuration = 60;
 // The key stays server-side; the browser only ever receives the resulting image.
 export async function GET() {
   await requireAdmin();
-  // Lets the client show a "Set up image generation" state without leaking the key.
-  return NextResponse.json({ configured: isImageGenConfigured() });
+  // Lets the client show a "set up" state + which provider is active, no key leak.
+  return NextResponse.json({ configured: isImageGenConfigured(), provider: activeImageProvider() });
 }
 
 export async function POST(req: Request) {
