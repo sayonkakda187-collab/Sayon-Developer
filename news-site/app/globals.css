@@ -600,7 +600,7 @@ body {
 }
 .adm-dclose:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .adm-dclose:active { transform: scale(0.92); }
-.adm-dnav { padding: 6px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.adm-dnav { padding: 6px 12px; display: flex; flex-direction: column; gap: 4px; }
 .adm-dlink {
   display: flex; align-items: center; gap: 13px; min-height: 48px; padding: 12px 14px; border-radius: 12px;
   color: #c2cdda; font-size: 15px; font-weight: 500; cursor: pointer; border: none; background: none; text-align: left; width: 100%;
@@ -615,7 +615,7 @@ body {
 .adm-dlink[data-tab="categories"].on svg { color: #c084fc; }
 .adm-dlink[data-tab="comments"].on svg { color: #60a5fa; }
 .adm-dlink[data-tab="facebook"].on svg { color: #60a5fa; }
-.adm-dfoot { border-top: 1px solid rgba(255, 255, 255, 0.08); padding: 12px; display: flex; flex-direction: column; gap: 2px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.adm-dfoot { padding: 0 12px; display: flex; flex-direction: column; gap: 4px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 
 /* Staggered slide-in of drawer links once the panel is open. */
 .adm-drawer .adm-dlink { opacity: 0; transform: translateX(-10px); }
@@ -796,7 +796,7 @@ body {
   .adm-frame { display: flex; flex-direction: row; flex: 1; min-height: 0; }
   .adm-sidebar { display: flex; flex-direction: column; width: 236px; flex: none; padding: 14px 16px 18px; }
   .adm-sidebar-site { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); }
-  .adm-navgroup { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .adm-navgroup { display: flex; flex-direction: column; gap: 5px; }
   .adm-navitem { display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 12px; color: #475569; font-size: 14.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background 0.15s; }
   .adm-navitem svg { width: 19px; height: 19px; flex: none; }
   .adm-navitem:hover { background: rgba(255, 255, 255, 0.45); }
@@ -806,7 +806,8 @@ body {
   .adm-navitem[data-tab="categories"].on svg { color: var(--adm-purple); }
   .adm-navitem[data-tab="comments"].on svg { color: var(--adm-blue); }
   .adm-navitem[data-tab="facebook"].on svg { color: #1877f2; }
-  .adm-navfoot { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 12px; }
+  /* Continues the nav list directly after Facebook Pages (no bottom-pinning gap). */
+  .adm-navfoot { display: flex; flex-direction: column; gap: 5px; padding-top: 5px; }
   .adm-navfoot .adm-navitem { font-weight: 500; font-size: 14px; color: #64748b; }
 
   /* Canvas → the scrolling main column. */
