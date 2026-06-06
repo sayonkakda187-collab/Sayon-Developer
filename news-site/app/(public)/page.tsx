@@ -20,14 +20,16 @@ export default async function Home() {
 
   return (
     <div>
-      {/* Lead story. */}
-      <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <FeaturedHero article={featured} />
+      {/* Top-of-page ad — the first thing visitors see on landing, above the
+          lead story. Collapses cleanly if unfilled (needs its own HOME widget
+          id in lib/ads.ts to fill). */}
+      <section className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={110} />
       </section>
 
-      {/* Homepage ad — between the hero and the card grid. */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <AdSlot name="HOME" widgetId={ADS.HOME} />
+      {/* Lead story. */}
+      <section className="mx-auto max-w-7xl px-4 pt-2 sm:px-6 sm:pt-4 lg:px-8">
+        <FeaturedHero article={featured} />
       </section>
 
       {/* Trending-style: search + category tabs + responsive card grid. */}
