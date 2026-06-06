@@ -370,7 +370,7 @@ export async function generateImage(promptRaw: string, opts: GenerateOpts = {}):
   if (prompt.length < 3) throw new ImageGenError("unknown", "A longer prompt is required.");
 
   const aspect = normalizeAspect(opts.aspectRatio);
-  const style = opts.style?.slice(0, 120);
+  const style = opts.style?.slice(0, 200);
   const count = Math.min(4, Math.max(1, Math.floor(opts.count ?? 1)));
 
   switch (activeImageProvider()) {
