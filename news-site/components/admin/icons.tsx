@@ -244,6 +244,16 @@ export const ImageIcon = (p: P) => (
   </svg>
 );
 
+// AI image — an image frame with a sparkle (the AI Images section + editor button).
+export const AiImageIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <path d="M21 12.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.5" />
+    <circle cx="8.5" cy="8.5" r="1.6" />
+    <path d="M3 17l4-4 3.5 3.5" />
+    <path d="M18 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4Z" />
+  </svg>
+);
+
 // Settings (gear) — the API Settings tab.
 export const SettingsIcon = (p: P) => (
   <svg {...base} strokeWidth={1.8} className={p.className} aria-hidden>

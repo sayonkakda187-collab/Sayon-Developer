@@ -17,7 +17,9 @@ import { ArticleAiEditModal, type AiEdit } from "@/components/admin/ArticleAiEdi
 import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
 import { CoverCropModal } from "@/components/admin/CoverCropModal";
 import { StockPhotoModal } from "@/components/admin/StockPhotoModal";
-import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon } from "@/components/admin/icons";
+import { AiImageModal } from "@/components/admin/AiImageModal";
+import { COVER_HANDOFF_KEY } from "@/lib/imageGenClient";
+import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon, AiImageIcon } from "@/components/admin/icons";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -131,6 +133,7 @@ export function ArticleForm({
   const [coverCredit, setCoverCredit] = useState(article?.coverCredit ?? "");
   const [coverCreditUrl, setCoverCreditUrl] = useState(article?.coverCreditUrl ?? "");
   const [stockOpen, setStockOpen] = useState(false);
+  const [aiImgOpen, setAiImgOpen] = useState(false);
   // Credit pending while a freshly-picked stock photo goes through the cropper;
   // applied to the form only once the cropped image uploads successfully.
   const pendingCredit = useRef<{ credit: string; url: string } | null>(null);
@@ -207,6 +210,24 @@ export function ArticleForm({
     const local = readLocalDraft(editorId);
     if (local && local.content !== content && (local.title || local.content)) {
       setRecovered(local);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // One-shot cover handoff from the AI Images tab ("Use in new article"): a Blob
+  // URL stashed in sessionStorage becomes this new article's cover. New drafts only.
+  useEffect(() => {
+    if (article?.id) return;
+    try {
+      const url = sessionStorage.getItem(COVER_HANDOFF_KEY);
+      if (url) {
+        sessionStorage.removeItem(COVER_HANDOFF_KEY); // consume once
+        setCoverImage(url);
+        setCoverCredit("");
+        setCoverCreditUrl("");
+      }
+    } catch {
+      /* sessionStorage may be unavailable */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -330,6 +351,22 @@ export function ArticleForm({
     }
     setUploadError("");
     setCropSrc(pick.url);
+  }
+
+  // An AI-generated image was chosen: it has no stock credit, so open it in the
+  // cropper directly (the cropped result uploads to Blob like any other cover).
+  // It's a data URL, which doesn't taint the crop canvas, so export works.
+  function onAiImagePick(url: string) {
+    pendingCredit.current = null;
+    setCoverCredit("");
+    setCoverCreditUrl("");
+    setAiImgOpen(false);
+    if (cropObjectUrl.current) {
+      URL.revokeObjectURL(cropObjectUrl.current);
+      cropObjectUrl.current = null;
+    }
+    setUploadError("");
+    setCropSrc(url);
   }
 
   function insertImageMarkdown(name: string, url: string) {
@@ -629,6 +666,10 @@ export function ArticleForm({
                     <ImageIcon className="h-[15px] w-[15px]" />
                     Free photos
                   </button>
+                  <button type="button" className="adm-btn-ghost adm-cover-btn" onClick={() => setAiImgOpen(true)}>
+                    <AiImageIcon className="h-[15px] w-[15px]" />
+                    Generate AI
+                  </button>
                   <button
                     type="button"
                     className="adm-cover-remove"
@@ -653,10 +694,16 @@ export function ArticleForm({
                   <span className="adm-cover-drop-sub">You’ll crop &amp; reframe it before it’s saved</span>
                   <input type="file" accept="image/*" hidden onChange={onCoverSelected} />
                 </label>
-                <button type="button" className="adm-btn-ghost adm-cover-stockbtn" onClick={() => setStockOpen(true)}>
-                  <ImageIcon className="h-[15px] w-[15px]" />
-                  Search free photos
-                </button>
+                <div className="adm-cover-srcbtns">
+                  <button type="button" className="adm-btn-ghost adm-cover-stockbtn" onClick={() => setStockOpen(true)}>
+                    <ImageIcon className="h-[15px] w-[15px]" />
+                    Search free photos
+                  </button>
+                  <button type="button" className="adm-btn-ghost adm-cover-stockbtn" onClick={() => setAiImgOpen(true)}>
+                    <AiImageIcon className="h-[15px] w-[15px]" />
+                    Generate with AI
+                  </button>
+                </div>
               </>
             )}
             <input
@@ -723,6 +770,14 @@ export function ArticleForm({
         initialExcerpt={excerpt}
         onPick={onStockPick}
         onClose={() => setStockOpen(false)}
+      />
+    )}
+
+    {aiImgOpen && (
+      <AiImageModal
+        initialTitle={title}
+        onPick={onAiImagePick}
+        onClose={() => setAiImgOpen(false)}
       />
     )}
 

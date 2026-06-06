@@ -1544,6 +1544,52 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-stock-setup p { font-size: 13px; line-height: 1.55; max-width: 460px; margin: 0 auto; }
 @media (prefers-reduced-motion: reduce) { .adm-stock-pick:hover img { transform: none; } }
 
+/* ── AI Images (generator tab + editor "Generate with AI" modal) ──────────── */
+/* News-safety caution — amber note shown in both the tab and the modal. */
+.adm-aiimg-caution {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 13px; border-radius: 12px; color: var(--adm-ink);
+  background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.28);
+}
+.adm-aiimg-caution svg { flex: none; color: #d97706; margin-top: 1px; }
+.adm-aiimg-caution p { margin: 0; font-size: 12.8px; line-height: 1.5; }
+[data-adm-theme="dark"] .admin-shell .adm-aiimg-caution { background: rgba(245, 158, 11, 0.13); border-color: rgba(245, 158, 11, 0.32); }
+[data-adm-theme="dark"] .admin-shell .adm-aiimg-caution svg { color: #fbbf24; }
+
+.adm-aiimg-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 560px) { .adm-aiimg-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.adm-aiimg-item { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.adm-aiimg-frame { width: 100%; overflow: hidden; border: 1px solid var(--adm-bd); border-radius: 12px; background: var(--adm-soft, #eef0f3); }
+.adm-aiimg-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.adm-aiimg-cell, .sk.adm-aiimg-cell { border-radius: 12px; }
+
+.adm-aiimg-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-aiimg-act { padding: 6px 10px; font-size: 12.5px; gap: 5px; min-height: 36px; }
+.adm-aiimg-url {
+  display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  color: var(--adm-muted-2); text-decoration: none; word-break: break-all; line-height: 1.4;
+}
+.adm-aiimg-url:hover { color: var(--adm-ink); text-decoration: underline; }
+
+/* Pickable result inside the editor modal (reuses the stock pick overlay). */
+.adm-aiimg-pick {
+  position: relative; display: block; width: 100%; overflow: hidden; cursor: pointer;
+  border: 1px solid var(--adm-bd); border-radius: 12px; padding: 0; background: var(--adm-soft, #eef0f3);
+}
+.adm-aiimg-pick img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s ease; }
+.adm-aiimg-pick:hover img { transform: scale(1.04); }
+.adm-aiimg-pick:hover .adm-stock-pickhint, .adm-aiimg-pick:focus-visible .adm-stock-pickhint { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .adm-aiimg-pick:hover img { transform: none; } }
+
+.adm-aiimg-setup { text-align: center; color: var(--adm-muted); }
+.adm-aiimg-setup h3 { font-size: 16px; font-weight: 700; color: var(--adm-ink); margin-bottom: 8px; }
+.adm-aiimg-setup p { font-size: 13px; line-height: 1.55; max-width: 480px; margin: 0 auto; }
+
+/* The two cover-source buttons (free photos / generate AI) in the empty state. */
+.adm-cover-srcbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.adm-cover-srcbtns .adm-cover-stockbtn { flex: 1; min-width: 150px; margin-top: 0; }
+
 /* Crop modal. */
 .adm-crop-modal { max-width: 620px; display: flex; flex-direction: column; padding: 0; }
 .adm-crop-modal .adm-modal-head { position: sticky; top: 0; background: var(--adm-card); z-index: 2; border-radius: var(--adm-radius) var(--adm-radius) 0 0; }

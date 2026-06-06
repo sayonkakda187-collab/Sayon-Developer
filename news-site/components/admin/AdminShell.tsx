@@ -26,6 +26,7 @@ import {
   SettingsIcon,
   GlobeIcon,
   SitesIcon,
+  AiImageIcon,
 } from "./icons";
 
 type SiteOption = { id: string; name: string; isDefault: boolean };
@@ -169,6 +170,15 @@ export function AdminShell({
             })}
           </div>
           <div className="adm-navfoot">
+            <Link
+              href="/admin/ai-images"
+              data-tab="ai-images"
+              className={`adm-navitem ${isActive("/admin/ai-images") ? "on" : ""}`}
+              aria-current={isActive("/admin/ai-images") ? "page" : undefined}
+            >
+              <AiImageIcon />
+              AI Images
+            </Link>
             <Link
               href="/admin/sites"
               data-tab="sites"
@@ -315,6 +325,16 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
+              <Link
+                href="/admin/ai-images"
+                data-tab="ai-images"
+                className={`adm-dlink ${isActive("/admin/ai-images") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/ai-images") ? "page" : undefined}
+              >
+                <AiImageIcon />
+                AI Images
+              </Link>
               <Link
                 href="/admin/sites"
                 data-tab="sites"
