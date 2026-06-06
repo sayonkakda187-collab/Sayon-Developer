@@ -9,7 +9,7 @@ import {
 } from "@/app/admin/facebook-actions";
 import { sortCategoryGroups } from "@/lib/facebookGroups";
 import { useToast } from "@/components/admin/Toast";
-import { FacebookIcon, PlusIcon, RefreshIcon, TrashIcon } from "@/components/admin/icons";
+import { FacebookIcon, PlusIcon, RefreshIcon, SearchIcon, TrashIcon } from "@/components/admin/icons";
 import { formatDate } from "@/lib/site";
 import { ConnectModal } from "./FacebookConnectModal";
 
@@ -55,12 +55,25 @@ export function FacebookPagesManager({
   const [showConnect, setShowConnect] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [query, setQuery] = useState("");
   const [, startTransition] = useTransition();
+
+  // Filter by name / id / group so a Page is easy to find among many.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return pages;
+    return pages.filter(
+      (p) =>
+        p.pageName.toLowerCase().includes(q) ||
+        p.pageId.toLowerCase().includes(q) ||
+        p.categoryGroup.toLowerCase().includes(q),
+    );
+  }, [pages, query]);
 
   // Group pages by niche/category for a scannable, grouped table.
   const grouped = useMemo(() => {
     const map = new Map<string, FacebookPageView[]>();
-    for (const p of pages) {
+    for (const p of filtered) {
       const arr = map.get(p.categoryGroup) ?? [];
       arr.push(p);
       map.set(p.categoryGroup, arr);
@@ -69,7 +82,7 @@ export function FacebookPagesManager({
       group,
       rows: map.get(group)!,
     }));
-  }, [pages]);
+  }, [filtered]);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -152,6 +165,18 @@ export function FacebookPagesManager({
         </div>
       </div>
 
+      {pages.length > 0 && (
+        <label className="adm-search" style={{ maxWidth: 360, margin: "14px 0 0" }}>
+          <SearchIcon className="h-4 w-4" aria-hidden />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search pages by name, ID, or group…"
+            aria-label="Search Facebook pages"
+          />
+        </label>
+      )}
+
       {pages.length === 0 ? (
         <div className="adm-card">
           <div className="adm-empty">
@@ -169,8 +194,12 @@ export function FacebookPagesManager({
             </button>
           </div>
         </div>
+      ) : grouped.length === 0 ? (
+        <div className="adm-card adm-card-pad" style={{ marginTop: 16 }}>
+          <p className="adm-card-sub">No pages match “{query}”.</p>
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 16 }}>
           {grouped.map(({ group, rows }) => (
             <div key={group} className="adm-card adm-card-pad">
               <div className="adm-fb-grouphd">

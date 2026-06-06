@@ -216,9 +216,30 @@ export function FacebookShareFlow({
       return next;
     });
   }
-  const allSelected = pages.length > 0 && pages.every((p) => selectedPageIds.has(p.id));
+  // Filter the Step-1 picker by name / group / id so a Page is easy to find.
+  const [pageQuery, setPageQuery] = useState("");
+  const visiblePages = useMemo(() => {
+    const q = pageQuery.trim().toLowerCase();
+    if (!q) return pages;
+    return pages.filter(
+      (p) =>
+        p.pageName.toLowerCase().includes(q) ||
+        p.categoryGroup.toLowerCase().includes(q) ||
+        p.pageId.toLowerCase().includes(q),
+    );
+  }, [pages, pageQuery]);
+
+  // "Select all" acts on the currently-visible (filtered) Pages.
+  const allVisibleSelected = visiblePages.length > 0 && visiblePages.every((p) => selectedPageIds.has(p.id));
   function toggleAll() {
-    setSelectedPageIds(allSelected ? new Set() : new Set(pages.map((p) => p.id)));
+    setSelectedPageIds((prev) => {
+      const next = new Set(prev);
+      for (const p of visiblePages) {
+        if (allVisibleSelected) next.delete(p.id);
+        else next.add(p.id);
+      }
+      return next;
+    });
   }
 
   async function onRefreshPages() {
@@ -424,15 +445,27 @@ export function FacebookShareFlow({
           <div className="adm-card adm-card-pad">
             <div className="adm-list-head" style={{ alignItems: "center" }}>
               <div className="adm-card-title">Select page{pages.length === 1 ? "" : "s"} to share to</div>
-              {pages.length > 1 && (
+              {visiblePages.length > 1 && (
                 <button type="button" className="adm-fb-grouptoggle" onClick={toggleAll}>
-                  {allSelected ? "Clear all" : "Select all"}
+                  {allVisibleSelected ? (pageQuery.trim() ? "Clear these" : "Clear all") : "Select all"}
                 </button>
               )}
             </div>
 
+            {pages.length > 1 && (
+              <label className="adm-search" style={{ maxWidth: 360, marginTop: 12 }}>
+                <SearchIcon className="h-4 w-4" aria-hidden />
+                <input
+                  value={pageQuery}
+                  onChange={(e) => setPageQuery(e.target.value)}
+                  placeholder="Search pages by name or group…"
+                  aria-label="Search pages"
+                />
+              </label>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12, marginTop: 12 }}>
-              {pages.map((p) => {
+              {visiblePages.map((p) => {
                 const on = selectedPageIds.has(p.id);
                 const connected = p.status === "Connected";
                 return (
@@ -483,6 +516,9 @@ export function FacebookShareFlow({
                 );
               })}
             </div>
+            {visiblePages.length === 0 && (
+              <p className="adm-card-sub" style={{ marginTop: 14 }}>No pages match “{pageQuery}”.</p>
+            )}
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
               <button type="button" className="adm-btn-primary" onClick={goToArticles} disabled={selectedPageIds.size === 0}>
