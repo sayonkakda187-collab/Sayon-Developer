@@ -30,3 +30,27 @@ export function countryName(code: string): string {
     return c;
   }
 }
+
+/** A palette of distinct, pleasant accent colours used to tint each country on
+ *  the audience map + list. */
+export const COUNTRY_PALETTE = [
+  "#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#a855f7", "#0ea5e9",
+  "#14b8a6", "#f97316", "#ec4899", "#84cc16", "#6366f1", "#eab308",
+  "#06b6d4", "#d946ef", "#22c55e", "#fb7185",
+];
+
+/**
+ * A colour for a country. Pass the row `index` (rank) to guarantee the top
+ * countries are all visually distinct (palette by rank); otherwise a stable
+ * hash of the code is used. The same data order is fed to the map + list, so a
+ * country reads as the same colour in both.
+ */
+export function countryColor(code: string, index?: number): string {
+  if (typeof index === "number" && index >= 0) {
+    return COUNTRY_PALETTE[index % COUNTRY_PALETTE.length];
+  }
+  const c = (code || "").trim().toUpperCase();
+  let h = 0;
+  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
+  return COUNTRY_PALETTE[h % COUNTRY_PALETTE.length];
+}

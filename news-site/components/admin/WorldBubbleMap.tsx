@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { COUNTRY_CENTROIDS, project } from "@/lib/countryCentroids";
-import { countryFlag, countryName } from "@/lib/countries";
+import { countryColor, countryName } from "@/lib/countries";
+import { CountryFlag } from "./CountryFlag";
 
 type Stat = { countryCode: string; count: number };
 
@@ -22,14 +23,18 @@ export function WorldBubbleMap({ stats, total }: { stats: Stat[]; total: number 
   const radius = (c: number) => Math.max(2.2, Math.min(15, 2.2 + Math.sqrt(c / max) * 13));
 
   const points = stats
-    .map((s) => {
+    .map((s, i) => {
       const cc = COUNTRY_CENTROIDS[s.countryCode];
       if (!cc) return null;
       const { x, y } = project(cc[0], cc[1]);
-      return { code: s.countryCode, count: s.count, x, y, r: radius(s.count) };
+      return { code: s.countryCode, count: s.count, x, y, r: radius(s.count), color: countryColor(s.countryCode, i) };
     })
-    .filter((p): p is { code: string; count: number; x: number; y: number; r: number } => p !== null)
+    .filter((p): p is { code: string; count: number; x: number; y: number; r: number; color: string } => p !== null)
     .sort((a, b) => b.r - a.r); // big first so small bubbles stay clickable on top
+
+  // One radial gradient per distinct colour in view (referenced by the bubbles).
+  const gradColors = Array.from(new Set(points.map((p) => p.color)));
+  const gradId = (color: string) => `aud-b-${color.replace("#", "")}`;
 
   const pct = (c: number) => (total ? Math.round((c / total) * 100) : 0);
 
@@ -43,10 +48,12 @@ export function WorldBubbleMap({ stats, total }: { stats: Stat[]; total: number 
         onClick={(e) => { if (e.target === e.currentTarget) setHover(null); }}
       >
         <defs>
-          <radialGradient id="aud-bubble" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgb(var(--accent))" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="0.5" />
-          </radialGradient>
+          {gradColors.map((color) => (
+            <radialGradient key={color} id={gradId(color)} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={color} stopOpacity="0.95" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.5" />
+            </radialGradient>
+          ))}
         </defs>
 
         <rect x="0" y="0" width={W} height={H} rx="4" fill="rgba(120,130,150,.06)" onClick={() => setHover(null)} />
@@ -73,8 +80,8 @@ export function WorldBubbleMap({ stats, total }: { stats: Stat[]; total: number 
               cx={p.x}
               cy={p.y}
               r={p.r}
-              fill="url(#aud-bubble)"
-              stroke="rgb(var(--accent))"
+              fill={`url(#${gradId(p.color)})`}
+              stroke={p.color}
               strokeWidth="0.4"
               strokeOpacity="0.6"
               style={{ cursor: "pointer" }}
@@ -106,7 +113,7 @@ export function WorldBubbleMap({ stats, total }: { stats: Stat[]; total: number 
             zIndex: 5,
           }}
         >
-          <span style={{ fontSize: 15 }}>{countryFlag(hover.code)}</span>{" "}
+          <CountryFlag code={hover.code} width={18} />{" "}
           <b>{countryName(hover.code)}</b>
           <span style={{ opacity: 0.85 }}> · {hover.count.toLocaleString("en-US")} · {pct(hover.count)}%</span>
         </div>
