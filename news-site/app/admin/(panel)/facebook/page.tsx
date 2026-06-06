@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ToastProvider } from "@/components/admin/Toast";
 import { FacebookShareFlow } from "@/components/admin/FacebookShareFlow";
+import { FacebookStats } from "@/components/admin/FacebookStats";
 import {
   FacebookPagesManager,
   type FacebookPageView,
@@ -70,6 +71,7 @@ export default async function AdminFacebookPage() {
 
   return (
     <ToastProvider>
+      <FacebookStats pages={view} />
       <FacebookShareFlow pages={view} connect={connect} />
       <FacebookScheduledPosts posts={scheduledView} />
       <FacebookPagesManager pages={view} connect={connect} />
