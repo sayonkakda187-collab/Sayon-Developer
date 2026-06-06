@@ -612,6 +612,60 @@ ranked **flagged country list** (count + %), **overall or per-article**, with a
   with no geo header bucket as Unknown). Existing view tracking + the dashboard
   views chart are unchanged (the country upsert is additive).
 
+## Multi-site foundation (database + admin structure only)
+
+Latent groundwork so additional news sites can be added **later** — **not** a
+live second site. **Golden rule: the current site (dailyledger.today) keeps
+working EXACTLY as before, as the DEFAULT site, with zero disruption.** All
+existing articles/categories/comments/settings stay intact and visible. There is
+**no domain routing, no per-site branding/ads/Facebook split yet** — only the
+data model + admin scaffolding.
+
+- **Data model** (`prisma/schema.prisma`): a new **`Site`** (id, name, unique
+  `slug`, unique nullable `domain`, `isDefault`, `logo`/`title`/`description`
+  branding **placeholders** (unused), timestamps) and a **nullable
+  `Article.siteId`** FK (`onDelete: SetNull`, indexed `[siteId, status,
+  publishedAt]`). **Categories and Tags are SHARED across sites** for now
+  (simplest; revisit if a site needs its own taxonomy). `siteId` stays
+  **nullable on purpose** and **null is treated as the default site** everywhere
+  (`articleWhereForSite`), so any legacy/edge row can never be hidden.
+- **Migration:** `20260606120000_sites` — additive + backfilled. Creates `Site`,
+  seeds **one default** (`id "site_default"`, name "The Daily Ledger", slug
+  `daily-ledger`, domain `dailyledger.today`, `isDefault true`), adds
+  `Article.siteId`, **backfills every existing article to the default site**,
+  then adds the index + FK. Auto-applies on deploy (`prisma migrate deploy`). No
+  data loss; reversible in effect (drop column/table). **No env needed.**
+- **Scoping helper** (`lib/sites.ts`, `server-only`): `getDefaultSite`,
+  `listSites` (with per-site article counts; null-siteId rows count toward the
+  default), `getActiveSiteId`/`getActiveSite` (validated `adm_site` cookie →
+  else default), and `articleWhereForSite(site)` → for the **default** site
+  `{ OR: [{ siteId }, { siteId: null }] }`, otherwise `{ siteId }`.
+  `DEFAULT_SITE_ID = "site_default"`.
+- **What is scoped (admin only, conservative):** the **admin Articles list**
+  (`/admin/articles`) filters by the active site, and **new articles** get the
+  active site's `siteId` on **create** (`saveArticle`; **updates never touch
+  `siteId`**). With a single site this returns **exactly today's full list** and
+  assigns everything to the default site — behavior is unchanged.
+- **What is NOT scoped (left exactly as before, by design):** **all public
+  reads** (home/article/category/search/sitemap/comments in `lib/queries.ts`),
+  the **admin dashboard stats**, **admin search**, and **Facebook** share lists.
+  One site → identical output; these get scoped only when a real second site
+  ships.
+- **Admin UI:** a **Sites** page (`/admin/sites`, `SitesManager`) lists sites
+  (article counts, a **Default** pill) and adds a site (name / optional slug /
+  optional domain, uniqueness-checked); the **default site can't be deleted**,
+  and a site with articles can't be deleted (nothing orphaned). A **site
+  switcher** (`SiteSwitcher`, in the sidebar + mobile drawer) picks the site
+  you're managing, persisted in the **httpOnly `adm_site` cookie**
+  (`setActiveSite`, scoped to `/admin`); it's a disabled read-only label until a
+  second site exists. All actions are `requireAdmin()`.
+- **Deliberately deferred (future work, do NOT assume present):**
+  **domain→site routing** (map a request hostname → `Site` → scope public
+  queries), **per-site branding** (logo/title/description), and **per-site ads /
+  Facebook Pages**. When adding a second live site, wire public queries through
+  `articleWhereForSite` (resolved from the host), and split ads/FB config per
+  site — none of that is done here.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

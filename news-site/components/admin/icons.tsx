@@ -65,6 +65,14 @@ export const GlobeIcon = (p: P) => (
     <path d="M12 3a14.5 14.5 0 0 0 0 18 14.5 14.5 0 0 0 0-18Z" />
   </svg>
 );
+export const SitesIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.9} className={p.className} aria-hidden>
+    <rect x="3" y="4" width="18" height="13" rx="2" />
+    <path d="M3 8.5h18" />
+    <path d="M6 6.4h.01M8.4 6.4h.01" />
+    <path d="M8.5 21h7M12 17v4" />
+  </svg>
+);
 export const DashboardIcon = (p: P) => (
   <svg {...base} className={p.className} aria-hidden>
     <rect x="3" y="3" width="7" height="9" rx="1.5" />

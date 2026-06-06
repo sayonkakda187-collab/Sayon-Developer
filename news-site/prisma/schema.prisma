@@ -36,6 +36,11 @@ model Article {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
+  // Multi-site: which Site this article belongs to. Nullable; null is treated as
+  // the default site (lib/sites.ts) so existing/legacy rows are never hidden.
+  siteId String?
+  site   Site? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
   tags           Tag[]           @relation("ArticleTags")
   comments       Comment[]
   scheduledPosts ScheduledPost[]
@@ -44,11 +49,35 @@ model Article {
 
   @@index([status, publishedAt])
   @@index([categoryId])
+  @@index([siteId, status, publishedAt])
   // Trigram GIN indexes accelerate case-insensitive substring search (ILIKE)
   // used by the admin article search across these fields.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_title_trgm_idx")
   @@index([excerpt(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_excerpt_trgm_idx")
   @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "Article_content_trgm_idx")
+}
+
+// ── Sites (multi-site foundation) ────────────────────────────────────────────
+// A Site = one news property (its own domain + content). For now there is ONE
+// default site (= the current site); multi-site is latent structure (no domain
+// routing / per-site branding/ads/FB yet — see CLAUDE.md). Categories and Tags
+// are SHARED across sites for now. logo/title/description are future-branding
+// placeholders, not wired to the frontend.
+model Site {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  domain      String?  @unique // public hostname (null until assigned); routing is future work
+  isDefault   Boolean  @default(false)
+  logo        String? // future per-site branding (unused for now)
+  title       String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles Article[]
+
+  @@index([isDefault])
 }
 
 model Category {

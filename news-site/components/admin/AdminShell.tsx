@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/actions";
 import { AdminThemeToggle } from "./AdminThemeToggle";
 import { AdskeeperBalancePill } from "./AdskeeperBalancePill";
+import { SiteSwitcher } from "./SiteSwitcher";
 import { AdminAvatar } from "./AdminAvatar";
 import { GlobalSearch } from "./GlobalSearch";
 import {
@@ -24,7 +25,10 @@ import {
   TrendingIcon,
   SettingsIcon,
   GlobeIcon,
+  SitesIcon,
 } from "./icons";
+
+type SiteOption = { id: string; name: string; isDefault: boolean };
 
 const NAV = [
   { tab: "dashboard", label: "Dashboard", drawerLabel: "Dashboard", href: "/admin", Icon: DashboardIcon },
@@ -39,10 +43,14 @@ const NAV = [
 export function AdminShell({
   userEmail,
   avatarUrl,
+  sites = [],
+  activeSiteId,
   children,
 }: {
   userEmail: string;
   avatarUrl?: string | null;
+  sites?: SiteOption[];
+  activeSiteId?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -138,6 +146,11 @@ export function AdminShell({
       <div className="adm-frame">
         {/* ── Desktop sidebar (≥1024px) ── */}
         <aside className="adm-sidebar adm-only-desktop">
+          {sites.length > 0 && activeSiteId && (
+            <div className="adm-sidebar-site">
+              <SiteSwitcher sites={sites} activeSiteId={activeSiteId} />
+            </div>
+          )}
           <div className="adm-navgroup">
             {NAV.map(({ tab, drawerLabel, href, Icon }) => {
               const active = isActive(href);
@@ -156,6 +169,15 @@ export function AdminShell({
             })}
           </div>
           <div className="adm-navfoot">
+            <Link
+              href="/admin/sites"
+              data-tab="sites"
+              className={`adm-navitem ${isActive("/admin/sites") ? "on" : ""}`}
+              aria-current={isActive("/admin/sites") ? "page" : undefined}
+            >
+              <SitesIcon />
+              Sites
+            </Link>
             <Link
               href="/admin/settings"
               data-tab="settings"
@@ -269,6 +291,11 @@ export function AdminShell({
               </button>
             </div>
             <div className="adm-dnav">
+              {sites.length > 0 && activeSiteId && (
+                <div className="adm-dsite">
+                  <SiteSwitcher sites={sites} activeSiteId={activeSiteId} />
+                </div>
+              )}
               {NAV.map(({ tab, drawerLabel, href, Icon }, i) => {
                 const active = isActive(href);
                 return (
@@ -288,6 +315,16 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
+              <Link
+                href="/admin/sites"
+                data-tab="sites"
+                className={`adm-dlink ${isActive("/admin/sites") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/sites") ? "page" : undefined}
+              >
+                <SitesIcon />
+                Sites
+              </Link>
               <Link
                 href="/admin/settings"
                 data-tab="settings"

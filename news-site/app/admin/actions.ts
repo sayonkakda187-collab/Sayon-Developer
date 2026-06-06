@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, clearSessionCookie } from "@/lib/auth";
 import { slugify, uniqueArticleSlug } from "@/lib/slug";
+import { getActiveSiteId } from "@/lib/sites";
 
 export async function logout() {
   clearSessionCookie();
@@ -78,6 +79,9 @@ export async function saveArticle(formData: FormData) {
     });
   } else {
     const publishedAt = status === "published" ? new Date() : null;
+    // New articles belong to the site selected in the admin switcher (default
+    // site for now). Updates never touch siteId, so existing articles stay put.
+    const siteId = await getActiveSiteId();
     const created = await prisma.article.create({
       data: {
         title,
@@ -90,6 +94,7 @@ export async function saveArticle(formData: FormData) {
         categoryId,
         status,
         publishedAt,
+        siteId,
         tags: { connect: uniqueTagIds.map((tid) => ({ id: tid })) },
       },
       select: { id: true },
