@@ -219,7 +219,7 @@ export default async function ArticlePage({ params }: Props) {
             p.type === "md" ? (
               <Markdown key={i} content={p.content} />
             ) : p.slot === "top" ? (
-              <AdSlot key={i} name="IN_ARTICLE_TOP" widgetId={ADS.IN_ARTICLE_TOP} minHeight={180} />
+              <AdSlot key={i} name="IN_ARTICLE_TOP" widgetId={ADS.IN_ARTICLE_TOP} minHeight={300} />
             ) : (
               <AdSlot key={i} name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
             ),

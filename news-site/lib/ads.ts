@@ -38,10 +38,9 @@ export const ADSKEEPER_SITE_ID = "1097964";
 export const ADS = {
   /** EARLY in-article unit, injected right AFTER the first paragraph so a reader
    *  sees one ad as they start — without pushing the headline/opening down or
-   *  stacking ads before the story. Needs its OWN widget id (a widget fills only
-   *  ONE slot per page, so it can't reuse IN_ARTICLE / RECOMMENDED). Placeholder
-   *  → clean no-op (renders nothing, no gap) until you paste a real id. */
-  IN_ARTICLE_TOP: "REPLACE_WITH_WIDGET_ID",
+   *  stacking ads before the story. Its own widget id (distinct from RECOMMENDED,
+   *  since a widget fills only ONE slot per page). LIVE. */
+  IN_ARTICLE_TOP: "2029928",
   /** In-article unit, injected between paragraphs AFTER the opening (~3rd–4th
    *  paragraph) so readers reach the story first. Placeholder until you add one. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
