@@ -16,7 +16,7 @@
  * prompt, and on tap posts SKIP_WAITING -> the SW activates, purges old caches,
  * and the page reloads into the fresh build. Bump VERSION to force a purge.
  */
-const VERSION = "v2-20260604";
+const VERSION = "v3-20260606";
 const STATIC_CACHE = `dl-admin-static-${VERSION}`;
 const PAGES_CACHE = `dl-admin-pages-${VERSION}`;
 const KEEP = new Set([STATIC_CACHE, PAGES_CACHE]);
