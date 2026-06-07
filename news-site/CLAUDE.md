@@ -204,14 +204,20 @@ Separate from AdsKeeper — AdSense allows running other networks, so both coexi
 This is the **account/verification script only** (no ad units yet; real
 `<ins class="adsbygoogle">` placements come **after approval**).
 
-- **Script:** `components/AdSenseHead.tsx` loads
+- **Verification (what Google actually checks):** a **server-rendered
+  `<meta name="google-adsense-account" content="ca-pub-…">`** tag in `<head>`,
+  emitted via **`metadata.other`** in the **root** layout (`app/layout.tsx`). This
+  is Google's recommended signal and — unlike a `next/script` tag — is guaranteed
+  to be in the **RAW server HTML** the crawler reads without executing JS. (The
+  earlier `beforeInteractive` script alone did **not** pass verification: in the
+  App Router, `next/script` is loaded by the Next runtime and isn't reliably a
+  static `<script>` in the served `<head>`.) Inherited by every route (no page
+  overrides `metadata.other`).
+- **Library script:** `components/AdSenseHead.tsx` still loads
   `pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<ADSENSE_PUBLISHER_ID>`
-  via `next/script` with **`strategy="beforeInteractive"`**, mounted in the
-  **root** layout (`app/layout.tsx`). beforeInteractive is deliberate: it injects
-  the tag into the **server-rendered HTML `<head>`** (what Google's verifier
-  crawls), whereas AdsKeeper's `afterInteractive` injects client-side. It's
-  **always on** (verification needs it present) — NOT gated by `ADS_ENABLED` — and
-  loads site-wide (incl. `/admin`, harmless: async, no ad units, behind auth).
+  via `next/script` from the root layout — kept so ad units work once added
+  post-approval (it does **not** carry verification). Always on, async, site-wide
+  (incl. `/admin`, harmless: no ad units, behind auth).
 - **Publisher id:** `ADSENSE_PUBLISHER_ID` in `lib/ads.ts`
   (`ca-pub-5470257305108580`) — public by design (ships in HTML).
 - **ads.txt:** `public/ads.txt` (served at `/ads.txt`) carries

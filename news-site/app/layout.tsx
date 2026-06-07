@@ -4,6 +4,7 @@ import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
 import { AdSenseHead } from "@/components/AdSenseHead";
+import { ADSENSE_PUBLISHER_ID } from "@/lib/ads";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,12 @@ export const metadata: Metadata = {
     url: siteConfig.url,
   },
   twitter: { card: "summary_large_image" },
+  // Google AdSense site verification. A SERVER-RENDERED <meta> tag in <head> is
+  // Google's recommended verification signal — and, unlike a next/script tag
+  // (loaded by the Next.js runtime), it's guaranteed to be in the RAW server HTML
+  // the crawler reads WITHOUT executing JS. Renders:
+  //   <meta name="google-adsense-account" content="ca-pub-5470257305108580">
+  other: { "google-adsense-account": ADSENSE_PUBLISHER_ID },
 };
 
 // Runs before paint: sets the theme class (no flash) and marks `js` enabled so

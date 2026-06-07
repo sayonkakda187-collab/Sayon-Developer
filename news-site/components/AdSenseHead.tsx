@@ -2,19 +2,18 @@ import Script from "next/script";
 import { ADSENSE_PUBLISHER_ID } from "@/lib/ads";
 
 /**
- * Google AdSense ACCOUNT script — site verification + review (NOT ad units).
+ * Google AdSense ACCOUNT script — loads the AdSense library site-wide (NOT ad
+ * units; those come after approval).
  *
- * Mounted in the ROOT layout so it lands in the SERVER-RENDERED HTML <head> of
- * every page, which is what Google's site verifier/crawler looks for.
- * `strategy="beforeInteractive"` is the Next.js mechanism that injects a script
- * into the initial HTML <head> from the server (the App Router requires
- * beforeInteractive scripts to live in the root layout). The AdsKeeper loader, by
- * contrast, uses `afterInteractive` — injected client-side, where a verifier
- * might not see it — which is fine for AdsKeeper but not for verification.
+ * NOTE: site VERIFICATION does NOT rely on this tag. `next/script` is loaded by
+ * the Next.js runtime and isn't guaranteed to appear as a static <script> in the
+ * RAW server HTML <head> that Google's (no-JS) crawler reads — so verification is
+ * handled by the server-rendered `<meta name="google-adsense-account">` tag in
+ * app/layout.tsx (`metadata.other`). This script just loads the AdSense library
+ * early so ad units work once they're added post-approval.
  *
  * Async + non-blocking, and independent of AdsKeeper (AdSense allows other
- * networks, so both coexist). No `<ins class="adsbygoogle">` units are added yet
- * — those come after approval.
+ * networks, so both coexist).
  */
 export function AdSenseHead() {
   return (
