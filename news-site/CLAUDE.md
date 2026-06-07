@@ -225,7 +225,7 @@ never blocks the rest) + a Stop — and returns you to the selector, so you can
 (US sharing article A while you kick off Sports → article B), each independent; a
 **"Sharing now"** panel lists them. **Schedule** (server-side cron) is unchanged.
 ⚠️ Live jobs are client-driven — keep the tab open until they finish (an
-automatic server fallback for closing mid-share is a planned follow-up). The detailed **Pages manager** (grouped table, per-page
+automatic server fallback for closing mid-share is a planned follow-up). The detailed **Pages manager** (per-group **card grid** — `repeat(auto-fill, minmax(250px,1fr))`, each card carrying the select checkbox, avatar, status, Group + Issue selectors and Refresh/Disconnect — matching the share selector), per-page
 refresh/disconnect, category groups) stays rendered below. Each row's **Category
 Group** cell is an inline **move selector** — pick another group (or "＋ New
 group…") to reassign that Page via `setFacebookPageGroup`, and it jumps to the
@@ -347,7 +347,7 @@ token is needed — only the captured browser session.
 - `app/api/cron/facebook-post/route.ts` — Vercel Cron runner. Atomically claims
   due rows (`updateMany pending→posting`) for **idempotency** (no double-posts),
   posts via Graph, records status/postedAt/error, never crashes on one failure.
-- UI: `/admin/facebook` (grouped table + Connect modal + toasts) and the
+- UI: `/admin/facebook` (per-group card grid + Connect modal + toasts) and the
   "Publish to Facebook Pages" panel on the article edit page (per-niche
   checkboxes, Publish Now / Schedule, per-page results + post history).
 
