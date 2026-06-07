@@ -52,6 +52,7 @@ export default async function AdminFacebookPage() {
     pageId: p.pageId,
     pageName: p.pageName,
     categoryGroup: p.categoryGroup,
+    issue: p.issue,
     status: p.status,
     lastSyncedAt: p.lastSyncedAt ? p.lastSyncedAt.toISOString() : null,
     postedCount: postedByPage.get(p.id) ?? 0,

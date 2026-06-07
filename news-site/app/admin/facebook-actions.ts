@@ -515,6 +515,27 @@ export async function setFacebookPageGroup(input: {
   }
 }
 
+/** Flag (or clear) an operational issue on a Page — e.g. "Limited post", "Post
+ *  failed", "Verify identity". Pass issue=null (or empty) to clear it. Only
+ *  touches `issue`; the token and everything else are untouched. */
+export async function setFacebookPageIssue(input: {
+  id: string;
+  issue: string | null;
+}): Promise<ActionResult> {
+  await requireAdmin();
+  const issue = input.issue?.trim() || null;
+  try {
+    await prisma.facebookPage.update({
+      where: { id: input.id },
+      data: { issue },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch {
+    return fail("Could not update the page’s issue.");
+  }
+}
+
 // ── Publish an article now to selected pages ─────────────────────────────────
 
 /**
