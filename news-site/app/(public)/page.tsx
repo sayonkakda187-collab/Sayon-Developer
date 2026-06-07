@@ -21,10 +21,11 @@ export default async function Home() {
   return (
     <div>
       {/* Top-of-page ad — the first thing visitors see on landing, above the
-          lead story. Collapses cleanly if unfilled (needs its own HOME widget
-          id in lib/ads.ts to fill). */}
+          lead story. A Header Widget (4 cards on desktop / 2 on mobile); reserves
+          300px to match its height so it never jumps the hero down when it fills,
+          and collapses cleanly if AdsKeeper doesn't fill it. */}
       <section className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={110} />
+        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={300} />
       </section>
 
       {/* Lead story. */}
