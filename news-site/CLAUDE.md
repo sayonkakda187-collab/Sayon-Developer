@@ -224,8 +224,15 @@ never blocks the rest) + a Stop — and returns you to the selector, so you can
 **start another group's share immediately**. Several jobs run **concurrently**
 (US sharing article A while you kick off Sports → article B), each independent; a
 **"Sharing now"** panel lists them. **Schedule** (server-side cron) is unchanged.
-⚠️ Live jobs are client-driven — keep the tab open until they finish (an
-automatic server fallback for closing mid-share is a planned follow-up). The detailed **Pages manager** (per-group **card grid** — `repeat(auto-fill, minmax(250px,1fr))`, each card carrying the select checkbox, avatar, status, Group + Issue selectors and Refresh/Disconnect — matching the share selector), per-page
+⚠️ Live jobs are client-driven — keep the tab open while they post; but if you
+**close the tab** mid-share (or hit a job's **"Finish on server"** button), the
+**not-yet-started** pages are handed to the server queue: `POST
+/api/admin/facebook/queue-remaining` (`sendBeacon` on `pagehide`, or `fetch` for
+the button) → admin-only → `lib/facebookQueue.ts` → `ScheduledPost` rows the cron
+drains. Only pages the live loop hasn't started are sent (the in-flight + done
+ones are owned by the live path), so **no page posts twice** (the `pagehide`
+handler skips bfcache + tab-switches). Note the Hobby cron is daily, so
+handed-off pages post at the next cron run. The detailed **Pages manager** (per-group **card grid** — `repeat(auto-fill, minmax(250px,1fr))`, each card carrying the select checkbox, avatar, status, Group + Issue selectors and Refresh/Disconnect — matching the share selector), per-page
 refresh/disconnect, category groups) stays rendered below. Each row's **Category
 Group** cell is an inline **move selector** — pick another group (or "＋ New
 group…") to reassign that Page via `setFacebookPageGroup`, and it jumps to the

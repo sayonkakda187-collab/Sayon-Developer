@@ -27,7 +27,7 @@ import { formatSchedule, nowLocalInput, localInputToUtcISO, SCHEDULE_TZ } from "
 import { FACEBOOK_CATEGORY_GROUPS, sortCategoryGroups } from "@/lib/facebookGroups";
 
 type Step = "pages" | "articles";
-type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled"; error?: string; postId?: string };
+type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled" | "queued"; error?: string; postId?: string };
 
 type JobPage = { id: string; name: string; status: string };
 /** A single, self-contained "share this article to these pages" job. Several run
@@ -185,6 +185,11 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
   const ivRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resolveRef = useRef<(() => void) | null>(null);
   const startedRef = useRef(false);
+  // Pages the live loop has NOT started yet — the only ones ever safe to hand to
+  // the server queue (so a page never posts twice).
+  const pendingRef = useRef<Set<string>>(new Set(job.pages.map((p) => p.id)));
+  const runningRef = useRef(true);
+  const handoffRef = useRef(false);
 
   // Cancellable gap between pages — resolves true if Stop interrupts it.
   function countdownSleep(totalSecs: number): Promise<boolean> {
@@ -211,6 +216,61 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
     if (resolveRef.current) resolveRef.current();
   }
 
+  // Hand the not-yet-started pages to the server queue (explicit button). They
+  // finish via Vercel Cron even if you leave; pages already attempted aren't
+  // re-sent, so nothing double-posts.
+  async function finishOnServer() {
+    const ids = [...pendingRef.current];
+    if (ids.length === 0) return;
+    pendingRef.current.clear();
+    handoffRef.current = true;
+    cancelRef.current = true;
+    if (resolveRef.current) resolveRef.current();
+    try {
+      const res = await fetch("/api/admin/facebook/queue-remaining", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ articleId: job.article.id, caption: job.caption, pageDbIds: ids }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; count?: number } | null;
+      const n = data?.count ?? ids.length;
+      if (res.ok && data?.ok) {
+        success(`${job.label}: ${n} page${n === 1 ? "" : "s"} queued to finish on the server (posts at the next cron run).`);
+      } else {
+        error(`${job.label}: couldn’t queue the remaining pages — they were not posted.`);
+      }
+    } catch {
+      error(`${job.label}: couldn’t queue the remaining pages — they were not posted.`);
+    }
+    router.refresh();
+  }
+
+  // If the tab is actually being unloaded mid-share, hand the not-yet-started
+  // pages to the server queue via sendBeacon so they still finish. Skips bfcache
+  // (the job may resume) + tab-switches (pagehide doesn't fire for those), and
+  // only sends pages the live loop hasn't started — so nothing double-posts.
+  useEffect(() => {
+    const onPageHide = (e: PageTransitionEvent) => {
+      if (e.persisted || handoffRef.current || !runningRef.current) return;
+      const ids = [...pendingRef.current];
+      if (ids.length === 0) return;
+      handoffRef.current = true;
+      pendingRef.current.clear();
+      try {
+        const blob = new Blob(
+          [JSON.stringify({ articleId: job.article.id, caption: job.caption, pageDbIds: ids })],
+          { type: "application/json" },
+        );
+        navigator.sendBeacon?.("/api/admin/facebook/queue-remaining", blob);
+      } catch {
+        /* best effort */
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (startedRef.current) return; // guard StrictMode double-invoke
     startedRef.current = true;
@@ -221,6 +281,7 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
       for (let i = 0; i < pages.length; i++) {
         if (cancelRef.current) break;
         const pg = pages[i];
+        pendingRef.current.delete(pg.id); // now owned by the live path — never queue it
         setProgress((p) => ({ ...p, [pg.id]: { status: "posting" } }));
         const res = await publishArticleNow({ articleId: job.article.id, pageDbIds: [pg.id], caption: job.caption });
         const r = res.ok ? res.data[0] : null;
@@ -241,8 +302,16 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
       setCountdown(null);
       setWaitingFor(null);
       setRunning(false);
+      runningRef.current = false;
       const total = pages.length;
-      if (cancelRef.current) {
+      if (handoffRef.current) {
+        // Remaining pages were handed to the server queue (button / tab close).
+        setProgress((p) => {
+          const next = { ...p };
+          for (const pg of pages) if (next[pg.id]?.status === "pending") next[pg.id] = { status: "queued" };
+          return next;
+        });
+      } else if (cancelRef.current) {
         setCancelled(true);
         setProgress((p) => {
           const next = { ...p };
@@ -267,6 +336,7 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
   }, []);
 
   const okCount = Object.values(progress).filter((p) => p.status === "ok").length;
+  const queuedCount = Object.values(progress).filter((p) => p.status === "queued").length;
   const total = job.pages.length;
 
   return (
@@ -278,7 +348,17 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
           {job.article.title}
         </span>
         {running ? (
-          <button type="button" className="adm-btn-ghost adm-fb-danger" onClick={stop}>Stop</button>
+          <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="adm-btn-ghost"
+              onClick={finishOnServer}
+              title="Queue the not-yet-posted pages so the server finishes them, even if you close this tab"
+            >
+              Finish on server
+            </button>
+            <button type="button" className="adm-btn-ghost adm-fb-danger" onClick={stop}>Stop</button>
+          </span>
         ) : (
           <button type="button" className="adm-btn-ghost" onClick={() => onDismiss(job.id)}>Dismiss</button>
         )}
@@ -296,12 +376,13 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
               <span className="adm-fb-result-msg">
                 {st.status === "posting" ? "Posting…"
                   : st.status === "pending" ? "Waiting…"
-                    : st.status === "cancelled" ? "Cancelled"
-                      : st.status === "ok"
-                        ? st.postId
-                          ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
-                          : "Posted ✓"
-                        : (st.error ?? "Failed to post.")}
+                    : st.status === "queued" ? "Queued · server"
+                      : st.status === "cancelled" ? "Cancelled"
+                        : st.status === "ok"
+                          ? st.postId
+                            ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
+                            : "Posted ✓"
+                          : (st.error ?? "Failed to post.")}
               </span>
             </div>
           );
@@ -317,7 +398,8 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
       {!running && (
         <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 10 }}>
           <span className="adm-fb-target-dot" aria-hidden />
-          {cancelled ? "Stopped — posted" : "Posted"} to <strong>{okCount}</strong> of <strong>{total}</strong> page{total === 1 ? "" : "s"}.
+          {cancelled ? "Stopped — posted" : "Posted"} to <strong>{okCount}</strong> of <strong>{total}</strong> page{total === 1 ? "" : "s"}
+          {queuedCount > 0 ? <> · <strong>{queuedCount}</strong> queued on the server</> : null}.
         </p>
       )}
     </div>
