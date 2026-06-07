@@ -595,34 +595,47 @@ breakdown, and a **payout-progress** bar toward AdsKeeper's **$100** minimum
 - 🔐 If your AdsKeeper password/token is ever exposed (screenshot/chat), change it
   in AdsKeeper and re-save here.
 
-## Audience analytics (visitor countries)
+## Audience analytics (visitor countries + devices)
 
 A privacy-respecting **Audience** admin tab (`/admin/audience`, globe nav item)
 showing which countries article readers come from — a world **bubble map** + a
-ranked **flagged country list** (count + %), **overall or per-article**, with a
+ranked **flagged country list** (count + %) — plus a **device breakdown**
+(mobile / desktop / tablet share), **overall or per-article**, with a
 7 / 30-day / all-time range.
 
 - **Tracking:** the public article server component reads Vercel's free
-  **`x-vercel-ip-country`** geo header via `headers()` and passes it to
-  `incrementViews(id, country)`, which adds a 3rd parallel upsert into a new
-  **`ArticleCountryView`** table (articleId, ISO alpha-2 `countryCode`, UTC
-  `date`, `count`). **Privacy: counts only — no IP/UA/PII**; missing/invalid →
-  `"ZZ"` (Unknown). No paid geo-IP service; no extra blocking (same `Promise.all`
-  as the existing view write).
+  **`x-vercel-ip-country`** geo header via `headers()` **and** a coarse device
+  class from the User-Agent (Next's `userAgent({ headers })` → `device.type`,
+  mapped to `mobile` / `desktop` / `tablet`; anything else → desktop), then passes
+  both to `incrementViews(id, country, device)`. That adds two parallel upserts:
+  **`ArticleCountryView`** (articleId, ISO alpha-2 `countryCode`, UTC `date`,
+  `count`) and **`ArticleDeviceView`** (articleId, `device`, UTC `date`, `count`).
+  **Privacy: counts only — no IP, no stored UA string, no PII**; the raw UA is
+  parsed then discarded, missing/invalid country → `"ZZ"` (Unknown). No paid
+  geo-IP service; same `Promise.all` as the existing view write.
 - **Aggregation:** `getCountryStats({ articleId?, days? })` (groupBy country, sum)
-  + `getAudienceArticles()` (articles that have data); admin-only server action
-  `getAudienceStats` powers the client re-fetch on scope/range change.
+  and `getDeviceStats({ articleId?, days? })` (groupBy device, sum), plus
+  `getAudienceArticles()` (articles that have data). The admin-only server action
+  `getAudienceStats` returns **both** (`{ stats, total, devices }`) and powers the
+  client re-fetch on scope/range change.
 - **Map:** dependency-free SVG **equirectangular bubble map** (`WorldBubbleMap` +
   `lib/countryCentroids.ts`) — faint base dots trace the continents, visitor
   countries get volume-sized bubbles + a flag/name/% tooltip. No map
   library/topojson (light bundle, theme-aware).
+- **Devices:** a **Devices** card on the tab — a proportional split bar +
+  per-device legend (count + %), and a **"Top device"** summary tile. It renders
+  once per-device data exists (historical reads from before this feature have
+  country data but no device split). `components/admin/AudienceDashboard.tsx`.
 - **Helpers:** `lib/countries.ts` — alpha-2 → flag emoji (regional indicators) +
-  `Intl.DisplayNames` name; `"ZZ"` → 🌐 Unknown.
-- **Migration:** `20260605140000_article_country_view` (auto-applies). **No env
-  needed** — the Vercel header is automatic in production. ⚠️ Real country data
-  only appears once **real visitors hit the deployed site** (localhost/preview
-  with no geo header bucket as Unknown). Existing view tracking + the dashboard
-  views chart are unchanged (the country upsert is additive).
+  `Intl.DisplayNames` name; `"ZZ"` → 🌐 Unknown. `lib/devices.ts` — device class →
+  label + accent colour (pure, client-safe; shared by tracking + the dashboard).
+- **Migrations:** `20260605140000_article_country_view` +
+  `20260607120000_article_device_view` (both auto-apply, additive). **No env
+  needed** — the Vercel geo header + the request User-Agent are automatic in
+  production. ⚠️ Real country/device data only appears once **real visitors hit
+  the deployed site** (localhost/preview with no geo header bucket as Unknown).
+  Existing view tracking + the dashboard views chart are unchanged (the new
+  upserts are additive).
 
 ## AI image generation (swappable provider: Cloudflare / Hugging Face / Gemini)
 

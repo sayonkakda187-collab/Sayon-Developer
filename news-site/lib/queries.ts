@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { Article, Category } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { normalizeDevice } from "@/lib/devices";
 
 export const ARTICLES_PER_PAGE = 8;
 
@@ -109,13 +110,21 @@ function normalizeCountry(raw?: string | null): string {
 /**
  * Fire-and-forget view increment; never blocks rendering on failure. Bumps the
  * all-time `Article.views` counter, the per-day `DailyView` bucket (views-over-
- * time chart) and the per-country `ArticleCountryView` bucket (Audience map).
- * Privacy-respecting: only per-day integer counts, no IP/UA/visitor PII — the
- * country comes from the free Vercel `x-vercel-ip-country` header ("ZZ" = unknown).
+ * time chart), the per-country `ArticleCountryView` bucket (Audience map) and the
+ * per-device `ArticleDeviceView` bucket (Audience device breakdown). Privacy-
+ * respecting: only per-day integer counts, no IP/UA/visitor PII — the country
+ * comes from the free Vercel `x-vercel-ip-country` header ("ZZ" = unknown) and the
+ * device is a coarse class (mobile/desktop/tablet) derived from the User-Agent and
+ * immediately discarded (only the bucket is stored).
  */
-export async function incrementViews(id: string, countryCode?: string | null) {
+export async function incrementViews(
+  id: string,
+  countryCode?: string | null,
+  device?: string | null,
+) {
   const today = utcDayStart();
   const code = normalizeCountry(countryCode);
+  const dev = normalizeDevice(device);
   try {
     await Promise.all([
       prisma.article.update({
@@ -131,6 +140,11 @@ export async function incrementViews(id: string, countryCode?: string | null) {
         where: { articleId_countryCode_date: { articleId: id, countryCode: code, date: today } },
         update: { count: { increment: 1 } },
         create: { articleId: id, countryCode: code, date: today, count: 1 },
+      }),
+      prisma.articleDeviceView.upsert({
+        where: { articleId_device_date: { articleId: id, device: dev, date: today } },
+        update: { count: { increment: 1 } },
+        create: { articleId: id, device: dev, date: today, count: 1 },
       }),
       // Real-time read log for the Audience "Live readers" panel.
       prisma.recentView.create({ data: { articleId: id, countryCode: code } }),
@@ -171,6 +185,38 @@ export async function getCountryStats(opts?: {
   });
   const stats = rows
     .map((r) => ({ countryCode: r.countryCode, count: r._sum.count ?? 0 }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const total = stats.reduce((s, x) => s + x.count, 0);
+  return { stats, total };
+}
+
+export type DeviceStat = { device: string; count: number };
+
+/**
+ * Aggregated device-class counts (mobile/desktop/tablet) for the Audience
+ * analytics. Same scoping as getCountryStats: overall (all articles) or a single
+ * article, with an optional rolling window in days (omit / 0 = all time). Returns
+ * counts sorted desc + the total.
+ */
+export async function getDeviceStats(opts?: {
+  articleId?: string;
+  days?: number;
+}): Promise<{ stats: DeviceStat[]; total: number }> {
+  const where: { articleId?: string; date?: { gte: Date } } = {};
+  if (opts?.articleId) where.articleId = opts.articleId;
+  if (opts?.days && opts.days > 0) {
+    const start = utcDayStart();
+    start.setUTCDate(start.getUTCDate() - (Math.min(3650, Math.round(opts.days)) - 1));
+    where.date = { gte: start };
+  }
+  const rows = await prisma.articleDeviceView.groupBy({
+    by: ["device"],
+    where,
+    _sum: { count: true },
+  });
+  const stats = rows
+    .map((r) => ({ device: r.device, count: r._sum.count ?? 0 }))
     .filter((s) => s.count > 0)
     .sort((a, b) => b.count - a.count);
   const total = stats.reduce((s, x) => s + x.count, 0);

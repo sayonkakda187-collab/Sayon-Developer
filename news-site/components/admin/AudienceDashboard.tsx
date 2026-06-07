@@ -6,10 +6,12 @@ import { WorldBubbleMap } from "./WorldBubbleMap";
 import { CountryFlag } from "./CountryFlag";
 import { LiveReaders } from "./LiveReaders";
 import { countryColor, countryName } from "@/lib/countries";
+import { deviceColor, deviceLabel, normalizeDevice, DEVICE_ORDER } from "@/lib/devices";
 import { GlobeIcon } from "./icons";
 import { formatNumber } from "@/lib/site";
 
 type Stat = { countryCode: string; count: number };
+type DeviceStat = { device: string; count: number };
 type ArticleOpt = { id: string; title: string };
 
 const RANGES = [
@@ -21,16 +23,22 @@ const RANGES = [
 export function AudienceDashboard({
   initialStats,
   initialTotal,
+  initialDevices,
+  initialDeviceTotal,
   articles,
 }: {
   initialStats: Stat[];
   initialTotal: number;
+  initialDevices: DeviceStat[];
+  initialDeviceTotal: number;
   articles: ArticleOpt[];
 }) {
   const [scope, setScope] = useState<string>("all"); // "all" or an articleId
   const [days, setDays] = useState(0);
   const [stats, setStats] = useState<Stat[]>(initialStats);
   const [total, setTotal] = useState(initialTotal);
+  const [devices, setDevices] = useState<DeviceStat[]>(initialDevices);
+  const [deviceTotal, setDeviceTotal] = useState(initialDeviceTotal);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const firstRun = useRef(true);
@@ -47,6 +55,8 @@ export function AudienceDashboard({
       if (cancelled) return;
       setStats(res.stats);
       setTotal(res.total);
+      setDevices(res.devices.stats);
+      setDeviceTotal(res.devices.total);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -59,12 +69,18 @@ export function AudienceDashboard({
 
   const max = Math.max(1, ...stats.map((s) => s.count));
   const scopeLabel = scope === "all" ? "All articles" : articles.find((a) => a.id === scope)?.title ?? "Article";
+  // Stable display order (phones → desktop → tablet) for the device breakdown;
+  // `devices` itself is already sorted by count, so devices[0] is the top device.
+  const orderedDevices = DEVICE_ORDER.map((d) =>
+    devices.find((x) => normalizeDevice(x.device) === d),
+  ).filter((x): x is DeviceStat => !!x && x.count > 0);
+  const topDevice = devices[0] ?? null;
 
   return (
     <div>
       <div className="adm-page-h">
         <h1>Audience</h1>
-        <p>Which countries your article readers come from (privacy-respecting — country counts only, via Vercel’s free geo header).</p>
+        <p>Where your readers are and what they read on — visitor countries + device mix (privacy-respecting: aggregate counts only, via Vercel’s free geo header + the request User-Agent).</p>
       </div>
 
       {/* Real-time readers (always on, independent of the scope/range filters) */}
@@ -134,6 +150,20 @@ export function AudienceDashboard({
               }
               sub={`${formatNumber(stats[0].count)} · ${total ? Math.round((stats[0].count / total) * 100) : 0}%`}
             />
+            {topDevice && (
+              <SummaryTile
+                label="Top device"
+                value={
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ color: deviceColor(topDevice.device), display: "inline-flex" }}>
+                      <DeviceIcon type={topDevice.device} />
+                    </span>
+                    {deviceLabel(topDevice.device)}
+                  </span>
+                }
+                sub={`${formatNumber(topDevice.count)} · ${deviceTotal ? Math.round((topDevice.count / deviceTotal) * 100) : 0}%`}
+              />
+            )}
           </div>
 
           <div className="adm-grid-2">
@@ -168,6 +198,52 @@ export function AudienceDashboard({
               </div>
             </div>
           </div>
+
+          {/* Devices — how readers access (mobile vs desktop vs tablet). Renders
+              once the new per-device data starts arriving; historical reads from
+              before this feature have country data but no device split. */}
+          {orderedDevices.length > 0 && (
+            <div className="adm-card adm-card-pad" style={{ marginTop: 16 }}>
+              <div className="adm-card-title">Devices</div>
+              <div className="adm-card-sub" style={{ marginBottom: 12 }}>
+                How readers access · {formatNumber(deviceTotal)} {deviceTotal === 1 ? "view" : "views"} · {scopeLabel}
+              </div>
+
+              {/* Proportional split bar (mobile / desktop / tablet) */}
+              <div style={{ display: "flex", height: 16, borderRadius: 999, overflow: "hidden", background: "var(--adm-bd)" }}>
+                {orderedDevices.map((d) => {
+                  const pct = deviceTotal ? (d.count / deviceTotal) * 100 : 0;
+                  return (
+                    <div
+                      key={d.device}
+                      title={`${deviceLabel(d.device)} · ${Math.round(pct)}%`}
+                      style={{ width: `${pct}%`, background: deviceColor(d.device) }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Legend with per-device counts + share */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginTop: 14 }}>
+                {orderedDevices.map((d) => {
+                  const pct = deviceTotal ? Math.round((d.count / deviceTotal) * 100) : 0;
+                  return (
+                    <div key={d.device} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", background: deviceColor(d.device), flex: "none" }}>
+                        <DeviceIcon type={d.device} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: "var(--adm-ink)", fontSize: 14 }}>{deviceLabel(d.device)}</div>
+                        <div style={{ color: "var(--adm-muted)", fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>
+                          <b style={{ color: "var(--adm-ink)" }}>{formatNumber(d.count)}</b> · {pct}%
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -181,6 +257,34 @@ function SummaryTile({ label, value, sub }: { label: string; value: ReactNode; s
       <div style={{ fontSize: 18, fontWeight: 700, color: "var(--adm-ink)", letterSpacing: "-0.3px", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
       <div className="adm-gsub" style={{ marginTop: 2 }}>{sub}</div>
     </div>
+  );
+}
+
+/** Small device glyph (phone / monitor / tablet), inherits color via currentColor. */
+function DeviceIcon({ type }: { type: string }) {
+  const d = normalizeDevice(type);
+  if (d === "mobile") {
+    return (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="7" y="2" width="10" height="20" rx="2" />
+        <path d="M11 18h2" />
+      </svg>
+    );
+  }
+  if (d === "tablet") {
+    return (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M11 18h2" />
+      </svg>
+    );
+  }
+  // desktop / monitor
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </svg>
   );
 }
 

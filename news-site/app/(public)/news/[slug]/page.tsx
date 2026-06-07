@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Link } from "next-view-transitions";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { userAgent } from "next/server";
 import {
   getApprovedComments,
   getArticleBySlug,
@@ -80,9 +81,16 @@ export default async function ArticlePage({ params }: Props) {
   const article = await getArticleBySlug(params.slug);
   if (!article) notFound();
 
-  // Visitor country from Vercel's free geo header (privacy-respecting: only an
-  // aggregate per-country count is stored, never the IP). Missing → "Unknown".
-  await incrementViews(article.id, headers().get("x-vercel-ip-country"));
+  // Visitor country (Vercel's free geo header) + a coarse device class
+  // (mobile/desktop/tablet) parsed from the User-Agent — privacy-respecting: only
+  // aggregate per-country and per-device counts are stored, never the IP or the
+  // raw UA string. Missing → Unknown country / Desktop.
+  const h = headers();
+  await incrementViews(
+    article.id,
+    h.get("x-vercel-ip-country"),
+    userAgent({ headers: h }).device.type,
+  );
   const [related, comments] = await Promise.all([
     getRelatedArticles({
       categoryId: article.categoryId,
