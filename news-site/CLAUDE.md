@@ -345,17 +345,27 @@ token is needed — only the captured browser session.
 - `lib/crypto.ts` — AES-256-GCM encrypt/decrypt for secrets.
 - `lib/facebook.ts` — Graph API wrapper: `validatePageToken`, `postToPage`
   (`POST /{pageId}/feed` with message+link), `exchangeForLongLivedUserToken`,
-  `permalinkForPost`. Categorizes expired/invalid tokens (codes 190/102/…).
+  `permalinkForPost`, and `getPostStats` (reads a post's **engagement**
+  reactions/comments/shares always, + **reach/impressions** best-effort — those
+  need `read_insights`, so they degrade to null rather than failing). Categorizes
+  expired/invalid tokens (codes 190/102/…).
 - `lib/facebookPublish.ts` — single publish chokepoint (decrypt → post → update
   page status) shared by "Publish now" and the cron.
 - `lib/facebookGroups.ts` — niche group list + sort helper.
 - `app/admin/facebook-actions.ts` — server actions (connect/refresh/disconnect/
-  publishNow/schedule/cancel), all `requireAdmin()`.
+  publishNow/schedule/cancel), all `requireAdmin()`. Plus **`listSharedArticles`**
+  (articles with ≥1 posted share) + **`getShareResults({ articleId })`** which
+  reads each posted page's results live via `getPostStats` (decrypt token →
+  Graph), concurrency-limited (`mapLimit` 6) + capped, one page's failure never
+  blocks the rest.
 - `app/api/cron/facebook-post/route.ts` — Vercel Cron runner. Atomically claims
   due rows (`updateMany pending→posting`) for **idempotency** (no double-posts),
   posts via Graph, records status/postedAt/error, never crashes on one failure.
-- UI: `/admin/facebook` (per-group card grid + Connect modal + toasts) and the
-  "Publish to Facebook Pages" panel on the article edit page (per-niche
+- UI: `/admin/facebook` (per-group card grid + Connect modal + toasts), a
+  **Share results** panel (`FacebookShareResults` — pick a shared article → live
+  per-page **reactions / comments / shares / reach** cards + "View post" links,
+  Refresh re-reads; reach shows a "needs read_insights" note when unavailable),
+  and the "Publish to Facebook Pages" panel on the article edit page (per-niche
   checkboxes, Publish Now / Schedule, per-page results + post history).
 
 **Cron / scheduling**

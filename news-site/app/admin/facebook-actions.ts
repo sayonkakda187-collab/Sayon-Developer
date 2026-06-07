@@ -9,6 +9,8 @@ import {
   exchangeForLongLivedUserToken,
   validatePageToken,
   getUserPages,
+  getPostStats,
+  permalinkForPost,
 } from "@/lib/facebook";
 import {
   getFacebookAppCreds,
@@ -848,6 +850,134 @@ export async function scheduleArticleShares(input: {
   await prisma.scheduledPost.createMany({ data: rows });
   revalidatePath("/admin/facebook");
   return { ok: true, data: { count: rows.length } };
+}
+
+// ── Share results (per-page engagement + reach) ───────────────────────────────
+
+/** Articles that have at least one POSTED Facebook share, most recent first. */
+export async function listSharedArticles(): Promise<
+  ActionResult<{ articles: { id: string; title: string; posts: number; lastAt: string | null }[] }>
+> {
+  await requireAdmin();
+  const grouped = await prisma.scheduledPost.groupBy({
+    by: ["articleId"],
+    where: { status: "posted", graphPostId: { not: null } },
+    _count: { _all: true },
+    _max: { postedAt: true },
+  });
+  const sorted = grouped
+    .sort((a, b) => (b._max.postedAt?.getTime() ?? 0) - (a._max.postedAt?.getTime() ?? 0))
+    .slice(0, 50);
+  const ids = sorted.map((g) => g.articleId);
+  if (ids.length === 0) return { ok: true, data: { articles: [] } };
+  const articles = await prisma.article.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } });
+  const byId = new Map(articles.map((a) => [a.id, a.title]));
+  return {
+    ok: true,
+    data: {
+      articles: sorted
+        .filter((g) => byId.has(g.articleId))
+        .map((g) => ({
+          id: g.articleId,
+          title: byId.get(g.articleId)!,
+          posts: g._count._all,
+          lastAt: g._max.postedAt ? g._max.postedAt.toISOString() : null,
+        })),
+    },
+  };
+}
+
+export type ShareResultRow = {
+  pageDbId: string;
+  pageName: string;
+  postedAt: string | null;
+  permalink: string;
+  ok: boolean;
+  error?: string;
+  reactions: number | null;
+  comments: number | null;
+  shares: number | null;
+  impressions: number | null;
+  reach: number | null;
+  insightsUnavailable: boolean;
+};
+
+/** Run an async map with bounded concurrency (keeps Graph calls under control). */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Per-page results for one article's POSTED shares — engagement always, plus
+ * reach/impressions when `read_insights` is granted. Each post is read live from
+ * the Graph API with that Page's (decrypted) token; one page failing (e.g. an
+ * expired token) never blocks the rest. Capped + concurrency-limited so a refresh
+ * can't hammer Graph.
+ */
+export async function getShareResults(input: {
+  articleId: string;
+}): Promise<ActionResult<{ articleTitle: string; results: ShareResultRow[] }>> {
+  await requireAdmin();
+  const article = await prisma.article.findUnique({
+    where: { id: input.articleId },
+    select: { id: true, title: true },
+  });
+  if (!article) return fail("Article not found.");
+
+  const rows = await prisma.scheduledPost.findMany({
+    where: { articleId: article.id, status: "posted", graphPostId: { not: null } },
+    orderBy: { postedAt: "desc" },
+    take: 60,
+    include: { facebookPage: { select: { id: true, pageName: true, accessToken: true } } },
+  });
+
+  const results = await mapLimit(rows, 6, async (r): Promise<ShareResultRow> => {
+    const postId = r.graphPostId as string;
+    const base = {
+      pageDbId: r.facebookPage.id,
+      pageName: r.facebookPage.pageName,
+      postedAt: r.postedAt ? r.postedAt.toISOString() : null,
+      permalink: permalinkForPost(postId),
+    };
+    try {
+      const token = decryptSecret(r.facebookPage.accessToken);
+      const s = await getPostStats(postId, token);
+      return {
+        ...base,
+        permalink: s.permalink || base.permalink,
+        ok: true,
+        reactions: s.reactions,
+        comments: s.comments,
+        shares: s.shares,
+        impressions: s.impressions,
+        reach: s.reach,
+        insightsUnavailable: s.insightsUnavailable,
+      };
+    } catch (e) {
+      return {
+        ...base,
+        ok: false,
+        error: e instanceof FacebookApiError ? e.message : "Could not load results.",
+        reactions: null,
+        comments: null,
+        shares: null,
+        impressions: null,
+        reach: null,
+        insightsUnavailable: true,
+      };
+    }
+  });
+
+  return { ok: true, data: { articleTitle: article.title, results } };
 }
 
 /** Edit a still-pending scheduled post (time and/or caption). */
