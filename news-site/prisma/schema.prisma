@@ -46,6 +46,7 @@ model Article {
   scheduledPosts ScheduledPost[]
   dailyViews     DailyView[]
   countryViews   ArticleCountryView[]
+  deviceViews    ArticleDeviceView[]
   recentViews    RecentView[]
 
   @@index([status, publishedAt])
@@ -160,6 +161,25 @@ model ArticleCountryView {
 
   @@unique([articleId, countryCode, date])
   @@index([countryCode])
+  @@index([date])
+}
+
+// Per-device-type visitor counts for the admin Audience analytics. Privacy-
+// respecting: only an integer count per article per device class per UTC day —
+// no IP, no stored UA string, no visitor PII. The device class
+// (mobile/desktop/tablet) is derived from the request User-Agent at read time and
+// immediately discarded — only the bucket is kept. Incremented alongside the
+// other view counters.
+model ArticleDeviceView {
+  id        String   @id @default(cuid())
+  date      DateTime // UTC day (midnight) the views were counted on
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  device    String // "mobile" | "desktop" | "tablet"
+  count     Int      @default(0)
+
+  @@unique([articleId, device, date])
+  @@index([device])
   @@index([date])
 }
 
