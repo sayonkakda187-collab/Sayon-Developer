@@ -6,6 +6,7 @@ import {
   disconnectFacebookPage,
   refreshFacebookPage,
   setFacebookPageGroup,
+  setFacebookPagesGroup,
   setFacebookPageIssue,
 } from "@/app/admin/facebook-actions";
 import { FACEBOOK_CATEGORY_GROUPS, sortCategoryGroups } from "@/lib/facebookGroups";
@@ -51,6 +52,7 @@ function TableHead() {
   return (
     <thead>
       <tr>
+        <th aria-hidden style={{ width: 1 }} />
         <th>Page Name</th>
         <th>Page ID</th>
         <th>Category Group</th>
@@ -74,6 +76,8 @@ export function FacebookPagesManager({
   const [showConnect, setShowConnect] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [, startTransition] = useTransition();
 
   // Filter by name / id / group / issue so a Page is easy to find among many.
@@ -190,11 +194,61 @@ export function FacebookPagesManager({
     refresh();
   }
 
+  // ── Multi-select + bulk move ───────────────────────────────────────────────
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Select / unselect every row in one box (a niche group or "Needs attention").
+  function setGroupSelection(rowsArr: FacebookPageView[]) {
+    const allOn = rowsArr.length > 0 && rowsArr.every((r) => selectedIds.has(r.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const r of rowsArr) {
+        if (allOn) next.delete(r.id);
+        else next.add(r.id);
+      }
+      return next;
+    });
+  }
+
+  // Move every selected page to one group in a single request.
+  async function bulkMove(target: string) {
+    const group = target.trim();
+    const ids = [...selectedIds];
+    if (!group || ids.length === 0) return;
+    setBulkBusy(true);
+    const res = await setFacebookPagesGroup({ ids, categoryGroup: group });
+    setBulkBusy(false);
+    if (res.ok) {
+      success(`Moved ${res.data.count} page${res.data.count === 1 ? "" : "s"} to ${group}.`);
+      setSelectedIds(new Set());
+    } else {
+      error(res.error);
+    }
+    refresh();
+  }
+
   // One table row — shared by the niche tables and the "Needs attention" box.
   function renderRow(p: FacebookPageView) {
     const busy = busyId === p.id;
     return (
       <tr key={p.id}>
+        <td style={{ width: 1 }}>
+          <input
+            type="checkbox"
+            checked={selectedIds.has(p.id)}
+            onChange={() => toggleOne(p.id)}
+            disabled={busy || bulkBusy}
+            aria-label={`Select ${p.pageName}`}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+        </td>
         <td>
           <span style={{ fontWeight: 600, color: "var(--adm-ink)" }}>{p.pageName}</span>
           <span className="adm-fb-sub">
@@ -346,6 +400,52 @@ export function FacebookPagesManager({
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 16 }}>
+          {/* Bulk action bar — appears once one or more pages are ticked */}
+          {selectedIds.size > 0 && (
+            <div
+              className="adm-card adm-card-pad"
+              style={{ position: "sticky", top: 8, zIndex: 5, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "rgb(var(--accent))" }}
+            >
+              <strong style={{ color: "var(--adm-ink)" }}>{selectedIds.size} selected</strong>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span className="adm-fb-sub">Move to</span>
+                <select
+                  className="adm-input"
+                  style={{ maxWidth: 210 }}
+                  value=""
+                  disabled={bulkBusy}
+                  aria-label="Move selected pages to a group"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    if (v === "__new__") {
+                      const name = window.prompt(`Move ${selectedIds.size} selected page(s) to a new group:`, "");
+                      if (name && name.trim()) bulkMove(name.trim());
+                    } else {
+                      bulkMove(v);
+                    }
+                  }}
+                >
+                  <option value="">Choose group…</option>
+                  {groupOptions.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                  <option value="__new__">＋ New group…</option>
+                </select>
+              </label>
+              {bulkBusy && <span className="adm-spinner" aria-hidden />}
+              <button
+                type="button"
+                className="adm-btn-ghost"
+                style={{ marginLeft: "auto" }}
+                onClick={() => setSelectedIds(new Set())}
+                disabled={bulkBusy}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {/* Needs attention — pages the admin flagged with an operational issue */}
           {flagged.length > 0 && (
             <div
@@ -357,7 +457,12 @@ export function FacebookPagesManager({
                   <span className="adm-fb-groupname" style={{ color: "#b45309" }}>⚠ Needs attention</span>
                   <span className="adm-fb-groupcount">{flagged.length}</span>
                 </span>
-                {issueSummary && <span className="adm-fb-sub">{issueSummary}</span>}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  {issueSummary && <span className="adm-fb-sub">{issueSummary}</span>}
+                  <button type="button" className="adm-fb-grouptoggle" onClick={() => setGroupSelection(flagged)}>
+                    {flagged.every((r) => selectedIds.has(r.id)) ? "Unselect all" : "Select all"}
+                  </button>
+                </span>
               </div>
               <table className="adm-table adm-fb-table">
                 <TableHead />
@@ -369,9 +474,14 @@ export function FacebookPagesManager({
           {/* Healthy pages, grouped by niche/category */}
           {grouped.map(({ group, rows }) => (
             <div key={group} className="adm-card adm-card-pad">
-              <div className="adm-fb-grouphd">
-                <span className="adm-fb-groupname">{group}</span>
-                <span className="adm-fb-groupcount">{rows.length}</span>
+              <div className="adm-fb-grouphd" style={{ justifyContent: "space-between" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                  <span className="adm-fb-groupname">{group}</span>
+                  <span className="adm-fb-groupcount">{rows.length}</span>
+                </span>
+                <button type="button" className="adm-fb-grouptoggle" onClick={() => setGroupSelection(rows)}>
+                  {rows.every((r) => selectedIds.has(r.id)) ? "Unselect all" : "Select all"}
+                </button>
               </div>
               <table className="adm-table adm-fb-table">
                 <TableHead />
