@@ -366,15 +366,77 @@ export function FacebookPagesManager({
       </div>
 
       {pages.length > 0 && (
-        <label className="adm-search" style={{ maxWidth: 360, margin: "14px 0 0" }}>
-          <SearchIcon className="h-4 w-4" aria-hidden />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pages by name, ID, group, or issue…"
-            aria-label="Search Facebook pages"
-          />
-        </label>
+        <div
+          style={{
+            position: "sticky",
+            top: 8,
+            zIndex: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            margin: "14px 0 0",
+            padding: "10px 12px",
+            background: "var(--adm-card)",
+            border: "1px solid var(--adm-bd)",
+            borderRadius: "var(--adm-radius)",
+            boxShadow: "var(--adm-shadow)",
+            backdropFilter: "blur(16px) saturate(150%)",
+            WebkitBackdropFilter: "blur(16px) saturate(150%)",
+          }}
+        >
+          <label className="adm-search" style={{ flex: "1 1 240px", maxWidth: 420, marginTop: 0 }}>
+            <SearchIcon className="h-4 w-4" aria-hidden />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search pages by name, ID, group, or issue…"
+              aria-label="Search Facebook pages"
+            />
+          </label>
+
+          {/* Move (bulk) — sits next to Search; active once pages are ticked */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginLeft: "auto" }}>
+            {selectedIds.size > 0 && (
+              <span className="adm-fb-sub" style={{ fontWeight: 600, color: "var(--adm-ink)" }}>
+                {selectedIds.size} selected
+              </span>
+            )}
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className="adm-fb-sub">Move to</span>
+              <select
+                className="adm-input"
+                style={{ maxWidth: 200 }}
+                value=""
+                disabled={bulkBusy || selectedIds.size === 0}
+                aria-label="Move selected pages to a group"
+                title={selectedIds.size === 0 ? "Tick one or more pages first" : "Move the selected pages to a group"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  if (v === "__new__") {
+                    const name = window.prompt(`Move ${selectedIds.size} selected page(s) to a new group:`, "");
+                    if (name && name.trim()) bulkMove(name.trim());
+                  } else {
+                    bulkMove(v);
+                  }
+                }}
+              >
+                <option value="">{selectedIds.size === 0 ? "Select pages…" : "Choose group…"}</option>
+                {groupOptions.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+                <option value="__new__">＋ New group…</option>
+              </select>
+            </label>
+            {bulkBusy && <span className="adm-spinner" aria-hidden />}
+            {selectedIds.size > 0 && (
+              <button type="button" className="adm-btn-ghost" onClick={() => setSelectedIds(new Set())} disabled={bulkBusy}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {pages.length === 0 ? (
@@ -400,52 +462,6 @@ export function FacebookPagesManager({
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 16 }}>
-          {/* Bulk action bar — appears once one or more pages are ticked */}
-          {selectedIds.size > 0 && (
-            <div
-              className="adm-card adm-card-pad"
-              style={{ position: "sticky", top: 8, zIndex: 5, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "rgb(var(--accent))" }}
-            >
-              <strong style={{ color: "var(--adm-ink)" }}>{selectedIds.size} selected</strong>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span className="adm-fb-sub">Move to</span>
-                <select
-                  className="adm-input"
-                  style={{ maxWidth: 210 }}
-                  value=""
-                  disabled={bulkBusy}
-                  aria-label="Move selected pages to a group"
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v) return;
-                    if (v === "__new__") {
-                      const name = window.prompt(`Move ${selectedIds.size} selected page(s) to a new group:`, "");
-                      if (name && name.trim()) bulkMove(name.trim());
-                    } else {
-                      bulkMove(v);
-                    }
-                  }}
-                >
-                  <option value="">Choose group…</option>
-                  {groupOptions.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                  <option value="__new__">＋ New group…</option>
-                </select>
-              </label>
-              {bulkBusy && <span className="adm-spinner" aria-hidden />}
-              <button
-                type="button"
-                className="adm-btn-ghost"
-                style={{ marginLeft: "auto" }}
-                onClick={() => setSelectedIds(new Set())}
-                disabled={bulkBusy}
-              >
-                Clear
-              </button>
-            </div>
-          )}
-
           {/* Needs attention — pages the admin flagged with an operational issue */}
           {flagged.length > 0 && (
             <div
