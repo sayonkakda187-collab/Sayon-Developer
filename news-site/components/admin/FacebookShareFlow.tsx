@@ -523,26 +523,26 @@ export function FacebookShareFlow({
               )}
             </div>
 
-            {pages.length > 1 && (
-              <div
-                style={{
-                  position: "sticky",
-                  top: 8,
-                  zIndex: 6,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  marginTop: 12,
-                  padding: "10px 12px",
-                  background: "var(--adm-card)",
-                  border: "1px solid var(--adm-bd)",
-                  borderRadius: "var(--adm-radius)",
-                  boxShadow: "var(--adm-shadow)",
-                  backdropFilter: "blur(16px) saturate(150%)",
-                  WebkitBackdropFilter: "blur(16px) saturate(150%)",
-                }}
-              >
+            <div
+              style={{
+                position: "sticky",
+                top: 8,
+                zIndex: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                marginTop: 12,
+                padding: "10px 12px",
+                background: "var(--adm-card)",
+                border: "1px solid var(--adm-bd)",
+                borderRadius: "var(--adm-radius)",
+                boxShadow: "var(--adm-shadow)",
+                backdropFilter: "blur(16px) saturate(150%)",
+                WebkitBackdropFilter: "blur(16px) saturate(150%)",
+              }}
+            >
+              {pages.length > 1 && (
                 <label className="adm-search" style={{ flex: "1 1 240px", maxWidth: 420, marginTop: 0 }}>
                   <SearchIcon className="h-4 w-4" aria-hidden />
                   <input
@@ -552,14 +552,16 @@ export function FacebookShareFlow({
                     aria-label="Search pages"
                   />
                 </label>
+              )}
 
-                {/* Move ticked pages to a group — sits next to Search */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginLeft: "auto" }}>
-                  {selectedPageIds.size > 0 && (
-                    <span className="adm-fb-sub" style={{ fontWeight: 600, color: "var(--adm-ink)" }}>
-                      {selectedPageIds.size} selected
-                    </span>
-                  )}
+              {/* Actions next to Search: live count, Move, then the primary Share */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginLeft: "auto" }}>
+                {selectedPageIds.size > 0 && (
+                  <span className="adm-fb-sub" style={{ fontWeight: 600, color: "var(--adm-ink)" }}>
+                    {selectedPageIds.size} selected
+                  </span>
+                )}
+                {pages.length > 1 && (
                   <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <span className="adm-fb-sub">Move to</span>
                     <select
@@ -587,10 +589,20 @@ export function FacebookShareFlow({
                       <option value="__new__">＋ New group…</option>
                     </select>
                   </label>
-                  {bulkBusy && <span className="adm-spinner" aria-hidden />}
-                </div>
+                )}
+                {bulkBusy && <span className="adm-spinner" aria-hidden />}
+                <button
+                  type="button"
+                  className="adm-btn-primary"
+                  onClick={goToArticles}
+                  disabled={selectedPageIds.size === 0}
+                  title={selectedPageIds.size === 0 ? "Select at least one page first" : "Pick an article to share to the selected pages"}
+                >
+                  <FacebookIcon className="h-4 w-4" />
+                  Share Article →
+                </button>
               </div>
-            )}
+            </div>
 
             {visiblePages.length === 0 ? (
               <p className="adm-card-sub" style={{ marginTop: 14 }}>No pages match “{pageQuery}”.</p>
@@ -627,17 +639,6 @@ export function FacebookShareFlow({
               </div>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-              <button type="button" className="adm-btn-primary" onClick={goToArticles} disabled={selectedPageIds.size === 0}>
-                <FacebookIcon className="h-4 w-4" />
-                Share Article →
-              </button>
-              <span className="adm-field-hint" style={{ margin: 0 }}>
-                {selectedPageIds.size === 0
-                  ? "Select at least one page to continue."
-                  : `${selectedPageIds.size} page${selectedPageIds.size === 1 ? "" : "s"} selected.`}
-              </span>
-            </div>
           </div>
         )
       )}
