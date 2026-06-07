@@ -56,8 +56,36 @@ export async function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-border pt-6 text-xs text-fg-faint">
-          © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
+        <div className="mt-12 flex flex-col gap-4 border-t border-border pt-6 text-xs text-fg-faint sm:flex-row sm:items-center sm:justify-between">
+          <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Legal">
+            <Link
+              href="/about"
+              className="text-fg-muted transition-colors hover:text-accent-link"
+            >
+              About
+            </Link>
+            <Link
+              href="/contact"
+              className="text-fg-muted transition-colors hover:text-accent-link"
+            >
+              Contact
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-fg-muted transition-colors hover:text-accent-link"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-fg-muted transition-colors hover:text-accent-link"
+            >
+              Terms of Service
+            </Link>
+          </nav>
+          <p>
+            © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>
