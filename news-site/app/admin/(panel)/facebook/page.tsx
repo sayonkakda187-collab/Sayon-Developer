@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ToastProvider } from "@/components/admin/Toast";
 import { FacebookShareFlow } from "@/components/admin/FacebookShareFlow";
+import { FacebookShareResults } from "@/components/admin/FacebookShareResults";
 import { FacebookStats } from "@/components/admin/FacebookStats";
 import { FacebookTopActions } from "@/components/admin/FacebookTopActions";
 import {
@@ -76,6 +77,7 @@ export default async function AdminFacebookPage() {
       <FacebookTopActions userTokenSaved={Boolean(connect?.userTokenSaved)} />
       <FacebookStats pages={view} />
       <FacebookShareFlow pages={view} />
+      <FacebookShareResults />
       <FacebookScheduledPosts posts={scheduledView} />
       <FacebookPagesManager pages={view} connect={connect} />
     </ToastProvider>

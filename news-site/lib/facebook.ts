@@ -223,3 +223,68 @@ export function permalinkForPost(postId: string): string {
   if (page && post) return `https://www.facebook.com/${page}/posts/${post}`;
   return `https://www.facebook.com/${postId}`;
 }
+
+/** Per-post results read back after a share. Engagement is always attempted;
+ *  reach/impressions need the `read_insights` permission, so they degrade to null
+ *  (with `insightsUnavailable: true`) rather than failing the whole call. */
+export type PostStats = {
+  permalink?: string;
+  reactions: number | null;
+  comments: number | null;
+  shares: number | null;
+  impressions: number | null;
+  reach: number | null;
+  insightsUnavailable: boolean;
+};
+
+/**
+ * Read a posted item's results: engagement (reactions / comments / shares +
+ * permalink) in one call, then reach/impressions from the post-insights edge in a
+ * second, best-effort call. Insights require the `read_insights` permission on the
+ * Page token — when it's missing/denied we keep the engagement numbers and just
+ * mark reach unavailable. `postId` is the "{page}_{post}" id we stored on posting.
+ */
+export async function getPostStats(postId: string, accessToken: string): Promise<PostStats> {
+  const fields = "permalink_url,shares,reactions.summary(true).limit(0),comments.summary(true).limit(0)";
+  const url =
+    `${GRAPH_BASE}/${encodeURIComponent(postId)}?fields=${encodeURIComponent(fields)}` +
+    `&access_token=${encodeURIComponent(accessToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{
+    permalink_url?: string;
+    shares?: { count?: number };
+    reactions?: { summary?: { total_count?: number } };
+    comments?: { summary?: { total_count?: number } };
+  }>(res, "Could not load post results");
+
+  const stats: PostStats = {
+    permalink: data.permalink_url,
+    reactions: data.reactions?.summary?.total_count ?? null,
+    comments: data.comments?.summary?.total_count ?? null,
+    shares: data.shares?.count ?? 0,
+    impressions: null,
+    reach: null,
+    insightsUnavailable: false,
+  };
+
+  // Reach / impressions — separate edge, needs read_insights. Tolerate failure.
+  try {
+    const iUrl =
+      `${GRAPH_BASE}/${encodeURIComponent(postId)}/insights/post_impressions,post_impressions_unique` +
+      `?access_token=${encodeURIComponent(accessToken)}`;
+    const iRes = await graphFetch(iUrl, { method: "GET", cache: "no-store" });
+    const iData = await parseGraph<{ data?: { name?: string; values?: { value?: number }[] }[] }>(
+      iRes,
+      "Could not load reach",
+    );
+    for (const m of iData.data ?? []) {
+      const v = m.values?.[0]?.value ?? null;
+      if (m.name === "post_impressions") stats.impressions = typeof v === "number" ? v : null;
+      else if (m.name === "post_impressions_unique") stats.reach = typeof v === "number" ? v : null;
+    }
+  } catch {
+    stats.insightsUnavailable = true;
+  }
+
+  return stats;
+}
