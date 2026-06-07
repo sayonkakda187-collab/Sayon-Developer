@@ -49,9 +49,11 @@ export const ADS = {
    *  to the top). Fills once that widget is Active/serving in AdsKeeper; until
    *  then the slot collapses cleanly (no empty box). */
   RECOMMENDED: "2029928",
-  /** Homepage — rendered at the VERY TOP, above the featured hero. Paste your new
-   *  homepage widget id here (placeholder renders nothing in prod until set). */
-  HOME: "REPLACE_WITH_WIDGET_ID",
+  /** Homepage — rendered at the VERY TOP, above the featured hero (the first
+   *  thing on landing). Uses 2030046 — a Header Widget (responsive single row:
+   *  4 cards on desktop, 2 on mobile). Fills once that widget is Active/serving
+   *  in AdsKeeper; until then the slot collapses cleanly (no empty box). */
+  HOME: "2030046",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.

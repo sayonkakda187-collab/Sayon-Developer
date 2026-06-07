@@ -190,8 +190,11 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   down — this **reverses** the earlier reader-first "no ad above the story" choice
   **at the owner's request**.
 - Placement on `/` (homepage): **HOME** at the **very top, above the featured
-  hero** (the first thing on landing). Needs its **own** widget id — `IN_ARTICLE`
-  / `HOME` stay placeholders (render nothing in prod) until you add widget ids.
+  hero** (the first thing on landing) — a Header Widget using **`2030046`**
+  (responsive single row: 4 cards on desktop / 2 on mobile), reserving 300px so it
+  never jumps the hero down when it fills; collapses cleanly if unfilled.
+  `IN_ARTICLE` stays a placeholder (renders nothing in prod) until you add a
+  widget id.
 
 ## Facebook Pages integration (Graph API)
 
