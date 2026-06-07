@@ -210,7 +210,10 @@ browser.
 (selectable cards w/ avatar + status + post counts; multi-select checkboxes,
 pre-selected when only one Page; **grouped by category/niche — each group is its
 own box with a per-group "Select all / Unselect all"**, mirroring the manager's
-`adm-fb-grouphd`, plus a name/group search + a global select-all; Connect/Refresh
+`adm-fb-grouphd`, plus a name/group search **and a "Move to group" control in a
+sticky toolbar** (reassigns the ticked pages between niches via
+`setFacebookPagesGroup` — so you can organize Pages without leaving this view) +
+a global select-all; Connect/Refresh
 in the header) → **Step 2 — pick a published article** (server action
 `listPublishedArticlesForShare`: search
 + pagination, published-only) with a "Sharing to: […] · Back" bar, then an
