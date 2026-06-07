@@ -515,6 +515,30 @@ export async function setFacebookPageGroup(input: {
   }
 }
 
+/** Bulk-move several Pages to one category/niche group at once (the manager's
+ *  multi-select "Move to" action). De-dupes ids, skips empties; returns how many
+ *  rows were updated. */
+export async function setFacebookPagesGroup(input: {
+  ids: string[];
+  categoryGroup: string;
+}): Promise<ActionResult<{ count: number }>> {
+  await requireAdmin();
+  const categoryGroup = input.categoryGroup.trim();
+  if (!categoryGroup) return fail("Choose a category group.");
+  const ids = [...new Set((input.ids ?? []).filter(Boolean))];
+  if (ids.length === 0) return fail("Select at least one page.");
+  try {
+    const res = await prisma.facebookPage.updateMany({
+      where: { id: { in: ids } },
+      data: { categoryGroup },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: { count: res.count } };
+  } catch {
+    return fail("Could not move the selected pages.");
+  }
+}
+
 /** Flag (or clear) an operational issue on a Page — e.g. "Limited post", "Post
  *  failed", "Verify identity". Pass issue=null (or empty) to clear it. Only
  *  touches `issue`; the token and everything else are untouched. */

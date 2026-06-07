@@ -226,7 +226,10 @@ post" / "Post failed" / "Verify identity" / custom, from `lib/facebookIssues.ts`
 flagging a Page (`setFacebookPageIssue`, nullable `FacebookPage.issue`) pulls it
 into a red **"Needs attention"** box at the top of the manager — independent of
 the token `status`; null = healthy — and clearing it returns the Page to its
-niche box.
+niche box. For organizing many Pages at once, rows have **checkboxes** + a
+per-box **"Select all"**, and a sticky **bulk bar** ("N selected · Move to …")
+reassigns every ticked Page in one `setFacebookPagesGroup` (`updateMany`) call —
+handy for sorting a large "Uncategorized" pile.
 `ConnectModal` was extracted to `FacebookConnectModal.tsx` and is shared by the
 flow + the manager. The per-article editor panel (`ArticleFacebookPanel`) is also
 unchanged. The browser-**Sessions** capture card was removed from the Facebook
