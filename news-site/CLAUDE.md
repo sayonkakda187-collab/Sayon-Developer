@@ -221,7 +221,12 @@ success screen. The detailed **Pages manager** (grouped table, per-page
 refresh/disconnect, category groups) stays rendered below. Each row's **Category
 Group** cell is an inline **move selector** — pick another group (or "＋ New
 group…") to reassign that Page via `setFacebookPageGroup`, and it jumps to the
-target group box on refresh.
+target group box on refresh. Each row also has an **Issue** selector ("Limited
+post" / "Post failed" / "Verify identity" / custom, from `lib/facebookIssues.ts`):
+flagging a Page (`setFacebookPageIssue`, nullable `FacebookPage.issue`) pulls it
+into a red **"Needs attention"** box at the top of the manager — independent of
+the token `status`; null = healthy — and clearing it returns the Page to its
+niche box.
 `ConnectModal` was extracted to `FacebookConnectModal.tsx` and is shared by the
 flow + the manager. The per-article editor panel (`ArticleFacebookPanel`) is also
 unchanged. The browser-**Sessions** capture card was removed from the Facebook

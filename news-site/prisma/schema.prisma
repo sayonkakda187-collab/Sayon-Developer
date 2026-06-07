@@ -220,6 +220,10 @@ model FacebookPage {
   accessToken   String // ENCRYPTED long-lived Page access token (never plaintext)
   categoryGroup String // niche/group label, e.g. "US News" | "KH News" | "Entertainment"
   status        String   @default("Connected") // "Connected" | "Expired"
+  // Optional operational problem flag the admin sets (e.g. "Limited post",
+  // "Post failed", "Verify identity") to surface a Page in the manager's
+  // "Needs attention" box — independent of the token `status`. Null = healthy.
+  issue         String?
   lastSyncedAt  DateTime? // last successful token validation
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
