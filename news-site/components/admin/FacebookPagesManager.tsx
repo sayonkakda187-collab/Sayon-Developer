@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   disconnectFacebookPage,
   refreshFacebookPage,
+  setFacebookPageGroup,
 } from "@/app/admin/facebook-actions";
-import { sortCategoryGroups } from "@/lib/facebookGroups";
+import { FACEBOOK_CATEGORY_GROUPS, sortCategoryGroups } from "@/lib/facebookGroups";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookIcon, PlusIcon, RefreshIcon, SearchIcon, TrashIcon } from "@/components/admin/icons";
 import { formatDate } from "@/lib/site";
@@ -82,6 +83,14 @@ export function FacebookPagesManager({
     }));
   }, [filtered]);
 
+  // Groups offered in the per-page "move" dropdown: the known niches + any custom
+  // groups already in use, de-duped and consistently sorted.
+  const groupOptions = useMemo(() => {
+    const all = new Set<string>(FACEBOOK_CATEGORY_GROUPS);
+    for (const p of pages) if (p.categoryGroup?.trim()) all.add(p.categoryGroup);
+    return sortCategoryGroups([...all]);
+  }, [pages]);
+
   function refresh() {
     startTransition(() => router.refresh());
   }
@@ -101,6 +110,18 @@ export function FacebookPagesManager({
     const res = await disconnectFacebookPage(id);
     setBusyId(null);
     if (res.ok) success(`Disconnected “${name}”.`);
+    else error(res.error);
+    refresh();
+  }
+
+  // Move a page to another category group (or a brand-new one via prompt).
+  async function onMoveGroup(id: string, name: string, target: string) {
+    const group = target.trim();
+    if (!group || group === pages.find((p) => p.id === id)?.categoryGroup) return;
+    setBusyId(id);
+    const res = await setFacebookPageGroup({ id, categoryGroup: group });
+    setBusyId(null);
+    if (res.ok) success(`Moved “${name}” to ${group}.`);
     else error(res.error);
     refresh();
   }
@@ -194,7 +215,30 @@ export function FacebookPagesManager({
                         </span>
                       </td>
                       <td><code className="adm-fb-code">{p.pageId}</code></td>
-                      <td>{p.categoryGroup}</td>
+                      <td>
+                        <select
+                          className="adm-input"
+                          style={{ maxWidth: 190, padding: "5px 8px", fontSize: 13 }}
+                          value={p.categoryGroup}
+                          disabled={busyId === p.id}
+                          aria-label={`Move ${p.pageName} to another group`}
+                          title="Move this page to another group"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "__new__") {
+                              const name = window.prompt(`Move “${p.pageName}” to a new group:`, "");
+                              if (name && name.trim()) onMoveGroup(p.id, p.pageName, name.trim());
+                            } else {
+                              onMoveGroup(p.id, p.pageName, v);
+                            }
+                          }}
+                        >
+                          {groupOptions.map((g) => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                          <option value="__new__">＋ New group…</option>
+                        </select>
+                      </td>
                       <td><StatusBadge status={p.status} /></td>
                       <td>
                         <div className="adm-fb-actions">
