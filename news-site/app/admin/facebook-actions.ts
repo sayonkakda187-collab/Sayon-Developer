@@ -491,6 +491,30 @@ export async function disconnectFacebookPage(id: string): Promise<ActionResult> 
   }
 }
 
+// ── Move a page to a different category / niche group ─────────────────────────
+
+/** Reassign a connected Page's category/niche group — used by the Pages manager
+ *  to move a page from one group box to another. Only touches `categoryGroup`;
+ *  the token and everything else are untouched. */
+export async function setFacebookPageGroup(input: {
+  id: string;
+  categoryGroup: string;
+}): Promise<ActionResult> {
+  await requireAdmin();
+  const categoryGroup = input.categoryGroup.trim();
+  if (!categoryGroup) return fail("Choose a category group.");
+  try {
+    await prisma.facebookPage.update({
+      where: { id: input.id },
+      data: { categoryGroup },
+    });
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: undefined };
+  } catch {
+    return fail("Could not move the page to that group.");
+  }
+}
+
 // ── Publish an article now to selected pages ─────────────────────────────────
 
 /**

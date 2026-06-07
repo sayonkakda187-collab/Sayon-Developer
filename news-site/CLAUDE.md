@@ -218,7 +218,10 @@ in the header) → **Step 2 — pick a published article** (server action
 time** via the existing `publishArticleNow` (Graph path) with **live per-page
 status** (posting/✓/✗) so one failure never blocks the rest, a summary, and a
 success screen. The detailed **Pages manager** (grouped table, per-page
-refresh/disconnect, category groups) stays rendered below, unchanged.
+refresh/disconnect, category groups) stays rendered below. Each row's **Category
+Group** cell is an inline **move selector** — pick another group (or "＋ New
+group…") to reassign that Page via `setFacebookPageGroup`, and it jumps to the
+target group box on refresh.
 `ConnectModal` was extracted to `FacebookConnectModal.tsx` and is shared by the
 flow + the manager. The per-article editor panel (`ArticleFacebookPanel`) is also
 unchanged. The browser-**Sessions** capture card was removed from the Facebook
