@@ -47,20 +47,45 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Shared column header for the page tables (manager + "Needs attention" box). */
-function TableHead() {
+const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
+function avatarColor(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+/** Page avatar: the real Page picture (proxied with the Page token) over a tidy
+ *  coloured-initial fallback — matches the share selector's cards. */
+function PageAvatar({ dbId, name, size = 38 }: { dbId: string; name: string; size?: number }) {
+  const [imgOk, setImgOk] = useState(true);
+  const initial = (name.trim()[0] ?? "?").toUpperCase();
   return (
-    <thead>
-      <tr>
-        <th aria-hidden style={{ width: 1 }} />
-        <th>Page Name</th>
-        <th>Page ID</th>
-        <th>Category Group</th>
-        <th>Issue</th>
-        <th>Token Status</th>
-        <th style={{ textAlign: "right" }}>Actions</th>
-      </tr>
-    </thead>
+    <span
+      aria-hidden
+      style={{
+        position: "relative",
+        width: size,
+        height: size,
+        flex: "none",
+        borderRadius: 999,
+        overflow: "hidden",
+        background: avatarColor(dbId || name),
+        display: "inline-block",
+      }}
+    >
+      <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: size * 0.42 }}>
+        {initial}
+      </span>
+      {imgOk && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/admin/facebook/${encodeURIComponent(dbId)}/picture?size=${size * 2}`}
+          alt=""
+          onError={() => setImgOk(false)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      )}
+    </span>
   );
 }
 
@@ -234,34 +259,56 @@ export function FacebookPagesManager({
     refresh();
   }
 
-  // One table row — shared by the niche tables and the "Needs attention" box.
-  function renderRow(p: FacebookPageView) {
+  // One page card — used by the niche grids and the "Needs attention" grid.
+  function renderCard(p: FacebookPageView) {
     const busy = busyId === p.id;
+    const selected = selectedIds.has(p.id);
     return (
-      <tr key={p.id}>
-        <td style={{ width: 1 }}>
+      <div
+        key={p.id}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 9,
+          padding: 12,
+          borderRadius: 14,
+          background: "var(--adm-card)",
+          border: selected ? "2px solid rgb(var(--accent))" : "1px solid var(--adm-bd)",
+          boxShadow: selected ? "0 0 0 3px rgba(var(--accent), 0.12)" : "none",
+        }}
+      >
+        {/* Header: select + avatar + name / status / counts */}
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
           <input
             type="checkbox"
-            checked={selectedIds.has(p.id)}
+            checked={selected}
             onChange={() => toggleOne(p.id)}
             disabled={busy || bulkBusy}
             aria-label={`Select ${p.pageName}`}
-            style={{ width: 16, height: 16, cursor: "pointer" }}
+            style={{ width: 16, height: 16, marginTop: 4, cursor: "pointer", flex: "none" }}
           />
-        </td>
-        <td>
-          <span style={{ fontWeight: 600, color: "var(--adm-ink)" }}>{p.pageName}</span>
-          <span className="adm-fb-sub">
-            {p.postedCount} posted
-            {p.pendingCount > 0 ? ` · ${p.pendingCount} scheduled` : ""}
-            {p.lastSyncedAt ? ` · synced ${formatDate(p.lastSyncedAt)}` : ""}
+          <PageAvatar dbId={p.id} name={p.pageName} />
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {p.pageName}
+            </span>
+            <span style={{ display: "block", marginTop: 4 }}>
+              <StatusBadge status={p.status} />
+            </span>
+            <span className="adm-fb-sub" style={{ display: "block", marginTop: 4 }}>
+              {p.postedCount} posted
+              {p.pendingCount > 0 ? ` · ${p.pendingCount} scheduled` : ""}
+              {p.lastSyncedAt ? ` · synced ${formatDate(p.lastSyncedAt)}` : ""}
+            </span>
           </span>
-        </td>
-        <td><code className="adm-fb-code">{p.pageId}</code></td>
-        <td>
+        </div>
+
+        {/* Group selector (move) */}
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="adm-fb-sub" style={{ width: 42, flex: "none" }}>Group</span>
           <select
             className="adm-input"
-            style={{ maxWidth: 180, padding: "5px 8px", fontSize: 13 }}
+            style={{ flex: 1, minWidth: 0, padding: "5px 8px", fontSize: 13 }}
             value={p.categoryGroup}
             disabled={busy}
             aria-label={`Move ${p.pageName} to another group`}
@@ -281,12 +328,16 @@ export function FacebookPagesManager({
             ))}
             <option value="__new__">＋ New group…</option>
           </select>
-        </td>
-        <td>
+        </label>
+
+        {/* Issue selector (flag) */}
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="adm-fb-sub" style={{ width: 42, flex: "none" }}>Issue</span>
           <select
             className="adm-input"
             style={{
-              maxWidth: 170,
+              flex: 1,
+              minWidth: 0,
               padding: "5px 8px",
               fontSize: 13,
               ...(p.issue ? { borderColor: "#d97706", color: "#b45309", fontWeight: 600 } : {}),
@@ -311,33 +362,32 @@ export function FacebookPagesManager({
             ))}
             <option value="__other__">＋ Other…</option>
           </select>
-        </td>
-        <td><StatusBadge status={p.status} /></td>
-        <td>
-          <div className="adm-fb-actions">
-            <button
-              type="button"
-              className="adm-btn-ghost adm-fb-act"
-              disabled={busy}
-              onClick={() => onRefreshToken(p.id, p.pageName)}
-              title="Validate this token against the Graph API"
-            >
-              <RefreshIcon className={`h-4 w-4 ${busy ? "adm-spinning" : ""}`} />
-              <span className="adm-fb-actlabel">Refresh</span>
-            </button>
-            <button
-              type="button"
-              className="adm-btn-ghost adm-fb-act adm-fb-danger"
-              disabled={busy}
-              onClick={() => onDisconnect(p.id, p.pageName)}
-              title="Delete this page and its token"
-            >
-              <TrashIcon className="h-4 w-4" />
-              <span className="adm-fb-actlabel">Disconnect</span>
-            </button>
-          </div>
-        </td>
-      </tr>
+        </label>
+
+        {/* Actions */}
+        <div className="adm-fb-actions" style={{ marginTop: 2, paddingTop: 8, borderTop: "1px solid var(--adm-bd)" }}>
+          <button
+            type="button"
+            className="adm-btn-ghost adm-fb-act"
+            disabled={busy}
+            onClick={() => onRefreshToken(p.id, p.pageName)}
+            title="Validate this token against the Graph API"
+          >
+            <RefreshIcon className={`h-4 w-4 ${busy ? "adm-spinning" : ""}`} />
+            <span className="adm-fb-actlabel">Refresh</span>
+          </button>
+          <button
+            type="button"
+            className="adm-btn-ghost adm-fb-act adm-fb-danger"
+            disabled={busy}
+            onClick={() => onDisconnect(p.id, p.pageName)}
+            title="Delete this page and its token"
+          >
+            <TrashIcon className="h-4 w-4" />
+            <span className="adm-fb-actlabel">Disconnect</span>
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -480,10 +530,9 @@ export function FacebookPagesManager({
                   </button>
                 </span>
               </div>
-              <table className="adm-table adm-fb-table">
-                <TableHead />
-                <tbody>{flagged.map(renderRow)}</tbody>
-              </table>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12, marginTop: 10 }}>
+                {flagged.map(renderCard)}
+              </div>
             </div>
           )}
 
@@ -499,10 +548,9 @@ export function FacebookPagesManager({
                   {rows.every((r) => selectedIds.has(r.id)) ? "Unselect all" : "Select all"}
                 </button>
               </div>
-              <table className="adm-table adm-fb-table">
-                <TableHead />
-                <tbody>{rows.map(renderRow)}</tbody>
-              </table>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12, marginTop: 10 }}>
+                {rows.map(renderCard)}
+              </div>
             </div>
           ))}
         </div>
