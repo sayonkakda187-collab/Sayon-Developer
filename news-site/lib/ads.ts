@@ -29,25 +29,30 @@
 // 1) Your AdsKeeper SITE ID (the number in the head loader URL). ← REPLACE
 export const ADSKEEPER_SITE_ID = "1097964";
 
-// 2) One WIDGET ID per on-page placement. ← REPLACE each with the widget id
-//    from AdsKeeper dashboard → Add Widget.
+// 2) One WIDGET ID per on-page placement.
 //    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
-//    may appear in only ONE container per page. So only RECOMMENDED is live for
-//    now; create a separate widget for IN_ARTICLE / HOME before they fill
-//    (reusing 2019769 in another slot is not supported and would leave it unfilled).
+//    may appear in only ONE container PER PAGE (across different pages it's fine).
+//    So the homepage HOME and the article IN_ARTICLE_TOP intentionally SHARE
+//    2030046 — they live on different pages (/ vs /news/[slug]), so each fills
+//    independently — while the article's TOP and END units use different ids
+//    (2030046 / 2029928) since those share a page. Only IN_ARTICLE (mid-body) is
+//    still a placeholder; add a widget id to light it up.
 export const ADS = {
   /** TOP-of-page article unit — rendered ABOVE the headline + cover (just under
-   *  the site header) for maximum visibility. Uses 2019769 — the widget known to
-   *  FILL — so the top slot actually shows an ad (it's a recommendation-style
-   *  grid, not a banner). A widget fills only ONE slot per page, so RECOMMENDED
-   *  below uses a different id. */
-  IN_ARTICLE_TOP: "2019769",
+   *  the site header) for maximum visibility. Uses 2030046 — the SAME Header
+   *  Widget as the homepage HOME slot — so opening a full story shows the same
+   *  card row at the top (4 cards desktop / 2 mobile), matching the homepage.
+   *  It's a different page from HOME (/news/[slug] vs /), so sharing the id is
+   *  fine; the article's END unit (RECOMMENDED) uses a different id since a
+   *  widget fills only ONE slot per page. */
+  IN_ARTICLE_TOP: "2030046",
   /** Optional in-article unit, injected between paragraphs AFTER the opening
    *  (~4th paragraph) on longer pieces. Placeholder until you add one. */
   IN_ARTICLE: "REPLACE_WITH_WIDGET_ID",
-  /** End-of-article unit AFTER the story body. Uses 2029928 (since 2019769 moved
-   *  to the top). Fills once that widget is Active/serving in AdsKeeper; until
-   *  then the slot collapses cleanly (no empty box). */
+  /** End-of-article unit AFTER the story body. Uses 2029928 — distinct from the
+   *  top slot's id, since a widget fills only ONE slot per page. Fills once that
+   *  widget is Active/serving in AdsKeeper; until then the slot collapses cleanly
+   *  (no empty box). */
   RECOMMENDED: "2029928",
   /** Homepage — rendered at the VERY TOP, above the featured hero (the first
    *  thing on landing). Uses 2030046 — a Header Widget (responsive single row:

@@ -179,8 +179,10 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   above the headline).
 - **Placement on `/news/[slug]`:** a **TOP-of-page unit ABOVE the headline +
   cover** (just under the site header) — **IN_ARTICLE_TOP** — for maximum
-  visibility, per the owner's requested layout. It uses **`2019769`** (the widget
-  known to fill) so the top slot actually shows. Then an optional in-body
+  visibility, per the owner's requested layout. It uses **`2030046`** — the **same
+  Header Widget as the homepage HOME slot** — so opening a full story shows the
+  same card row at the top, matching the homepage (a different page from `/`, so
+  sharing the id is fine). Then an optional in-body
   **IN_ARTICLE** unit after the opening (~4th paragraph; short pieces, <4
   paragraphs, skip it; placeholder until you add a widget id), and at the end the
   **RECOMMENDED** unit (`2029928`) after the body, before comments — it fills once
