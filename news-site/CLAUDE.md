@@ -198,6 +198,30 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   `IN_ARTICLE` stays a placeholder (renders nothing in prod) until you add a
   widget id.
 
+## Google AdSense (account script + ads.txt)
+
+Separate from AdsKeeper — AdSense allows running other networks, so both coexist.
+This is the **account/verification script only** (no ad units yet; real
+`<ins class="adsbygoogle">` placements come **after approval**).
+
+- **Script:** `components/AdSenseHead.tsx` loads
+  `pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<ADSENSE_PUBLISHER_ID>`
+  via `next/script` with **`strategy="beforeInteractive"`**, mounted in the
+  **root** layout (`app/layout.tsx`). beforeInteractive is deliberate: it injects
+  the tag into the **server-rendered HTML `<head>`** (what Google's verifier
+  crawls), whereas AdsKeeper's `afterInteractive` injects client-side. It's
+  **always on** (verification needs it present) — NOT gated by `ADS_ENABLED` — and
+  loads site-wide (incl. `/admin`, harmless: async, no ad units, behind auth).
+- **Publisher id:** `ADSENSE_PUBLISHER_ID` in `lib/ads.ts`
+  (`ca-pub-5470257305108580`) — public by design (ships in HTML).
+- **ads.txt:** `public/ads.txt` (served at `/ads.txt`) carries
+  `google.com, pub-5470257305108580, DIRECT, f08c47fec0942fa0` **appended to** the
+  existing MGID/AdsKeeper seller lines (both publishers coexist; never overwrite
+  the file).
+- ⚠️ Google can only verify this on the **production domain**
+  (`dailyledger.today`) — it must be **merged to `main`/deployed**, not just on a
+  preview URL.
+
 ## Facebook Pages integration (Graph API)
 
 Distribute published articles to Facebook Pages from the admin panel using the
