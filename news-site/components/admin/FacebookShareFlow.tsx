@@ -29,6 +29,19 @@ import { FACEBOOK_CATEGORY_GROUPS, sortCategoryGroups } from "@/lib/facebookGrou
 type Step = "pages" | "articles";
 type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled"; error?: string; postId?: string };
 
+type JobPage = { id: string; name: string; status: string };
+/** A single, self-contained "share this article to these pages" job. Several run
+ *  concurrently (one per group), each independent of the others. */
+type ShareJob = {
+  id: string;
+  label: string; // group label, e.g. "US News" (or "N pages" when mixed)
+  article: ShareArticleItem;
+  caption: string;
+  pages: JobPage[];
+  delaySeconds: number;
+  jitter: boolean;
+};
+
 const PER_PAGE = 9;
 const TZ_LABEL = SCHEDULE_TZ.replace("_", " ");
 const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
@@ -151,13 +164,176 @@ function PageCard({ page, selected, onToggle }: { page: FacebookPageView; select
 }
 
 /**
- * Two-step Facebook sharing flow.
- *  Step 1 — select one or more connected Pages (cards w/ checkboxes).
- *  Step 2 — pick a published article, tweak the caption, post to each selected
- *           Page via the Graph API (existing `publishArticleNow`), one at a time
- *           with live per-page status so a single failure never blocks the rest.
- * Page management (connect / refresh / disconnect) stays in the Pages manager
- * below; this flow reuses the same ConnectModal + refresh action.
+ * One independent, live share job. Posts its article to its pages sequentially
+ * via the Graph API (`publishArticleNow`) with the configured gap + per-page
+ * status. Each job owns its own loop/timers, so several render at once (one per
+ * group) and run concurrently — starting or stopping one never affects another.
+ * Client-driven: the tab must stay open until a job finishes (the server-side
+ * fallback for closing the tab is a separate, follow-up step).
+ */
+function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: string) => void }) {
+  const router = useRouter();
+  const { success, error } = useToast();
+  const [progress, setProgress] = useState<Record<string, PostStatus>>(() =>
+    Object.fromEntries(job.pages.map((p) => [p.id, { status: "pending" as const }])),
+  );
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [waitingFor, setWaitingFor] = useState<string | null>(null);
+  const [running, setRunning] = useState(true);
+  const [cancelled, setCancelled] = useState(false);
+  const cancelRef = useRef(false);
+  const ivRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resolveRef = useRef<(() => void) | null>(null);
+  const startedRef = useRef(false);
+
+  // Cancellable gap between pages — resolves true if Stop interrupts it.
+  function countdownSleep(totalSecs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let left = totalSecs;
+      setCountdown(left);
+      const finish = (interrupted: boolean) => {
+        if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
+        resolveRef.current = null;
+        setCountdown(null);
+        resolve(interrupted);
+      };
+      resolveRef.current = () => finish(true);
+      ivRef.current = setInterval(() => {
+        left -= 1;
+        if (left <= 0) finish(false);
+        else setCountdown(left);
+      }, 1000);
+    });
+  }
+
+  function stop() {
+    cancelRef.current = true;
+    if (resolveRef.current) resolveRef.current();
+  }
+
+  useEffect(() => {
+    if (startedRef.current) return; // guard StrictMode double-invoke
+    startedRef.current = true;
+    const pages = job.pages;
+    const gap = pages.length > 1 ? Math.max(0, job.delaySeconds) : 0;
+    (async () => {
+      let okCount = 0;
+      for (let i = 0; i < pages.length; i++) {
+        if (cancelRef.current) break;
+        const pg = pages[i];
+        setProgress((p) => ({ ...p, [pg.id]: { status: "posting" } }));
+        const res = await publishArticleNow({ articleId: job.article.id, pageDbIds: [pg.id], caption: job.caption });
+        const r = res.ok ? res.data[0] : null;
+        if (res.ok && r?.ok) {
+          okCount++;
+          setProgress((p) => ({ ...p, [pg.id]: { status: "ok", postId: r.graphPostId } }));
+        } else {
+          const msg = res.ok ? r?.error ?? "Failed to post." : res.error;
+          setProgress((p) => ({ ...p, [pg.id]: { status: "fail", error: msg } }));
+        }
+        if (i < pages.length - 1 && gap > 0 && !cancelRef.current) {
+          setWaitingFor(pages[i + 1].name);
+          const interrupted = await countdownSleep(job.jitter ? applyJitter(gap) : gap);
+          setWaitingFor(null);
+          if (interrupted || cancelRef.current) break;
+        }
+      }
+      setCountdown(null);
+      setWaitingFor(null);
+      setRunning(false);
+      const total = pages.length;
+      if (cancelRef.current) {
+        setCancelled(true);
+        setProgress((p) => {
+          const next = { ...p };
+          for (const pg of pages) if (next[pg.id]?.status === "pending") next[pg.id] = { status: "cancelled" };
+          return next;
+        });
+        success(`${job.label}: stopped — posted to ${okCount} of ${total}.`);
+      } else if (okCount === total) {
+        success(`${job.label}: posted to all ${total} page${total === 1 ? "" : "s"}.`);
+      } else if (okCount === 0) {
+        error(`${job.label}: all ${total} posts failed — see details.`);
+      } else {
+        success(`${job.label}: posted to ${okCount} of ${total} pages.`);
+      }
+      router.refresh();
+    })();
+    return () => {
+      cancelRef.current = true;
+      if (ivRef.current) clearInterval(ivRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const okCount = Object.values(progress).filter((p) => p.status === "ok").length;
+  const total = job.pages.length;
+
+  return (
+    <div style={{ border: "1px solid var(--adm-bd)", borderRadius: 14, padding: 12, background: "rgba(127, 140, 170, 0.06)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+        <span className="adm-fb-groupname">{job.label}</span>
+        <span className="adm-fb-groupcount">{okCount}/{total}</span>
+        <span className="adm-fb-sub" style={{ flex: "1 1 120px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {job.article.title}
+        </span>
+        {running ? (
+          <button type="button" className="adm-btn-ghost adm-fb-danger" onClick={stop}>Stop</button>
+        ) : (
+          <button type="button" className="adm-btn-ghost" onClick={() => onDismiss(job.id)}>Dismiss</button>
+        )}
+      </div>
+
+      <div className="adm-fb-results" style={{ marginTop: 8 }}>
+        {job.pages.map((pg) => {
+          const st = progress[pg.id];
+          if (!st) return null;
+          const cls = st.status === "ok" ? "ok" : st.status === "fail" ? "bad" : "";
+          return (
+            <div key={pg.id} className={`adm-fb-result ${cls}`}>
+              <span className="adm-fb-result-dot" aria-hidden />
+              <span style={{ fontWeight: 600 }}>{pg.name}</span>
+              <span className="adm-fb-result-msg">
+                {st.status === "posting" ? "Posting…"
+                  : st.status === "pending" ? "Waiting…"
+                    : st.status === "cancelled" ? "Cancelled"
+                      : st.status === "ok"
+                        ? st.postId
+                          ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
+                          : "Posted ✓"
+                        : (st.error ?? "Failed to post.")}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {countdown != null && (
+        <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 8 }}>
+          <span className="adm-spinner" aria-hidden />
+          Waiting {formatDuration(countdown)} before {waitingFor ? `“${waitingFor}”` : "the next page"}…
+        </p>
+      )}
+      {!running && (
+        <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 10 }}>
+          <span className="adm-fb-target-dot" aria-hidden />
+          {cancelled ? "Stopped — posted" : "Posted"} to <strong>{okCount}</strong> of <strong>{total}</strong> page{total === 1 ? "" : "s"}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Facebook sharing flow with INDEPENDENT, CONCURRENT per-group jobs.
+ *  Step 1 — select connected Pages (grouped by niche, with per-group Select all).
+ *  Step 2 — pick a published article + caption, then either:
+ *    • Post now → spawns a live `ShareJobCard` and returns you to Step 1, so you
+ *      can immediately start another group's share without waiting (several jobs
+ *      run side by side, each with its own progress + Stop), or
+ *    • Schedule → server-side rows fired by Vercel Cron (offline-safe), unchanged.
+ * Page management (connect / refresh / disconnect / move / flag) lives in the
+ * Pages manager below.
  */
 export function FacebookShareFlow({
   pages,
@@ -174,6 +350,10 @@ export function FacebookShareFlow({
   const [showConnect, setShowConnect] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  // Running live share jobs (one per launched share; they run concurrently).
+  const [jobs, setJobs] = useState<ShareJob[]>([]);
+  const jobSeqRef = useRef(0);
+
   // Step 2 — article picker
   const [items, setItems] = useState<ShareArticleItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -181,23 +361,14 @@ export function FacebookShareFlow({
   const [pageNum, setPageNum] = useState(1);
   const [loadingArticles, setLoadingArticles] = useState(false);
 
-  // Step 2 — compose / post
+  // Step 2 — compose
   const [article, setArticle] = useState<ShareArticleItem | null>(null);
   const [caption, setCaption] = useState("");
-  const [posting, setPosting] = useState(false);
-  const [progress, setProgress] = useState<Record<string, PostStatus>>({});
-  const [done, setDone] = useState(false);
 
-  // Between-pages delay (only applies when posting to multiple pages).
+  // Between-pages delay (captured into a job when you launch it).
   const [delaySeconds, setDelaySeconds] = useState(DEFAULT_DELAY);
   const [customMode, setCustomMode] = useState(false);
   const [jitter, setJitter] = useState(true);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [waitingFor, setWaitingFor] = useState<string | null>(null);
-  const [cancelled, setCancelled] = useState(false);
-  const cancelRef = useRef(false);
-  const countdownIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownResolveRef = useRef<(() => void) | null>(null);
 
   // Scheduling (server-side; fires via Vercel Cron even while offline)
   const [mode, setMode] = useState<"now" | "schedule">("now");
@@ -256,8 +427,6 @@ export function FacebookShareFlow({
   useEffect(() => {
     try { localStorage.setItem("fb.shareJitter", jitter ? "1" : "0"); } catch { /* ignore */ }
   }, [jitter]);
-  // Clear any running countdown timer on unmount.
-  useEffect(() => () => { if (countdownIvRef.current) clearInterval(countdownIvRef.current); }, []);
 
   function togglePage(id: string) {
     setSelectedPageIds((prev) => {
@@ -354,10 +523,7 @@ export function FacebookShareFlow({
     setArticle(null);
     setQ("");
     setPageNum(1);
-    setDone(false);
-    setCancelled(false);
     setScheduledOk(null);
-    setProgress({});
   }
 
   function defaultCaption(a: ShareArticleItem): string {
@@ -370,100 +536,37 @@ export function FacebookShareFlow({
   function chooseArticle(a: ShareArticleItem) {
     setArticle(a);
     setCaption(defaultCaption(a));
-    setDone(false);
-    setCancelled(false);
     setScheduledOk(null);
-    setProgress({});
   }
 
-  // Cancellable countdown for the gap between pages. Resolves true if interrupted
-  // (Stop pressed), false when it elapses naturally.
-  function countdownSleep(totalSecs: number): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      let left = totalSecs;
-      setCountdown(left);
-      const finish = (interrupted: boolean) => {
-        if (countdownIvRef.current) { clearInterval(countdownIvRef.current); countdownIvRef.current = null; }
-        countdownResolveRef.current = null;
-        setCountdown(null);
-        resolve(interrupted);
-      };
-      countdownResolveRef.current = () => finish(true);
-      countdownIvRef.current = setInterval(() => {
-        left -= 1;
-        if (left <= 0) finish(false);
-        else setCountdown(left);
-      }, 1000);
-    });
-  }
-
-  // Stop the sequence: skip remaining pages + interrupt any active countdown.
-  function stop() {
-    cancelRef.current = true;
-    if (countdownResolveRef.current) countdownResolveRef.current();
-  }
-
-  // Post to each selected Page sequentially (Graph API) with a configurable gap
-  // between pages + live status. One page failing never stops the rest; Stop
-  // cancels the remaining queue. Client-driven — keep this page open until done.
-  async function share() {
+  // Spawn a live share job from the current selection + article, then reset the
+  // selector so another group can be started immediately (jobs run concurrently).
+  function launchJob() {
     if (!article) return;
-    const ids = [...selectedPageIds];
-    if (ids.length === 0) return error("Select at least one page.");
-    cancelRef.current = false;
-    setCancelled(false);
-    setDone(false);
-    setPosting(true);
-    setCountdown(null);
-    setWaitingFor(null);
-    setProgress(Object.fromEntries(ids.map((id) => [id, { status: "pending" as const }])));
+    const sel = pages.filter((p) => selectedPageIds.has(p.id));
+    if (sel.length === 0) return error("Select at least one page.");
+    if (!caption.trim()) return error("Add a caption first.");
+    const groups = [...new Set(sel.map((p) => p.categoryGroup?.trim() || "Uncategorized"))];
+    const label = groups.length === 1 ? groups[0] : `${sel.length} pages`;
+    const job: ShareJob = {
+      id: `job-${Date.now()}-${jobSeqRef.current++}`,
+      label,
+      article,
+      caption,
+      pages: sel.map((p) => ({ id: p.id, name: p.pageName, status: p.status })),
+      delaySeconds,
+      jitter,
+    };
+    setJobs((prev) => [...prev, job]);
+    success(`Sharing “${article.title}” to ${label} (${sel.length} page${sel.length === 1 ? "" : "s"}) — started.`);
+    // Reset for the next group.
+    setSelectedPageIds(new Set());
+    setArticle(null);
+    setStep("pages");
+  }
 
-    const gap = ids.length > 1 ? Math.max(0, delaySeconds) : 0;
-    let okCount = 0;
-
-    for (let i = 0; i < ids.length; i++) {
-      if (cancelRef.current) break;
-      const id = ids[i];
-      setProgress((p) => ({ ...p, [id]: { status: "posting" } }));
-      const res = await publishArticleNow({ articleId: article.id, pageDbIds: [id], caption });
-      const r = res.ok ? res.data[0] : null;
-      if (res.ok && r?.ok) {
-        okCount++;
-        setProgress((p) => ({ ...p, [id]: { status: "ok", postId: r.graphPostId } }));
-      } else {
-        const msg = res.ok ? r?.error ?? "Failed to post." : res.error;
-        setProgress((p) => ({ ...p, [id]: { status: "fail", error: msg } }));
-      }
-
-      // Wait before the next page (skip after the last / when no gap / cancelled).
-      if (i < ids.length - 1 && gap > 0 && !cancelRef.current) {
-        setWaitingFor(pages.find((p) => p.id === ids[i + 1])?.pageName ?? null);
-        const interrupted = await countdownSleep(jitter ? applyJitter(gap) : gap);
-        setWaitingFor(null);
-        if (interrupted || cancelRef.current) break;
-      }
-    }
-
-    setCountdown(null);
-    setWaitingFor(null);
-    setPosting(false);
-
-    const totalSel = ids.length;
-    if (cancelRef.current) {
-      setCancelled(true);
-      setProgress((p) => {
-        const next = { ...p };
-        for (const id of ids) if (next[id]?.status === "pending") next[id] = { status: "cancelled" };
-        return next;
-      });
-      success(`Stopped — posted to ${okCount} of ${totalSel} page${totalSel === 1 ? "" : "s"}.`);
-    } else {
-      setDone(true);
-      if (okCount === totalSel) success(`Posted to all ${totalSel} page${totalSel === 1 ? "" : "s"}.`);
-      else if (okCount === 0) error(`All ${totalSel} posts failed — see details below.`);
-      else success(`Posted to ${okCount} of ${totalSel} pages — see details below.`);
-    }
-    router.refresh();
+  function removeJob(id: string) {
+    setJobs((prev) => prev.filter((j) => j.id !== id));
   }
 
   // Queue server-side scheduled posts (one per page) — they fire via the Vercel
@@ -495,10 +598,25 @@ export function FacebookShareFlow({
     router.refresh();
   }
 
-  const okCount = Object.values(progress).filter((p) => p.status === "ok").length;
-
   return (
     <div style={{ marginBottom: 22 }}>
+      {/* ───────────────────── Running shares (concurrent) ───────────────────── */}
+      {jobs.length > 0 && (
+        <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>
+          <div className="adm-card-title">
+            Sharing now <span className="adm-fb-groupcount">{jobs.length}</span>
+          </div>
+          <div className="adm-card-sub" style={{ marginTop: 2 }}>
+            Each runs on its own — start another group below while these post. Keep this tab open until they finish.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+            {jobs.map((job) => (
+              <ShareJobCard key={job.id} job={job} onDismiss={removeJob} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ───────────────────────── STEP 1 — pages ───────────────────────── */}
       {step === "pages" && (
         pages.length === 0 ? (
@@ -649,7 +767,7 @@ export function FacebookShareFlow({
           {/* Sharing-to bar */}
           <div className="adm-list-head" style={{ alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <div style={{ minWidth: 0 }}>
-              <button type="button" className="adm-link" onClick={() => setStep("pages")} disabled={posting} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+              <button type="button" className="adm-link" onClick={() => setStep("pages")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
                 ← Back to pages
               </button>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
@@ -754,7 +872,6 @@ export function FacebookShareFlow({
                       value={caption}
                       onChange={(e) => setCaption(e.target.value)}
                       rows={7}
-                      disabled={posting}
                       aria-label="Post caption"
                       placeholder="Caption for the Facebook post"
                     />
@@ -763,8 +880,8 @@ export function FacebookShareFlow({
                 </div>
               </div>
 
-              {/* When to post — now (immediate) or schedule (server-side) */}
-              {!posting && !done && !cancelled && !scheduledOk && (
+              {/* When to post — now (live job) or schedule (server-side) */}
+              {!scheduledOk && (
                 <div className="adm-seg" role="tablist" aria-label="When to post" style={{ marginTop: 10, width: "fit-content" }}>
                   <button type="button" role="tab" aria-selected={mode === "now"} className={`adm-seg-btn ${mode === "now" ? "on" : ""}`} onClick={() => setMode("now")}>Post now</button>
                   <button type="button" role="tab" aria-selected={mode === "schedule"} className={`adm-seg-btn ${mode === "schedule" ? "on" : ""}`} onClick={() => setMode("schedule")}>Schedule</button>
@@ -773,133 +890,73 @@ export function FacebookShareFlow({
 
               {mode === "now" ? (
                 <>
-              {/* Delay between pages — only relevant when posting to several */}
-              {selectedPages.length > 1 && (
-                <div className="adm-field" style={{ marginTop: 10 }}>
-                  <span>
-                    Delay between pages{" "}
-                    <span className="adm-field-hint" style={{ display: "inline" }}>— posts run one at a time with this gap, to avoid rapid multi-page posting</span>
-                  </span>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                    <select
-                      className="adm-input"
-                      style={{ maxWidth: 170 }}
-                      value={customMode ? "custom" : String(delaySeconds)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === "custom") setCustomMode(true);
-                        else { setCustomMode(false); setDelaySeconds(Number(v)); }
-                      }}
-                      disabled={posting}
-                      aria-label="Delay between pages"
-                    >
-                      {DELAY_PRESETS.map((p) => (
-                        <option key={p.value} value={String(p.value)}>{p.label}</option>
-                      ))}
-                      <option value="custom">Custom…</option>
-                    </select>
-                    {customMode && (
-                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <input
-                          type="number"
-                          min={0}
-                          max={3600}
-                          className="adm-input"
-                          style={{ width: 92 }}
-                          value={delaySeconds}
-                          onChange={(e) => setDelaySeconds(Math.max(0, Math.min(3600, Math.floor(Number(e.target.value) || 0))))}
-                          disabled={posting}
-                          aria-label="Custom delay in seconds"
-                        />
-                        <span className="adm-field-hint" style={{ margin: 0 }}>seconds</span>
+                  {/* Delay between pages — only relevant when posting to several */}
+                  {selectedPages.length > 1 && (
+                    <div className="adm-field" style={{ marginTop: 10 }}>
+                      <span>
+                        Delay between pages{" "}
+                        <span className="adm-field-hint" style={{ display: "inline" }}>— posts run one at a time with this gap, to avoid rapid multi-page posting</span>
                       </span>
-                    )}
-                    <label className="adm-check" style={{ margin: 0 }}>
-                      <input type="checkbox" checked={jitter} onChange={(e) => setJitter(e.target.checked)} disabled={posting} />
-                      <span>Vary a little</span>
-                    </label>
-                  </div>
-                  <span className="adm-field-hint">
-                    {delaySeconds > 0
-                      ? `~${formatDuration(delaySeconds)} between pages${jitter ? " (varied ±25%)" : ""} · about ${formatDuration(delaySeconds * (selectedPages.length - 1))} total. Keep this page open until it finishes.`
-                      : "No delay — posts to all selected pages back-to-back."}
-                  </span>
-                </div>
-              )}
-
-              {/* Per-page progress / results */}
-              {Object.keys(progress).length > 0 && (
-                <div className="adm-fb-results" style={{ marginTop: 6 }}>
-                  {selectedPages.map((p) => {
-                    const st = progress[p.id];
-                    if (!st) return null;
-                    const cls = st.status === "ok" ? "ok" : st.status === "fail" ? "bad" : "";
-                    return (
-                      <div key={p.id} className={`adm-fb-result ${cls}`}>
-                        <span className="adm-fb-result-dot" aria-hidden />
-                        <span style={{ fontWeight: 600 }}>{p.pageName}</span>
-                        <span className="adm-fb-result-msg">
-                          {st.status === "posting" ? "Posting…"
-                            : st.status === "pending" ? "Waiting…"
-                              : st.status === "cancelled" ? "Cancelled"
-                                : st.status === "ok"
-                                  ? st.postId
-                                    ? <a href={permalinkForPost(st.postId)} target="_blank" rel="noreferrer" className="adm-link">View post →</a>
-                                    : "Posted ✓"
-                                  : (st.error ?? "Failed to post.")}
-                        </span>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                        <select
+                          className="adm-input"
+                          style={{ maxWidth: 170 }}
+                          value={customMode ? "custom" : String(delaySeconds)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "custom") setCustomMode(true);
+                            else { setCustomMode(false); setDelaySeconds(Number(v)); }
+                          }}
+                          aria-label="Delay between pages"
+                        >
+                          {DELAY_PRESETS.map((p) => (
+                            <option key={p.value} value={String(p.value)}>{p.label}</option>
+                          ))}
+                          <option value="custom">Custom…</option>
+                        </select>
+                        {customMode && (
+                          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="number"
+                              min={0}
+                              max={3600}
+                              className="adm-input"
+                              style={{ width: 92 }}
+                              value={delaySeconds}
+                              onChange={(e) => setDelaySeconds(Math.max(0, Math.min(3600, Math.floor(Number(e.target.value) || 0))))}
+                              aria-label="Custom delay in seconds"
+                            />
+                            <span className="adm-field-hint" style={{ margin: 0 }}>seconds</span>
+                          </span>
+                        )}
+                        <label className="adm-check" style={{ margin: 0 }}>
+                          <input type="checkbox" checked={jitter} onChange={(e) => setJitter(e.target.checked)} />
+                          <span>Vary a little</span>
+                        </label>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <span className="adm-field-hint">
+                        {delaySeconds > 0
+                          ? `~${formatDuration(delaySeconds)} between pages${jitter ? " (varied ±25%)" : ""} · about ${formatDuration(delaySeconds * (selectedPages.length - 1))} total. Runs as a live job above — keep this tab open until it finishes.`
+                          : "No delay — posts to all selected pages back-to-back."}
+                      </span>
+                    </div>
+                  )}
 
-              {countdown != null && (
-                <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 8 }}>
-                  <span className="adm-spinner" aria-hidden />
-                  Waiting {formatDuration(countdown)} before {waitingFor ? `“${waitingFor}”` : "the next page"}…
-                </p>
-              )}
-
-              {(done || cancelled) && (
-                <p className="adm-fb-target" aria-live="polite" style={{ marginTop: 10 }}>
-                  <span className="adm-fb-target-dot" aria-hidden />
-                  {cancelled ? "Stopped — posted" : "Posted"} to <strong>{okCount}</strong> of <strong>{selectedPages.length}</strong> page{selectedPages.length === 1 ? "" : "s"}.
-                </p>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {posting ? (
-                  <>
-                    <button type="button" className="adm-btn-primary" disabled>
-                      <span className="adm-spinner" aria-hidden /> Posting…
-                    </button>
-                    <button type="button" className="adm-btn-ghost adm-fb-danger" onClick={stop}>
-                      Stop
-                    </button>
-                  </>
-                ) : done || cancelled ? (
-                  <>
-                    <button type="button" className="adm-btn-primary" onClick={() => { setArticle(null); setDone(false); setCancelled(false); setProgress({}); }}>
-                      Share another article
-                    </button>
-                    <button type="button" className="adm-btn-ghost" onClick={() => setStep("pages")}>
-                      Back to pages
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="adm-btn-primary" onClick={share} disabled={!caption.trim()}>
+                  {/* Actions — launch a live job, then bounce back to the selector */}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                    <button type="button" className="adm-btn-primary" onClick={launchJob} disabled={!caption.trim()}>
                       <FacebookIcon className="h-4 w-4" />
                       {selectedPages.length > 1 ? `Share to ${selectedPages.length} pages` : "Share to page"}
                     </button>
                     <button type="button" className="adm-btn-ghost" onClick={() => setArticle(null)}>
                       Choose a different article
                     </button>
-                  </>
-                )}
-              </div>
+                  </div>
+                  {jobs.length > 0 && (
+                    <span className="adm-field-hint" style={{ display: "block", marginTop: 8 }}>
+                      Tip: this starts a new job and returns you here — your other shares above keep running.
+                    </span>
+                  )}
                 </>
               ) : (
                 <>

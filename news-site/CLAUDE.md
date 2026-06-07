@@ -217,10 +217,15 @@ leaving this view); a global select-all + Connect/Refresh
 in the header) → **Step 2 — pick a published article** (server action
 `listPublishedArticlesForShare`: search
 + pagination, published-only) with a "Sharing to: […] · Back" bar, then an
-**editable caption + cover preview** → posts to each selected Page **one at a
-time** via the existing `publishArticleNow` (Graph path) with **live per-page
-status** (posting/✓/✗) so one failure never blocks the rest, a summary, and a
-success screen. The detailed **Pages manager** (grouped table, per-page
+**editable caption + cover preview**. **Post now** spawns an independent live
+**share job** (`ShareJobCard`) that posts to that group's Pages **one at a time**
+via `publishArticleNow` with **live per-page status** (posting/✓/✗, one failure
+never blocks the rest) + a Stop — and returns you to the selector, so you can
+**start another group's share immediately**. Several jobs run **concurrently**
+(US sharing article A while you kick off Sports → article B), each independent; a
+**"Sharing now"** panel lists them. **Schedule** (server-side cron) is unchanged.
+⚠️ Live jobs are client-driven — keep the tab open until they finish (an
+automatic server fallback for closing mid-share is a planned follow-up). The detailed **Pages manager** (grouped table, per-page
 refresh/disconnect, category groups) stays rendered below. Each row's **Category
 Group** cell is an inline **move selector** — pick another group (or "＋ New
 group…") to reassign that Page via `setFacebookPageGroup`, and it jumps to the
