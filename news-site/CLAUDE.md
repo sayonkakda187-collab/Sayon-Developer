@@ -208,8 +208,11 @@ browser.
 **Two-step Share flow (default Facebook tab screen):** `FacebookShareFlow`
 (`components/admin/FacebookShareFlow.tsx`) renders **Step 1 — select Page(s)**
 (selectable cards w/ avatar + status + post counts; multi-select checkboxes,
-pre-selected when only one Page; Connect/Refresh in the header) → **Step 2 —
-pick a published article** (server action `listPublishedArticlesForShare`: search
+pre-selected when only one Page; **grouped by category/niche — each group is its
+own box with a per-group "Select all / Unselect all"**, mirroring the manager's
+`adm-fb-grouphd`, plus a name/group search + a global select-all; Connect/Refresh
+in the header) → **Step 2 — pick a published article** (server action
+`listPublishedArticlesForShare`: search
 + pagination, published-only) with a "Sharing to: […] · Back" bar, then an
 **editable caption + cover preview** → posts to each selected Page **one at a
 time** via the existing `publishArticleNow` (Graph path) with **live per-page

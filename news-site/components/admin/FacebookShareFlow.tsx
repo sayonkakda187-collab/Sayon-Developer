@@ -23,6 +23,7 @@ import {
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 import { permalinkForPost } from "@/lib/facebook";
 import { formatSchedule, nowLocalInput, localInputToUtcISO, SCHEDULE_TZ } from "@/lib/fbSchedule";
+import { sortCategoryGroups } from "@/lib/facebookGroups";
 
 type Step = "pages" | "articles";
 type PostStatus = { status: "pending" | "posting" | "ok" | "fail" | "cancelled"; error?: string; postId?: string };
@@ -93,6 +94,58 @@ function PageAvatar({ dbId, name, size = 40 }: { dbId: string; name: string; siz
         />
       )}
     </span>
+  );
+}
+
+/** One selectable Page card (avatar, name, status, post count + check state). */
+function PageCard({ page, selected, onToggle }: { page: FacebookPageView; selected: boolean; onToggle: () => void }) {
+  const p = page;
+  const on = selected;
+  const connected = p.status === "Connected";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      style={{
+        textAlign: "left",
+        display: "flex",
+        gap: 11,
+        alignItems: "center",
+        padding: 12,
+        borderRadius: 14,
+        cursor: "pointer",
+        background: "var(--adm-card)",
+        border: on ? "2px solid rgb(var(--accent))" : "1px solid var(--adm-bd)",
+        boxShadow: on ? "0 0 0 3px rgba(var(--accent), 0.12)" : "none",
+        transition: "border-color .12s, box-shadow .12s",
+      }}
+    >
+      <PageAvatar dbId={p.id} name={p.pageName} />
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {p.pageName}
+        </span>
+        <span className="adm-fb-sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 999, background: connected ? "#16a34a" : "#dc2626", display: "inline-block", flex: "none" }} />
+          {connected ? "Connected" : "Expired"}
+        </span>
+        <span className="adm-fb-sub" style={{ display: "block" }}>
+          {formatNumber(p.postedCount)} posted{p.pendingCount > 0 ? ` · ${p.pendingCount} scheduled` : ""}
+        </span>
+      </span>
+      <span
+        aria-hidden
+        style={{
+          width: 22, height: 22, flex: "none", borderRadius: 7,
+          border: on ? "none" : "1.5px solid var(--adm-bd)",
+          background: on ? "rgb(var(--accent))" : "transparent",
+          color: "#fff", display: "grid", placeItems: "center",
+        }}
+      >
+        {on && <CheckIcon className="h-3.5 w-3.5" />}
+      </span>
+    </button>
   );
 }
 
@@ -225,6 +278,23 @@ export function FacebookShareFlow({
     );
   }, [pages, pageQuery]);
 
+  // Group the (filtered) pages by their category/niche so each group gets its
+  // own box with a "Select all / Unselect all" toggle. Known groups first
+  // (sortCategoryGroups), then any custom ones A–Z; missing → "Uncategorized".
+  const groupedPages = useMemo(() => {
+    const byGroup = new Map<string, FacebookPageView[]>();
+    for (const p of visiblePages) {
+      const g = p.categoryGroup?.trim() || "Uncategorized";
+      const arr = byGroup.get(g) ?? [];
+      arr.push(p);
+      byGroup.set(g, arr);
+    }
+    return sortCategoryGroups([...byGroup.keys()]).map((group) => ({
+      group,
+      pages: byGroup.get(group)!,
+    }));
+  }, [visiblePages]);
+
   // "Select all" acts on the currently-visible (filtered) Pages.
   const allVisibleSelected = visiblePages.length > 0 && visiblePages.every((p) => selectedPageIds.has(p.id));
   function toggleAll() {
@@ -232,6 +302,19 @@ export function FacebookShareFlow({
       const next = new Set(prev);
       for (const p of visiblePages) {
         if (allVisibleSelected) next.delete(p.id);
+        else next.add(p.id);
+      }
+      return next;
+    });
+  }
+
+  // Select / unselect every Page within a single group box.
+  function toggleGroup(groupPages: FacebookPageView[]) {
+    const allOn = groupPages.length > 0 && groupPages.every((p) => selectedPageIds.has(p.id));
+    setSelectedPageIds((prev) => {
+      const next = new Set(prev);
+      for (const p of groupPages) {
+        if (allOn) next.delete(p.id);
         else next.add(p.id);
       }
       return next;
@@ -425,60 +508,39 @@ export function FacebookShareFlow({
               </label>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12, marginTop: 12 }}>
-              {visiblePages.map((p) => {
-                const on = selectedPageIds.has(p.id);
-                const connected = p.status === "Connected";
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => togglePage(p.id)}
-                    aria-pressed={on}
-                    style={{
-                      textAlign: "left",
-                      display: "flex",
-                      gap: 11,
-                      alignItems: "center",
-                      padding: 12,
-                      borderRadius: 14,
-                      cursor: "pointer",
-                      background: "var(--adm-card)",
-                      border: on ? "2px solid rgb(var(--accent))" : "1px solid var(--adm-bd)",
-                      boxShadow: on ? "0 0 0 3px rgba(var(--accent), 0.12)" : "none",
-                      transition: "border-color .12s, box-shadow .12s",
-                    }}
-                  >
-                    <PageAvatar dbId={p.id} name={p.pageName} />
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {p.pageName}
-                      </span>
-                      <span className="adm-fb-sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: 999, background: connected ? "#16a34a" : "#dc2626", display: "inline-block", flex: "none" }} />
-                        {connected ? "Connected" : "Expired"} · {p.categoryGroup}
-                      </span>
-                      <span className="adm-fb-sub" style={{ display: "block" }}>
-                        {formatNumber(p.postedCount)} posted{p.pendingCount > 0 ? ` · ${p.pendingCount} scheduled` : ""}
-                      </span>
-                    </span>
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 22, height: 22, flex: "none", borderRadius: 7,
-                        border: on ? "none" : "1.5px solid var(--adm-bd)",
-                        background: on ? "rgb(var(--accent))" : "transparent",
-                        color: "#fff", display: "grid", placeItems: "center",
-                      }}
-                    >
-                      {on && <CheckIcon className="h-3.5 w-3.5" />}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {visiblePages.length === 0 && (
+            {visiblePages.length === 0 ? (
               <p className="adm-card-sub" style={{ marginTop: 14 }}>No pages match “{pageQuery}”.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+                {groupedPages.map(({ group, pages: groupPages }) => {
+                  const selectedInGroup = groupPages.reduce((n, p) => n + (selectedPageIds.has(p.id) ? 1 : 0), 0);
+                  const allOn = selectedInGroup === groupPages.length;
+                  return (
+                    <div
+                      key={group}
+                      style={{ border: "1px solid var(--adm-bd)", borderRadius: 14, padding: 12, background: "rgba(127, 140, 170, 0.06)" }}
+                    >
+                      <div className="adm-fb-grouphd" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                          <span className="adm-fb-groupname">{group}</span>
+                          <span className="adm-fb-groupcount">{groupPages.length}</span>
+                          {selectedInGroup > 0 && (
+                            <span className="adm-fb-sub">{selectedInGroup} selected</span>
+                          )}
+                        </span>
+                        <button type="button" className="adm-fb-grouptoggle" onClick={() => toggleGroup(groupPages)}>
+                          {allOn ? "Unselect all" : "Select all"}
+                        </button>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
+                        {groupPages.map((p) => (
+                          <PageCard key={p.id} page={p} selected={selectedPageIds.has(p.id)} onToggle={() => togglePage(p.id)} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
