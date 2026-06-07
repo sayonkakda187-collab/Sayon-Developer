@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
+import { AdSenseHead } from "@/components/AdSenseHead";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <ViewTransitions>{children}</ViewTransitions>
       </body>
+      {/* Google AdSense account script — server-injected into <head> for site
+          verification/review. Site-wide; loads on every page. */}
+      <AdSenseHead />
     </html>
   );
 }

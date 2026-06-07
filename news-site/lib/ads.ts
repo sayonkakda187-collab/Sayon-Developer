@@ -66,6 +66,19 @@ export const ADS = {
 //    AdSlot/AdsHead type-check cleanly when you flip it.
 export const ADS_ENABLED: boolean = true;
 
+/*
+ * Google AdSense ACCOUNT script — site verification + review. SEPARATE from the
+ * AdsKeeper integration above; AdSense permits other networks, so both run side
+ * by side. This is ONLY the account script (no `<ins class="adsbygoogle">` ad
+ * units yet — those come after approval). It loads site-wide from the ROOT
+ * layout's served <head> so Google's crawler can verify the site — see
+ * components/AdSenseHead.tsx. ALWAYS on (verification needs it present); it is
+ * intentionally NOT gated by ADS_ENABLED. The publisher id is public by design
+ * (it ships in the page HTML) and must match the `google.com, pub-… , DIRECT`
+ * line in public/ads.txt.
+ */
+export const ADSENSE_PUBLISHER_ID = "ca-pub-5470257305108580";
+
 // ── Helpers (no need to edit below) ─────────────────────────────────────────
 
 const PLACEHOLDER_PREFIX = "REPLACE_WITH";
