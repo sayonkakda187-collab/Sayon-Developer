@@ -28,8 +28,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["var(--font-fraunces)", "ui-serif", "Georgia", "serif"],
+        sans: ["var(--font-ui)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-head)", "ui-serif", "Georgia", "serif"],
+        head: ["var(--font-head)", "ui-serif", "Georgia", "serif"],
+        ui: ["var(--font-ui)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       maxWidth: {
         prose: "68ch",
