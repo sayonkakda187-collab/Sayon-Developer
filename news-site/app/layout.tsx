@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Newsreader, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
@@ -8,14 +8,21 @@ import { ADSENSE_PUBLISHER_ID } from "@/lib/ads";
 
 export const dynamic = "force-dynamic";
 
-const fraunces = Fraunces({
+// Editorial type pairing for the public site: Newsreader (serif headlines +
+// wordmark — optical sizing, italics) + Schibsted Grotesk (UI / labels / meta).
+// Exposed as --font-head / --font-ui (Tailwind font-display / font-sans map to
+// them in tailwind.config).
+const newsreader = Newsreader({
   subsets: ["latin"],
-  variable: "--font-fraunces",
+  style: ["normal", "italic"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-head",
   display: "swap",
 });
-const inter = Inter({
+const schibsted = Schibsted_Grotesk({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-ui",
   display: "swap",
 });
 
@@ -59,7 +66,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fraunces.variable} ${inter.variable}`}
+      className={`${newsreader.variable} ${schibsted.variable}`}
     >
       <body className="flex min-h-screen flex-col bg-bg font-sans text-fg antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />

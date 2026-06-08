@@ -1,40 +1,49 @@
 import { getHomepage } from "@/lib/queries";
-import { FeaturedHero } from "@/components/FeaturedHero";
-import { HomeFeed } from "@/components/HomeFeed";
+import { toLedgerStory } from "@/lib/ledger";
+import { LedgerHero } from "@/components/ledger/LedgerHero";
+import { Latest } from "@/components/ledger/Latest";
 import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 
+// Desk order used when a category is present (others append alphabetically).
+const DESK_ORDER = ["Business", "Sports", "Technology", "World"];
+
 export default async function Home() {
-  const { featured, feed, tabCategories } = await getHomepage();
+  const { featured, feed } = await getHomepage();
 
   if (!featured) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 lg:px-8">
-        <h1 className="font-display text-4xl font-bold tracking-tight">No stories yet</h1>
-        <p className="mt-4 text-fg-muted">
+      <main className="tl-wrap tl-home">
+        <h1 className="tl-section-title">No stories yet</h1>
+        <p className="tl-section-sub">
           Published articles will appear here. Add some from the admin panel.
         </p>
       </main>
     );
   }
 
+  const hero = toLedgerStory(featured);
+  const leads = feed.slice(0, 2).map(toLedgerStory);
+  const pool = feed.slice(2).map(toLedgerStory);
+
+  // Filter pills = "Top" + the desks actually present in the pool.
+  const present = Array.from(new Set(pool.map((s) => s.cat)));
+  const filters = [
+    "Top",
+    ...DESK_ORDER.filter((d) => present.includes(d)),
+    ...present.filter((p) => !DESK_ORDER.includes(p)).sort(),
+  ];
+
   return (
-    <div>
-      {/* Top-of-page ad — the first thing visitors see on landing, above the
-          lead story. A Header Widget (4 cards on desktop / 2 on mobile); reserves
-          300px to match its height so it never jumps the hero down when it fills,
-          and collapses cleanly if AdsKeeper doesn't fill it. */}
-      <section className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={300} />
-      </section>
+    <main className="tl-wrap tl-home">
+      <LedgerHero hero={hero} leads={leads} />
 
-      {/* Lead story. */}
-      <section className="mx-auto max-w-7xl px-4 pt-2 sm:px-6 sm:pt-4 lg:px-8">
-        <FeaturedHero article={featured} />
-      </section>
+      {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
+      <div style={{ padding: "28px 0" }}>
+        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={120} />
+      </div>
 
-      {/* Trending-style: search + category tabs + responsive card grid. */}
-      <HomeFeed articles={feed} categories={tabCategories} />
-    </div>
+      <Latest stories={pool} filters={filters} />
+    </main>
   );
 }
