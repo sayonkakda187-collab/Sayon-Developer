@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Fraunces, Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
@@ -16,6 +16,14 @@ const fraunces = Fraunces({
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+});
+// Serif wordmark for the masthead only (kept separate from the site's display
+// font, Fraunces). Weight 700 per the masthead spec.
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["700"],
+  variable: "--font-playfair",
   display: "swap",
 });
 
@@ -59,7 +67,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fraunces.variable} ${inter.variable}`}
+      className={`${fraunces.variable} ${inter.variable} ${playfair.variable}`}
     >
       <body className="flex min-h-screen flex-col bg-bg font-sans text-fg antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />

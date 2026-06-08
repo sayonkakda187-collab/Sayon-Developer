@@ -30,6 +30,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["var(--font-fraunces)", "ui-serif", "Georgia", "serif"],
+        masthead: ["var(--font-playfair)", "ui-serif", "Georgia", "serif"],
       },
       maxWidth: {
         prose: "68ch",

@@ -1,6 +1,6 @@
 import { Link } from "next-view-transitions";
 import { getCategories, getTrending } from "@/lib/queries";
-import { siteConfig } from "@/lib/site";
+import { Masthead } from "./Masthead";
 import { MainNav } from "./MainNav";
 import { MobileMenu } from "./MobileMenu";
 import { ThemeToggle } from "./ThemeToggle";
@@ -40,20 +40,17 @@ export async function SiteHeader() {
         </div>
       )}
 
-      {/* Main header (sticky) */}
-      <header className="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-8">
-            <Link
-              href="/"
-              className="font-display text-2xl font-extrabold tracking-tight text-fg"
-            >
-              {siteConfig.name}
-            </Link>
-            <MainNav items={navItems} />
-          </div>
+      {/* Centered serif masthead (scrolls away with the page) */}
+      <Masthead />
 
-          <div className="flex items-center gap-1.5">
+      {/* Primary nav row — sticky. A full-width sticky bar (so the mobile menu's
+          dropdown can anchor to it edge-to-edge); inside, equal flex spacers keep
+          the nav centered while Search / theme / menu sit on the right. */}
+      <div className="sticky top-0 z-40 border-y border-border bg-bg/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex-1" aria-hidden />
+          <MainNav items={navItems} />
+          <div className="flex flex-1 items-center justify-end gap-1.5">
             <Link
               href="/search"
               aria-label="Search"
@@ -68,7 +65,7 @@ export async function SiteHeader() {
             <MobileMenu items={[...navItems, { name: "Search", href: "/search" }]} />
           </div>
         </div>
-      </header>
+      </div>
     </>
   );
 }
