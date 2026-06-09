@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { useRouter } from "next/navigation";
 import {
   disconnectFacebookPage,
@@ -86,6 +87,29 @@ function PageAvatar({ dbId, name, size = 38 }: { dbId: string; name: string; siz
         />
       )}
     </span>
+  );
+}
+
+/** One box's page cards, paginated (12/page) so a big niche (or "Needs
+ *  attention") doesn't make the Pages panel scroll forever. Select-all still acts
+ *  on the whole group — pagination only affects what's rendered. */
+function PagedGrid({
+  rows,
+  render,
+  perPage = 12,
+}: {
+  rows: FacebookPageView[];
+  render: (p: FacebookPageView) => ReactNode;
+  perPage?: number;
+}) {
+  const { page, setPage, pageCount, pageItems } = usePaged(rows, perPage);
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12, marginTop: 10 }}>
+        {pageItems.map(render)}
+      </div>
+      <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
+    </>
   );
 }
 
@@ -530,9 +554,7 @@ export function FacebookPagesManager({
                   </button>
                 </span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12, marginTop: 10 }}>
-                {flagged.map(renderCard)}
-              </div>
+              <PagedGrid rows={flagged} render={renderCard} />
             </div>
           )}
 
@@ -548,9 +570,7 @@ export function FacebookPagesManager({
                   {rows.every((r) => selectedIds.has(r.id)) ? "Unselect all" : "Select all"}
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12, marginTop: 10 }}>
-                {rows.map(renderCard)}
-              </div>
+              <PagedGrid rows={rows} render={renderCard} />
             </div>
           ))}
         </div>
