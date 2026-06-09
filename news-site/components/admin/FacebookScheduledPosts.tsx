@@ -6,6 +6,7 @@ import { useToast } from "@/components/admin/Toast";
 import { updateScheduledShare, cancelScheduledShare, deleteScheduledShare } from "@/app/admin/facebook-actions";
 import { CalendarIcon, PencilIcon, TrashIcon, CloseIcon, CheckIcon } from "@/components/admin/icons";
 import { permalinkForPost } from "@/lib/facebook";
+import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatSchedule, toLocalInput, localInputToUtcISO, nowLocalInput, SCHEDULE_TZ } from "@/lib/fbSchedule";
 
 export type ScheduledPostView = {
@@ -64,6 +65,8 @@ export function FacebookScheduledPosts({ posts }: { posts: ScheduledPostView[] }
     ? sorted
     : sorted.filter((p) => p.status === filter || (filter === "pending" && p.status === "posting"));
 
+  const { page, setPage, pageCount, pageItems } = usePaged(shown, 15);
+
   function startEdit(p: ScheduledPostView) {
     setEditId(p.id);
     setEditAt(toLocalInput(new Date(p.scheduledFor)));
@@ -112,7 +115,7 @@ export function FacebookScheduledPosts({ posts }: { posts: ScheduledPostView[] }
         {posts.length > 0 && (
           <div className="adm-seg" role="tablist" aria-label="Filter scheduled posts">
             {FILTERS.map((f) => (
-              <button key={f} type="button" role="tab" aria-selected={filter === f} className={`adm-seg-btn ${filter === f ? "on" : ""}`} onClick={() => setFilter(f)}>
+              <button key={f} type="button" role="tab" aria-selected={filter === f} className={`adm-seg-btn ${filter === f ? "on" : ""}`} onClick={() => { setFilter(f); setPage(1); }}>
                 {f[0].toUpperCase() + f.slice(1)}{f !== "all" && counts[f] ? ` (${counts[f]})` : ""}
               </button>
             ))}
@@ -127,8 +130,9 @@ export function FacebookScheduledPosts({ posts }: { posts: ScheduledPostView[] }
       ) : shown.length === 0 ? (
         <p className="adm-card-sub" style={{ marginTop: 14 }}>No {filter} posts.</p>
       ) : (
+        <>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-          {shown.map((p) => (
+          {pageItems.map((p) => (
             <div key={p.id} style={{ border: "1px solid var(--adm-bd)", borderRadius: 12, padding: 12, background: "var(--adm-card)" }}>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
@@ -180,6 +184,8 @@ export function FacebookScheduledPosts({ posts }: { posts: ScheduledPostView[] }
             </div>
           ))}
         </div>
+        <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
+        </>
       )}
     </div>
   );

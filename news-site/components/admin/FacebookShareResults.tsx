@@ -9,6 +9,7 @@ import {
 } from "@/app/admin/facebook-actions";
 import { formatDate, formatNumber } from "@/lib/site";
 import { RefreshIcon } from "@/components/admin/icons";
+import { usePaged, AdminPager } from "@/components/admin/Pager";
 
 type ArticleOpt = { id: string; title: string; posts: number; lastAt: string | null };
 
@@ -51,7 +52,10 @@ export function FacebookShareResults() {
     };
   }, [error]);
 
+  const { page, setPage, pageCount, pageItems } = usePaged(rows ?? [], 12);
+
   async function load(id: string) {
+    setPage(1);
     if (!id) {
       setRows(null);
       setTitle("");
@@ -132,7 +136,7 @@ export function FacebookShareResults() {
             </p>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, marginTop: 14 }}>
-            {rows.map((r, i) => (
+            {pageItems.map((r, i) => (
               <div key={`${r.pageDbId}-${i}`} style={{ border: "1px solid var(--adm-bd)", borderRadius: 14, padding: 12, background: "var(--adm-card)" }}>
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
@@ -163,6 +167,7 @@ export function FacebookShareResults() {
               </div>
             ))}
           </div>
+          <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
         </>
       )}
     </div>

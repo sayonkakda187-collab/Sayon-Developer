@@ -1810,6 +1810,21 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 [data-adm-theme="dark"] .admin-shell .adm-seg-tag { color: #fbbf24; }
 .adm-seg-ok { display: inline-flex; color: var(--adm-green); }
 
+/* ── Facebook tab: section switcher bar ─────────────────────────────────────── */
+.adm-fb-tabbar { display: flex; justify-content: center; margin: 2px 0 18px; }
+.adm-fb-tabbar .adm-seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+.adm-fb-tabbar .adm-seg-btn { white-space: nowrap; }
+
+/* ── Pagination (Prev · 1 2 … N · Next) ─────────────────────────────────────── */
+.adm-pager { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
+.adm-pager-btn { min-width: 36px; height: 34px; padding: 0 11px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--adm-bd); background: var(--adm-card); color: var(--adm-ink); border-radius: 9px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.adm-pager-btn:hover:not(:disabled):not(.on) { background: var(--adm-soft, rgba(0,0,0,0.05)); }
+.adm-pager-btn.on { background: var(--adm-blue); border-color: transparent; color: #fff; }
+.adm-pager-btn:disabled { opacity: .45; cursor: default; }
+.adm-pager-gap { color: var(--adm-muted); padding: 0 4px; user-select: none; }
+
 /* ── API Settings page ─────────────────────────────────────────────────────── */
 .adm-settings-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
 

@@ -3,6 +3,7 @@ import { ToastProvider } from "@/components/admin/Toast";
 import { FacebookShareFlow } from "@/components/admin/FacebookShareFlow";
 import { FacebookShareResults } from "@/components/admin/FacebookShareResults";
 import { FacebookStats } from "@/components/admin/FacebookStats";
+import { FacebookTabs } from "@/components/admin/FacebookTabs";
 import { FacebookTopActions } from "@/components/admin/FacebookTopActions";
 import {
   FacebookPagesManager,
@@ -76,10 +77,15 @@ export default async function AdminFacebookPage() {
     <ToastProvider>
       <FacebookTopActions userTokenSaved={Boolean(connect?.userTokenSaved)} />
       <FacebookStats pages={view} />
-      <FacebookShareFlow pages={view} />
-      <FacebookShareResults />
-      <FacebookScheduledPosts posts={scheduledView} />
-      <FacebookPagesManager pages={view} connect={connect} />
+      <FacebookTabs
+        defaultId="share"
+        tabs={[
+          { id: "share", label: "Share", node: <FacebookShareFlow pages={view} /> },
+          { id: "scheduled", label: "Scheduled", node: <FacebookScheduledPosts posts={scheduledView} /> },
+          { id: "results", label: "Results", node: <FacebookShareResults /> },
+          { id: "pages", label: "Pages", node: <FacebookPagesManager pages={view} connect={connect} /> },
+        ]}
+      />
     </ToastProvider>
   );
 }
