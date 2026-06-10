@@ -23,6 +23,7 @@ import {
   CloseIcon,
   FacebookIcon,
   TrendingIcon,
+  SparklesIcon,
   SettingsIcon,
   GlobeIcon,
   SitesIcon,
@@ -39,6 +40,7 @@ const NAV = [
   { tab: "categories", label: "Categories", drawerLabel: "Categories & Tags", href: "/admin/categories", Icon: CategoriesIcon },
   { tab: "comments", label: "Comments", drawerLabel: "Comments", href: "/admin/comments", Icon: CommentsIcon },
   { tab: "facebook", label: "Facebook", drawerLabel: "Facebook Pages", href: "/admin/facebook", Icon: FacebookIcon },
+  { tab: "ai-assistant", label: "Assistant", drawerLabel: "AI Assistant", href: "/admin/ai-assistant", Icon: SparklesIcon },
 ] as const;
 
 export function AdminShell({
