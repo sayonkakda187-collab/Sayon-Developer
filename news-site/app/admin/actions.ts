@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin, clearSessionCookie } from "@/lib/auth";
 import { slugify, uniqueArticleSlug } from "@/lib/slug";
 import { getActiveSiteId } from "@/lib/sites";
+import { publishArticleNow } from "@/app/admin/facebook-actions";
 
 export async function logout() {
   clearSessionCookie();
@@ -54,11 +55,15 @@ export async function saveArticle(formData: FormData) {
   const slug = await uniqueArticleSlug(title, id || undefined);
 
   let savedId = id;
+  // True only when this save flips the article from not-published → published, so
+  // auto-share fires exactly once (never when re-saving an already-published one).
+  let freshlyPublished = false;
   if (id) {
     const existing = await prisma.article.findUnique({
       where: { id },
-      select: { publishedAt: true },
+      select: { publishedAt: true, status: true },
     });
+    freshlyPublished = status === "published" && existing?.status !== "published";
     const publishedAt =
       status === "published" ? (existing?.publishedAt ?? new Date()) : null;
     await prisma.article.update({
@@ -78,6 +83,7 @@ export async function saveArticle(formData: FormData) {
       },
     });
   } else {
+    freshlyPublished = status === "published";
     const publishedAt = status === "published" ? new Date() : null;
     // New articles belong to the site selected in the admin switcher (default
     // site for now). Updates never touch siteId, so existing articles stay put.
@@ -100,6 +106,24 @@ export async function saveArticle(formData: FormData) {
       select: { id: true },
     });
     savedId = created.id;
+  }
+
+  // Auto-share to Facebook on the FIRST publish only. Reuses the exact Graph path
+  // + per-page history recording as "Publish Now". Skipped outside production
+  // (unless FACEBOOK_AUTOSHARE_ENABLED=true) so publishing from a preview deploy —
+  // which shares the production DB — never posts for real. A share failure never
+  // blocks publishing: it's recorded as a failed ScheduledPost row, retriable from
+  // the Facebook tab.
+  const autoShare = formData.get("fbAutoShare") === "on";
+  const autoSharePageIds = formData.getAll("fbAutoSharePageIds").map(String).filter(Boolean);
+  const autoShareAllowed =
+    process.env.VERCEL_ENV === "production" || process.env.FACEBOOK_AUTOSHARE_ENABLED === "true";
+  if (freshlyPublished && autoShare && autoSharePageIds.length > 0 && autoShareAllowed) {
+    try {
+      await publishArticleNow({ articleId: savedId, pageDbIds: autoSharePageIds });
+    } catch {
+      /* never block publishing on a share failure */
+    }
   }
 
   // On publish, land on the Articles list with the Share panel auto-opened so

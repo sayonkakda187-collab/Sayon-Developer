@@ -20,6 +20,7 @@ import { StockPhotoModal } from "@/components/admin/StockPhotoModal";
 import { AiImageModal } from "@/components/admin/AiImageModal";
 import { COVER_HANDOFF_KEY } from "@/lib/imageGenClient";
 import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon, AiImageIcon } from "@/components/admin/icons";
+import { AutoShareField, type AutoSharePage } from "@/components/admin/AutoShareField";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -109,6 +110,8 @@ export function ArticleForm({
   article,
   initial,
   aiHandoff = false,
+  fbPages,
+  autoShareActive = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   categories: Category[];
@@ -120,6 +123,12 @@ export function ArticleForm({
   // When arriving from AI Assist (?ai=1), read the one-shot draft handoff stashed
   // in sessionStorage and pre-fill the editor as an UNSAVED draft. Never published.
   aiHandoff?: boolean;
+  // Connected Facebook Pages for the "Auto-share on publish" control. Omit to hide
+  // the control (e.g. on the new-article screen).
+  fbPages?: AutoSharePage[];
+  // Whether auto-share actually runs in this environment (production) — drives the
+  // preview-only note in the control.
+  autoShareActive?: boolean;
 }) {
   const editorId = article?.id ?? "new";
   const router = useRouter();
@@ -747,6 +756,10 @@ export function ArticleForm({
               className={`${inputClass} mt-2`}
             />
           </div>
+
+          {fbPages && fbPages.length > 0 && (
+            <AutoShareField pages={fbPages} active={autoShareActive} />
+          )}
         </div>
       </div>
     </form>

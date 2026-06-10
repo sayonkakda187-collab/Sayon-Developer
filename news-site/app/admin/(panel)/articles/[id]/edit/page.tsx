@@ -43,12 +43,20 @@ export default async function EditArticlePage({
 
   if (!article) notFound();
 
+  // Auto-share fires only in production (preview/dev share the prod DB, so a
+  // preview publish must never post). FACEBOOK_AUTOSHARE_ENABLED forces it on for
+  // a deliberate test. This just drives the UI note; saveArticle re-checks server-side.
+  const autoShareActive =
+    process.env.VERCEL_ENV === "production" || process.env.FACEBOOK_AUTOSHARE_ENABLED === "true";
+
   return (
     <ToastProvider>
       <ArticleForm
         action={saveArticle}
         categories={categories}
         tags={tags}
+        fbPages={pages}
+        autoShareActive={autoShareActive}
         article={{
           id: article.id,
           title: article.title,
