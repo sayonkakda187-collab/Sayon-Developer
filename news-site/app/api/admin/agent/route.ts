@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isAiConfigured, resolveModel, AgentError } from "@/lib/agent/anthropic";
 import { runAgentTurn } from "@/lib/agent/run";
+import { getAgentSettings } from "@/lib/agent/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,13 +50,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Send a message to the assistant." }, { status: 400 });
   }
 
-  const model = resolveModel(typeof body.model === "string" ? body.model : undefined);
+  const settings = await getAgentSettings();
+  // The chat's model picker wins; otherwise the saved Agent-Settings default.
+  const model = resolveModel(
+    typeof body.model === "string" ? body.model : settings.model ?? undefined,
+  );
   const categories = (
     await prisma.category.findMany({ select: { name: true }, orderBy: { name: "asc" } })
   ).map((c) => c.name);
 
   try {
-    const result = await runAgentTurn({ messages, model, categories });
+    const result = await runAgentTurn({ messages, model, categories, settings });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const code = err instanceof AgentError ? err.code : "unknown";

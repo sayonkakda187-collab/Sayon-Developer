@@ -6,170 +6,154 @@ import { getActiveSiteId } from "@/lib/sites";
 import { aggregateTrending, isSourceConfigured } from "@/lib/news/aggregate";
 import { NEWS_SOURCE_IDS } from "@/lib/news/sources";
 import { generateAiAssist } from "@/lib/aiAssist";
+import { permalinkForPost } from "@/lib/facebook";
 import type { AnthropicTool } from "./anthropic";
-
-// Phase 1 tools: read articles + news, and create/edit DRAFTS. None of these
-// touch the public site (no publish, no live-edit, no Facebook) — those are
-// gated, approval-only actions added in Phase 2.
+import { addAction, updateAction, type AgentSettings, type AgentActionRecord, type AgentActionType } from "./store";
+import { executeAgentAction } from "./execute";
 
 export type ToolResult = {
-  /** JSON/text fed back to the model as the tool_result. */
-  content: string;
-  /** Short human log line shown in the chat ("🔧 …"). */
-  summary: string;
+  content: string; // fed back to the model
+  summary: string; // "🔧 …" log line
   isError?: boolean;
+  proposedAction?: AgentActionRecord; // set when a gated action awaits approval
 };
 
-export const PHASE1_TOOLS: AnthropicTool[] = [
-  {
-    name: "list_articles",
-    description:
-      "List the site's articles (newest first). Filter by status ('draft', 'published', or 'all') and an optional case-insensitive title search. Returns id, title, status, category, excerpt, updated time.",
-    input_schema: {
-      type: "object",
-      properties: {
-        status: { type: "string", enum: ["draft", "published", "all"], description: "Default 'all'." },
-        query: { type: "string", description: "Optional title search." },
-      },
-    },
-  },
-  {
-    name: "get_article",
-    description: "Get one article's full details by id (title, status, excerpt, body, category, slug).",
-    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-  },
-  {
-    name: "search_news",
-    description:
-      "Search trending real-world news through the site's news providers (results are cached; the free tiers have small daily quotas, so search sparingly). Provide a category OR a keyword. Returns headlines with source + url to research and attribute.",
-    input_schema: {
-      type: "object",
-      properties: {
-        category: { type: "string", description: "general, world, business, technology, sports, etc." },
-        keyword: { type: "string", description: "Free-text topic to search for." },
-      },
-    },
-  },
-  {
-    name: "create_draft",
-    description:
-      "Write a NEW ORIGINAL article in the site's own words about a topic or a found news item, and save it as a DRAFT (never published). ALWAYS pass source_url when basing it on a news item, so a source link is attributed. Returns the new draft id + edit URL.",
-    input_schema: {
-      type: "object",
-      properties: {
-        topic: { type: "string", description: "The headline/topic to write about." },
-        source_url: { type: "string", description: "URL of the news item it's based on (for attribution)." },
-        source_title: { type: "string", description: "Name of the source outlet." },
-        category: { type: "string", description: "One of the site's categories (optional)." },
-      },
-      required: ["topic"],
-    },
-  },
-  {
-    name: "update_draft",
-    description:
-      "Edit an existing DRAFT's title, excerpt (SEO meta), or body (markdown). Only drafts can be edited — editing a published/live article is NOT allowed in this phase. Returns what changed.",
-    input_schema: {
-      type: "object",
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        excerpt: { type: "string", description: "SEO meta / summary." },
-        content: { type: "string", description: "Full replacement markdown body." },
-      },
-      required: ["id"],
-    },
-  },
-];
+export type ToolCtx = { model?: string; settings: AgentSettings };
 
-/** Dispatch a single tool call. `model` is reused for the create_draft AI call. */
-export async function executeTool(
-  name: string,
-  input: Record<string, unknown>,
-  model?: string,
-): Promise<ToolResult> {
+// ── Tool schemas ─────────────────────────────────────────────────────────────
+const T_list: AnthropicTool = {
+  name: "list_articles",
+  description: "List the site's articles (newest first). Filter by status ('draft','published','all') + optional title search. Returns id, title, status, category, excerpt, updated.",
+  input_schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "published", "all"] }, query: { type: "string" } } },
+};
+const T_get: AnthropicTool = {
+  name: "get_article",
+  description: "Get one article's full details by id (title, status, excerpt, body, category, slug).",
+  input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+};
+const T_news: AnthropicTool = {
+  name: "search_news",
+  description: "Search trending real-world news via the site's cached providers (small daily quotas — search sparingly). Give a category OR keyword. Returns headlines + source + url to research and attribute.",
+  input_schema: { type: "object", properties: { category: { type: "string" }, keyword: { type: "string" } } },
+};
+const T_createDraft: AnthropicTool = {
+  name: "create_draft",
+  description: "Write a NEW ORIGINAL article in the site's own words and save as a DRAFT (never published). ALWAYS pass source_url when based on a news item so a source link is attributed. Returns the draft id + edit URL.",
+  input_schema: { type: "object", properties: { topic: { type: "string" }, source_url: { type: "string" }, source_title: { type: "string" }, category: { type: "string" } }, required: ["topic"] },
+};
+const T_updateDraft: AnthropicTool = {
+  name: "update_draft",
+  description: "Edit a DRAFT's title, excerpt, or body (markdown). Drafts only — editing a live article uses update_published_article.",
+  input_schema: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, excerpt: { type: "string" }, content: { type: "string" } }, required: ["id"] },
+};
+const T_publish: AnthropicTool = {
+  name: "publish_article",
+  description: "Propose PUBLISHING a draft (makes it public). This requires the owner's approval — it returns a pending action, it does NOT publish immediately. (Article scheduling isn't supported; publishing is immediate once approved.)",
+  input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+};
+const T_updatePublished: AnthropicTool = {
+  name: "update_published_article",
+  description: "Propose EDITING a LIVE (published) article's title/excerpt/body. Gated — returns a pending action for the owner to approve.",
+  input_schema: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, excerpt: { type: "string" }, content: { type: "string" } }, required: ["id"] },
+};
+const T_share: AnthropicTool = {
+  name: "share_to_facebook",
+  description: "Propose SHARING a published article to a connected Facebook Page. Gated — returns a pending action for the owner to approve. `page` is a Page name or id.",
+  input_schema: { type: "object", properties: { article_id: { type: "string" }, page: { type: "string" } }, required: ["article_id", "page"] },
+};
+const T_stats: AnthropicTool = {
+  name: "get_share_stats",
+  description: "Read recent Facebook share stats (counts of posted/failed/pending + a few recent posts). Read-only — no approval needed.",
+  input_schema: { type: "object", properties: {} },
+};
+
+/** The tools exposed to the model for this turn, filtered by enabled capabilities. */
+export function buildTools(s: AgentSettings): AnthropicTool[] {
+  const tools: AnthropicTool[] = [T_list, T_get];
+  if (s.capabilities.newsSearch) tools.push(T_news);
+  if (s.capabilities.drafting) tools.push(T_createDraft);
+  if (s.capabilities.editing) tools.push(T_updateDraft, T_updatePublished);
+  if (s.capabilities.publishing) tools.push(T_publish);
+  if (s.capabilities.sharing) tools.push(T_share, T_stats);
+  return tools;
+}
+
+export async function executeTool(name: string, input: Record<string, unknown>, ctx: ToolCtx): Promise<ToolResult> {
   switch (name) {
-    case "list_articles":
-      return listArticles(input);
-    case "get_article":
-      return getArticle(input);
-    case "search_news":
-      return searchNews(input);
-    case "create_draft":
-      return createDraft(input, model);
-    case "update_draft":
-      return updateDraft(input);
-    default:
-      return { content: `Unknown tool: ${name}`, summary: `Unknown tool ${name}`, isError: true };
+    case "list_articles": return listArticles(input);
+    case "get_article": return getArticle(input);
+    case "search_news": return searchNews(input);
+    case "create_draft": return createDraft(input, ctx.model);
+    case "update_draft": return updateDraft(input);
+    case "publish_article": return proposePublish(input, ctx.settings);
+    case "update_published_article": return proposeUpdatePublished(input, ctx.settings);
+    case "share_to_facebook": return proposeShare(input, ctx.settings);
+    case "get_share_stats": return shareStats();
+    default: return { content: `Unknown tool: ${name}`, summary: `Unknown tool ${name}`, isError: true };
   }
 }
 
+// ── Gating helper: propose (await approval) or execute now (approval off) ──────
+async function gate(
+  type: AgentActionType,
+  summary: string,
+  detail: string | undefined,
+  params: Record<string, unknown>,
+  settings: AgentSettings,
+): Promise<ToolResult> {
+  // publish + share are HARD-required; update-live respects the toggle.
+  const required = type === "update_published_article" ? settings.requireApproval.editLive : true;
+  if (required) {
+    const action = await addAction({ type, status: "pending", summary, detail, params });
+    return {
+      content: `Proposed for the owner's approval: "${summary}". This is NOT done yet — it executes only when the owner clicks Approve. Do NOT claim it happened.`,
+      summary: `Proposed: ${summary}`,
+      proposedAction: action,
+    };
+  }
+  const action = await addAction({ type, status: "pending", summary, detail, params });
+  const res = await executeAgentAction(action);
+  await updateAction(action.id, { status: res.ok ? "done" : "failed", result: res.result, error: res.error, decidedAt: new Date().toISOString() });
+  return {
+    content: res.ok ? `Done: ${res.result}` : `Failed: ${res.error}`,
+    summary: `${res.ok ? "Executed" : "Failed"}: ${summary}`,
+    isError: !res.ok,
+  };
+}
+
+// ── Read / draft tools (Phase 1) ──────────────────────────────────────────────
 async function listArticles(input: Record<string, unknown>): Promise<ToolResult> {
   const status = input.status === "draft" || input.status === "published" ? input.status : undefined;
   const query = typeof input.query === "string" ? input.query.trim() : "";
   const rows = await prisma.article.findMany({
-    where: {
-      ...(status ? { status } : {}),
-      ...(query ? { title: { contains: query, mode: "insensitive" } } : {}),
-    },
+    where: { ...(status ? { status } : {}), ...(query ? { title: { contains: query, mode: "insensitive" } } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 20,
     select: { id: true, title: true, status: true, excerpt: true, updatedAt: true, category: { select: { name: true } } },
   });
-  const articles = rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    status: r.status,
-    category: r.category?.name ?? null,
-    excerpt: r.excerpt,
-    updated: r.updatedAt.toISOString(),
-  }));
+  const articles = rows.map((r) => ({ id: r.id, title: r.title, status: r.status, category: r.category?.name ?? null, excerpt: r.excerpt, updated: r.updatedAt.toISOString() }));
   const label = status ?? "all";
-  return {
-    content: JSON.stringify({ count: articles.length, articles }),
-    summary: `Listed ${articles.length} ${label} article${articles.length === 1 ? "" : "s"}${query ? ` matching “${query}”` : ""}`,
-  };
+  return { content: JSON.stringify({ count: articles.length, articles }), summary: `Listed ${articles.length} ${label} article${articles.length === 1 ? "" : "s"}${query ? ` matching “${query}”` : ""}` };
 }
 
 async function getArticle(input: Record<string, unknown>): Promise<ToolResult> {
   const id = typeof input.id === "string" ? input.id : "";
   if (!id) return { content: "Missing id.", summary: "get_article (missing id)", isError: true };
-  const a = await prisma.article.findUnique({
-    where: { id },
-    select: { id: true, title: true, status: true, excerpt: true, content: true, slug: true, category: { select: { name: true } } },
-  });
+  const a = await prisma.article.findUnique({ where: { id }, select: { id: true, title: true, status: true, excerpt: true, content: true, slug: true, category: { select: { name: true } } } });
   if (!a) return { content: "Article not found.", summary: "get_article: not found", isError: true };
-  // Cap the body so a long article can't blow the token budget.
   const content = a.content.length > 6000 ? `${a.content.slice(0, 6000)}\n…(truncated)` : a.content;
-  return {
-    content: JSON.stringify({ ...a, category: a.category?.name ?? null, content }),
-    summary: `Read “${a.title}”`,
-  };
+  return { content: JSON.stringify({ ...a, category: a.category?.name ?? null, content }), summary: `Read “${a.title}”` };
 }
 
 async function searchNews(input: Record<string, unknown>): Promise<ToolResult> {
   const category = typeof input.category === "string" ? input.category.trim() : "";
   const keyword = typeof input.keyword === "string" ? input.keyword.trim() : "";
   const enabled = NEWS_SOURCE_IDS.filter(isSourceConfigured);
-  if (enabled.length === 0) {
-    return { content: "No news sources are configured (no API keys set). Tell the owner to add a key on the Trending page.", summary: "search_news: no sources configured", isError: true };
-  }
-  const result = await aggregateTrending({
-    enabled,
-    query: { category: category || "general", query: keyword, lang: "en", country: "us", page: 1 },
-  });
-  const items = result.items.slice(0, 8).map((i) => ({
-    title: i.title,
-    source: i.source,
-    url: i.url,
-    publishedAt: i.publishedAt,
-    description: i.description ? i.description.slice(0, 220) : "",
-  }));
+  if (enabled.length === 0) return { content: "No news sources are configured (no API keys).", summary: "search_news: no sources configured", isError: true };
+  const result = await aggregateTrending({ enabled, query: { category: category || "general", query: keyword, lang: "en", country: "us", page: 1 } });
+  const items = result.items.slice(0, 8).map((i) => ({ title: i.title, source: i.source, url: i.url, publishedAt: i.publishedAt, description: i.description ? i.description.slice(0, 220) : "" }));
   const label = keyword ? `“${keyword}”` : category || "general";
-  return {
-    content: JSON.stringify({ count: items.length, cached: result.cached, items }),
-    summary: `Searched news: ${label}${result.cached ? " (cached)" : ""} — ${items.length} hit${items.length === 1 ? "" : "s"}`,
-  };
+  return { content: JSON.stringify({ count: items.length, cached: result.cached, items }), summary: `Searched news: ${label}${result.cached ? " (cached)" : ""} — ${items.length} hit${items.length === 1 ? "" : "s"}` };
 }
 
 async function createDraft(input: Record<string, unknown>, model?: string): Promise<ToolResult> {
@@ -179,40 +163,23 @@ async function createDraft(input: Record<string, unknown>, model?: string): Prom
   const sourceTitle = typeof input.source_title === "string" ? input.source_title.trim() : "";
   const categoryName = typeof input.category === "string" ? input.category.trim() : "";
 
-  // ORIGINAL draft via the existing headline-only pipeline (no scraped source text).
   const ai = await generateAiAssist({ headline: topic, topic: categoryName || undefined, model });
   const title = (ai.headlines[0] || topic).slice(0, 200);
-
   let content = ai.draft;
   if (sourceUrl) {
     let host = sourceUrl;
-    try {
-      host = new URL(sourceUrl).hostname.replace(/^www\./, "");
-    } catch {
-      /* keep raw */
-    }
+    try { host = new URL(sourceUrl).hostname.replace(/^www\./, ""); } catch { /* keep */ }
     content += `\n\n---\n\n*Source: [${sourceTitle || host}](${sourceUrl})*`;
   }
-
   let categoryId: string | null = null;
   if (categoryName) {
-    const cat = await prisma.category.findFirst({
-      where: { OR: [{ name: { equals: categoryName, mode: "insensitive" } }, { slug: slugify(categoryName) }] },
-      select: { id: true },
-    });
+    const cat = await prisma.category.findFirst({ where: { OR: [{ name: { equals: categoryName, mode: "insensitive" } }, { slug: slugify(categoryName) }] }, select: { id: true } });
     categoryId = cat?.id ?? null;
   }
-
   const slug = await uniqueArticleSlug(title);
   const siteId = await getActiveSiteId();
-  const created = await prisma.article.create({
-    data: { title, slug, excerpt: ai.excerpt, content, status: "draft", categoryId, siteId },
-    select: { id: true },
-  });
-  return {
-    content: JSON.stringify({ id: created.id, title, status: "draft", excerpt: ai.excerpt, editUrl: `/admin/articles/${created.id}/edit` }),
-    summary: `Drafted “${title}”`,
-  };
+  const created = await prisma.article.create({ data: { title, slug, excerpt: ai.excerpt, content, status: "draft", categoryId, siteId }, select: { id: true } });
+  return { content: JSON.stringify({ id: created.id, title, status: "draft", excerpt: ai.excerpt, editUrl: `/admin/articles/${created.id}/edit` }), summary: `Drafted “${title}”` };
 }
 
 async function updateDraft(input: Record<string, unknown>): Promise<ToolResult> {
@@ -220,28 +187,70 @@ async function updateDraft(input: Record<string, unknown>): Promise<ToolResult> 
   if (!id) return { content: "Missing id.", summary: "update_draft (missing id)", isError: true };
   const a = await prisma.article.findUnique({ where: { id }, select: { id: true, status: true, title: true } });
   if (!a) return { content: "Article not found.", summary: "update_draft: not found", isError: true };
-  if (a.status !== "draft") {
-    return {
-      content: "This article is already published. Editing a live article requires an approval action, which isn't available in this phase.",
-      summary: "update_draft blocked (article is published)",
-      isError: true,
-    };
-  }
-
+  if (a.status !== "draft") return { content: "This article is published — use update_published_article (which needs approval).", summary: "update_draft blocked (published)", isError: true };
   const data: { title?: string; slug?: string; excerpt?: string; content?: string } = {};
-  if (typeof input.title === "string" && input.title.trim()) {
-    data.title = input.title.trim().slice(0, 200);
-    data.slug = await uniqueArticleSlug(data.title, id);
-  }
+  if (typeof input.title === "string" && input.title.trim()) { data.title = input.title.trim().slice(0, 200); data.slug = await uniqueArticleSlug(data.title, id); }
   if (typeof input.excerpt === "string" && input.excerpt.trim()) data.excerpt = input.excerpt.trim();
   if (typeof input.content === "string" && input.content.trim()) data.content = input.content;
-  if (Object.keys(data).length === 0) {
-    return { content: "No changes were provided.", summary: "update_draft (no changes)", isError: true };
-  }
-
+  if (Object.keys(data).length === 0) return { content: "No changes provided.", summary: "update_draft (no changes)", isError: true };
   await prisma.article.update({ where: { id }, data });
+  return { content: JSON.stringify({ id, updated: Object.keys(data) }), summary: `Updated draft “${data.title ?? a.title}”` };
+}
+
+// ── Gated tools (Phase 2) ─────────────────────────────────────────────────────
+async function proposePublish(input: Record<string, unknown>, settings: AgentSettings): Promise<ToolResult> {
+  const id = typeof input.id === "string" ? input.id : "";
+  if (!id) return { content: "Missing article id.", summary: "publish_article (missing id)", isError: true };
+  const a = await prisma.article.findUnique({ where: { id }, select: { id: true, title: true, status: true } });
+  if (!a) return { content: "Article not found.", summary: "publish_article: not found", isError: true };
+  if (a.status === "published") return { content: `“${a.title}” is already published.`, summary: "publish_article: already live", isError: true };
+  return gate("publish_article", `Publish: ${a.title}`, undefined, { articleId: a.id }, settings);
+}
+
+async function proposeUpdatePublished(input: Record<string, unknown>, settings: AgentSettings): Promise<ToolResult> {
+  const id = typeof input.id === "string" ? input.id : "";
+  if (!id) return { content: "Missing article id.", summary: "update_published_article (missing id)", isError: true };
+  const a = await prisma.article.findUnique({ where: { id }, select: { id: true, title: true, status: true } });
+  if (!a) return { content: "Article not found.", summary: "update_published_article: not found", isError: true };
+  if (a.status !== "published") return { content: "That article isn't published — use update_draft for drafts.", summary: "update_published_article: not live", isError: true };
+  const changes: Record<string, unknown> = { articleId: a.id };
+  const fields: string[] = [];
+  if (typeof input.title === "string" && input.title.trim()) { changes.title = input.title.trim(); fields.push("title"); }
+  if (typeof input.excerpt === "string" && input.excerpt.trim()) { changes.excerpt = input.excerpt.trim(); fields.push("excerpt"); }
+  if (typeof input.content === "string" && input.content.trim()) { changes.content = input.content; fields.push("body"); }
+  if (fields.length === 0) return { content: "No changes provided.", summary: "update_published_article (no changes)", isError: true };
+  return gate("update_published_article", `Edit live article: ${a.title}`, `Changes: ${fields.join(", ")}`, changes, settings);
+}
+
+async function proposeShare(input: Record<string, unknown>, settings: AgentSettings): Promise<ToolResult> {
+  const articleId = typeof input.article_id === "string" ? input.article_id : "";
+  const pageArg = typeof input.page === "string" ? input.page.trim() : "";
+  if (!articleId || !pageArg) return { content: "Need an article_id and a page.", summary: "share_to_facebook (missing args)", isError: true };
+  const a = await prisma.article.findUnique({ where: { id: articleId }, select: { id: true, title: true, status: true } });
+  if (!a) return { content: "Article not found.", summary: "share_to_facebook: article not found", isError: true };
+  if (a.status !== "published") return { content: "Only published articles can be shared — publish it first (which needs approval).", summary: "share_to_facebook: article not published", isError: true };
+  const page = await prisma.facebookPage.findFirst({
+    where: { OR: [{ id: pageArg }, { pageName: { equals: pageArg, mode: "insensitive" } }, { pageName: { contains: pageArg, mode: "insensitive" } }] },
+    select: { id: true, pageName: true, status: true },
+  });
+  if (!page) return { content: `No connected Page matches “${pageArg}”.`, summary: "share_to_facebook: page not found", isError: true };
+  const note = page.status !== "Connected" ? " (page token may be expired)" : "";
+  return gate("share_to_facebook", `Share to ${page.pageName}: ${a.title}`, `Article → Facebook Page${note}`, { articleId: a.id, pageDbId: page.id }, settings);
+}
+
+async function shareStats(): Promise<ToolResult> {
+  const grouped = await prisma.scheduledPost.groupBy({ by: ["status"], _count: { _all: true } });
+  const counts: Record<string, number> = {};
+  for (const g of grouped) counts[g.status] = g._count._all;
+  const recent = await prisma.scheduledPost.findMany({
+    where: { status: "posted", graphPostId: { not: null } },
+    orderBy: { postedAt: "desc" },
+    take: 5,
+    include: { article: { select: { title: true } }, facebookPage: { select: { pageName: true } } },
+  });
+  const recentOut = recent.map((r) => ({ article: r.article.title, page: r.facebookPage?.pageName ?? "(page)", when: r.postedAt?.toISOString() ?? null, permalink: r.graphPostId ? permalinkForPost(r.graphPostId) : null }));
   return {
-    content: JSON.stringify({ id, updated: Object.keys(data) }),
-    summary: `Updated draft “${data.title ?? a.title}” (${Object.keys(data).join(", ")})`,
+    content: JSON.stringify({ counts, recent: recentOut }),
+    summary: `Share stats: ${counts.posted ?? 0} posted · ${counts.failed ?? 0} failed · ${counts.pending ?? 0} pending`,
   };
 }
