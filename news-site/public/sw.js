@@ -16,7 +16,7 @@
  * prompt, and on tap posts SKIP_WAITING -> the SW activates, purges old caches,
  * and the page reloads into the fresh build. Bump VERSION to force a purge.
  */
-const VERSION = "v3-20260606";
+const VERSION = "v4-20260610-push";
 const STATIC_CACHE = `dl-admin-static-${VERSION}`;
 const PAGES_CACHE = `dl-admin-pages-${VERSION}`;
 const KEEP = new Set([STATIC_CACHE, PAGES_CACHE]);
@@ -101,3 +101,48 @@ async function staleWhileRevalidate(request, cacheName) {
     .catch(() => hit);
   return hit || fetching;
 }
+
+// ── Web Push: AI Assistant approval alerts ───────────────────────────────────
+// Payload carries only a title/body (the action title) + a url to open. Never
+// cached (push is event-driven, not fetch).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || "Daily Ledger Admin";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      tag: data.tag || "agent",
+      data: { url: data.url || "/admin/ai-assistant" },
+      icon: "/icons/icon-192",
+      badge: "/icons/icon-192",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/admin/ai-assistant";
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const c of all) {
+        if (c.url.includes("/admin")) {
+          if ("navigate" in c) {
+            try {
+              await c.navigate(target);
+            } catch {
+              /* ignore */
+            }
+          }
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })(),
+  );
+});
