@@ -130,3 +130,39 @@ export async function listActions(limit = 30): Promise<AgentActionRecord[]> {
   const list = await readActions();
   return list.slice(-limit).reverse();
 }
+
+// ── Web Push subscriptions (the admin's installed phones) ─────────────────────
+const PUSH_KEY = "agent_push_subs";
+
+export type PushSub = { endpoint: string; keys: { p256dh: string; auth: string } };
+
+export async function getPushSubs(): Promise<PushSub[]> {
+  const row = await prisma.appSetting.findUnique({ where: { key: PUSH_KEY } });
+  if (!row?.value) return [];
+  try {
+    const arr = JSON.parse(row.value);
+    return Array.isArray(arr) ? (arr as PushSub[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writePushSubs(list: PushSub[]): Promise<void> {
+  const value = JSON.stringify(list.slice(-20));
+  await prisma.appSetting.upsert({
+    where: { key: PUSH_KEY },
+    update: { value, encrypted: false },
+    create: { key: PUSH_KEY, value, encrypted: false },
+  });
+}
+
+export async function addPushSub(sub: PushSub): Promise<void> {
+  const list = (await getPushSubs()).filter((s) => s.endpoint !== sub.endpoint);
+  list.push(sub);
+  await writePushSubs(list);
+}
+
+export async function removePushSub(endpoint: string): Promise<void> {
+  const list = (await getPushSubs()).filter((s) => s.endpoint !== endpoint);
+  await writePushSubs(list);
+}

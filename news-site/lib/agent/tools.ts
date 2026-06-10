@@ -10,6 +10,7 @@ import { permalinkForPost } from "@/lib/facebook";
 import type { AnthropicTool } from "./anthropic";
 import { addAction, updateAction, type AgentSettings, type AgentActionRecord, type AgentActionType } from "./store";
 import { executeAgentAction } from "./execute";
+import { sendApprovalPush } from "./push";
 
 export type ToolResult = {
   content: string; // fed back to the model
@@ -105,6 +106,8 @@ async function gate(
   const required = type === "update_published_article" ? settings.requireApproval.editLive : true;
   if (required) {
     const action = await addAction({ type, status: "pending", summary, detail, params });
+    // Notify the owner's installed phone(s) — best-effort, never blocks the turn.
+    await sendApprovalPush(action).catch(() => {});
     return {
       content: `Proposed for the owner's approval: "${summary}". This is NOT done yet — it executes only when the owner clicks Approve. Do NOT claim it happened.`,
       summary: `Proposed: ${summary}`,

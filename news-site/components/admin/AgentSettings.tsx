@@ -7,6 +7,7 @@ import { AI_MODELS } from "@/lib/aiModels";
 import { useToast } from "@/components/admin/Toast";
 import { updateAgentSettings } from "@/app/admin/agent-actions";
 import type { AgentSettings } from "@/lib/agent/store";
+import { PushToggle } from "@/components/admin/PushToggle";
 import { CheckIcon } from "@/components/admin/icons";
 
 function Toggle({
@@ -122,6 +123,8 @@ export function AgentSettingsForm({ initial, aiConfigured }: { initial: AgentSet
           ))}
         </select>
       </div>
+
+      <PushToggle />
 
       <div className="adm-settings-actions">
         <button type="button" className="adm-btn-primary" onClick={save} disabled={saving}>
