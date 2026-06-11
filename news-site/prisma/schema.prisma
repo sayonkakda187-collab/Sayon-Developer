@@ -31,6 +31,9 @@ model Article {
   // photographer name + a link to credit them. Null for manual uploads / pasted URLs.
   coverCredit    String?
   coverCreditUrl String?
+  // Which free source the cover came from ("Pexels" | "Unsplash" | "Pixabay" |
+  // "Wikimedia Commons"). Drives the source-accurate credit line. Null = legacy/manual.
+  coverImageSource String?
   status      String    @default("draft") // "draft" | "published"
   views       Int       @default(0)
   publishedAt DateTime?

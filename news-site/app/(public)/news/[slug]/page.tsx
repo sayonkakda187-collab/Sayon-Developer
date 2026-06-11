@@ -27,6 +27,14 @@ type Props = { params: { slug: string } };
 
 type ArticlePart = { type: "md"; content: string } | { type: "ad" } | { type: "adsense" };
 
+// Homepage (with required UTM for Unsplash) for the cover credit line's source link.
+const COVER_SOURCE_HOME: Record<string, string> = {
+  Unsplash: "https://unsplash.com/?utm_source=the_daily_ledger&utm_medium=referral",
+  Pexels: "https://www.pexels.com",
+  Pixabay: "https://pixabay.com",
+  "Wikimedia Commons": "https://commons.wikimedia.org",
+};
+
 /**
  * Split the article body so a single in-article ad can sit after the opening
  * (~4th paragraph) on long-enough pieces; short pieces (<4 paragraphs) get none.
@@ -191,7 +199,18 @@ export default async function ArticlePage({ params }: Props) {
                 ) : (
                   article.coverCredit
                 )}{" "}
-                · Pexels
+                ·{" "}
+                {(() => {
+                  const src = article.coverImageSource ?? "Pexels"; // legacy covers were Pexels
+                  const href = COVER_SOURCE_HOME[src];
+                  return href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="underline-offset-2 hover:underline">
+                      {src}
+                    </a>
+                  ) : (
+                    src
+                  );
+                })()}
               </p>
             )}
           </div>

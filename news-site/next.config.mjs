@@ -14,8 +14,13 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "fastly.picsum.photos" },
-      // Vercel Blob public URLs (admin image uploads in production).
+      // Vercel Blob public URLs (admin image uploads + re-hosted Pixabay covers).
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      // Hotlinked featured-image sources (Pexels, Unsplash, Wikimedia). Pixabay is
+      // re-hosted to Blob (its terms disallow hotlinking), so it isn't listed here.
+      { protocol: "https", hostname: "images.pexels.com" },
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
 };

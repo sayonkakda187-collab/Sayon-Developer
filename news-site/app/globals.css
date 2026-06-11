@@ -1603,6 +1603,12 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   opacity: 0; transition: opacity 0.18s;
 }
 .adm-stock-pick:hover .adm-stock-pickhint, .adm-stock-pick:focus-visible .adm-stock-pickhint { opacity: 1; }
+/* Small source badge (Pexels / Unsplash / Pixabay / Wikimedia) on each result. */
+.adm-stock-src {
+  position: absolute; top: 6px; left: 6px; z-index: 1; padding: 2px 7px; border-radius: 999px;
+  background: rgba(8, 12, 22, 0.62); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  pointer-events: none;
+}
 .adm-stock-credit { margin-top: 5px; font-size: 11px; color: var(--adm-muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adm-stock-credit a { display: inline-flex; align-items: center; gap: 3px; color: var(--adm-muted-2); text-decoration: none; }
 .adm-stock-credit a:hover { color: var(--adm-ink); text-decoration: underline; }
