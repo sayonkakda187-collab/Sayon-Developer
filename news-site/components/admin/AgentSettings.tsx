@@ -8,7 +8,7 @@ import { useToast } from "@/components/admin/Toast";
 import { updateAgentSettings } from "@/app/admin/agent-actions";
 import type { AgentSettings, AutopilotSettings } from "@/lib/agent/store";
 import { PushToggle } from "@/components/admin/PushToggle";
-import { CheckIcon } from "@/components/admin/icons";
+import { CheckIcon, CloseIcon } from "@/components/admin/icons";
 
 // Asia/Phnom_Penh is a fixed UTC+7 (no DST), so a plain hour shift is exact.
 const PP_OFFSET_MIN = 7 * 60;
@@ -257,6 +257,44 @@ export function AgentSettingsForm({
             <Link href="/admin/articles" className="adm-link">Articles</Link>.
           </span>
         </div>
+      </div>
+
+      <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>
+        <div className="adm-card-title">Preferred posting times</div>
+        <div className="adm-card-sub" style={{ marginBottom: 10 }}>
+          Quick-schedule presets (Asia/Phnom_Penh). Shown on publish approval cards and used by
+          auto-stagger when you approve several drafts in a row.
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {s.preferredTimes.map((t, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="time"
+                className="adm-input"
+                style={{ maxWidth: 130 }}
+                value={t}
+                onChange={(e) => setS((p) => ({ ...p, preferredTimes: p.preferredTimes.map((x, idx) => (idx === i ? e.target.value : x)) }))}
+              />
+              <button
+                type="button"
+                className="adm-iconbtn"
+                aria-label="Remove time"
+                onClick={() => setS((p) => ({ ...p, preferredTimes: p.preferredTimes.filter((_, idx) => idx !== i) }))}
+              >
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="adm-btn-ghost"
+          style={{ marginTop: 10 }}
+          disabled={s.preferredTimes.length >= 8}
+          onClick={() => setS((p) => ({ ...p, preferredTimes: [...p.preferredTimes, "12:00"] }))}
+        >
+          + Add time
+        </button>
       </div>
 
       <PushToggle />

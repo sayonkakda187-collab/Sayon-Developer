@@ -34,9 +34,15 @@ model Article {
   // Which free source the cover came from ("Pexels" | "Unsplash" | "Pixabay" |
   // "Wikimedia Commons"). Drives the source-accurate credit line. Null = legacy/manual.
   coverImageSource String?
-  status      String    @default("draft") // "draft" | "published"
+  status      String    @default("draft") // "draft" | "scheduled" | "published"
   views       Int       @default(0)
   publishedAt DateTime?
+  // Scheduled publishing: when status is "scheduled", the article auto-publishes
+  // at this UTC instant (via /api/cron/publish-due). Null otherwise.
+  scheduledAt DateTime?
+  // JSON array of FacebookPage ids to auto-share to AT PUBLISH TIME (set when an
+  // article is scheduled with sharing on). Cleared once the share has fired.
+  autoSharePageIds String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -57,6 +63,7 @@ model Article {
   recentViews    RecentView[]
 
   @@index([status, publishedAt])
+  @@index([status, scheduledAt])
   @@index([categoryId])
   @@index([siteId, status, publishedAt])
   // Trigram GIN indexes accelerate case-insensitive substring search (ILIKE)

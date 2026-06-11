@@ -28,6 +28,7 @@ import {
   GlobeIcon,
   SitesIcon,
   AiImageIcon,
+  ClockIcon,
 } from "./icons";
 
 type SiteOption = { id: string; name: string; isDefault: boolean };
@@ -174,6 +175,15 @@ export function AdminShell({
             })}
           </div>
           <div className="adm-navfoot">
+            <Link
+              href="/admin/scheduled"
+              data-tab="scheduled"
+              className={`adm-navitem ${isActive("/admin/scheduled") ? "on" : ""}`}
+              aria-current={isActive("/admin/scheduled") ? "page" : undefined}
+            >
+              <ClockIcon />
+              Scheduled
+            </Link>
             <Link
               href="/admin/ai-images"
               data-tab="ai-images"
@@ -330,6 +340,16 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
+              <Link
+                href="/admin/scheduled"
+                data-tab="scheduled"
+                className={`adm-dlink ${isActive("/admin/scheduled") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/scheduled") ? "page" : undefined}
+              >
+                <ClockIcon />
+                Scheduled
+              </Link>
               <Link
                 href="/admin/ai-images"
                 data-tab="ai-images"

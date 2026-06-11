@@ -950,6 +950,39 @@ UI; adds one nullable `Article.coverImageSource` column (migration
   `BLOB_READ_WRITE_TOKEN` re-hosts Pixabay (already set in production). Route:
   `app/api/admin/image-search` (GET search + POST resolve, `requireAdmin`).
 
+## Scheduled publishing (with agent control)
+
+Articles can be **scheduled** to auto-publish at a chosen time, and the **Facebook
+auto-share fires at publish time, not approval time**. Additive `Article.scheduledAt`
++ `Article.autoSharePageIds` + a `"scheduled"` status (migration
+`20260611190000_article_scheduled_publishing`). All times are **Asia/Phnom_Penh**
+(reuses `lib/fbSchedule`). Scheduled articles are hidden from all public reads
+(the `published` filter is exact `status: "published"`).
+
+- **Publish chokepoint** (`lib/publish.ts`): `runPublishSideEffects` (Key Points if
+  empty + Facebook auto-share to the stored pages) is shared by the editor, the
+  agent, and the cron — so a story shares to the same pages whether published now
+  or later. `publishScheduledArticleById` is **idempotent** (atomic status claim →
+  never double-publishes/shares); `publishDue` drains everything due + logs each
+  `scheduled → published` transition to the agent activity log.
+- **Executor** `/api/cron/publish-due` (`CRON_SECRET`, fail-closed). **Hobby caveat:
+  Vercel cron only runs once daily**, so this needs an **external pinger** (e.g.
+  cron-job.org) calling it every ~10 min: `POST https://DOMAIN/api/cron/publish-due`
+  with header `Authorization: Bearer <CRON_SECRET>`. A bundled daily Vercel cron is
+  only a safety net. (No other plan limit blocks the feature.)
+- **Editor:** a **Schedule** control (datetime picker, Phnom Penh) alongside Save
+  draft / Publish; scheduling stores the ticked **auto-share pages** to fire on
+  publish. **Scheduled queue** at `/admin/scheduled` (nav "Scheduled"): change time
+  / publish now / cancel-to-draft.
+- **Agent:** `publish_article` takes an optional `when` (the agent resolves NL times
+  like "tonight 9pm" using the current Phnom-Penh time injected into the system
+  prompt). The **approval card** shows **Publish now / Schedule** with a picker +
+  preset chips drawn from **preferred times**; the approve route applies the chosen
+  time. **Preferred posting times** are in Agent Settings (default 19:00/21:00/23:00
+  PP). **Auto-stagger:** the preset chips come from `/api/admin/agent/scheduled-slots`
+  (next FREE preferred slots, excluding already-scheduled times), so approving several
+  drafts in a row lands each on the next open slot.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

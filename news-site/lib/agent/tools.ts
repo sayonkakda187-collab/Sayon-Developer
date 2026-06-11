@@ -8,6 +8,7 @@ import { NEWS_SOURCE_IDS } from "@/lib/news/sources";
 import { generateAiAssist } from "@/lib/aiAssist";
 import { pickFeaturedImage } from "@/lib/imageSearch";
 import { permalinkForPost } from "@/lib/facebook";
+import { localInputToUtcISO, formatSchedule } from "@/lib/fbSchedule";
 import type { AnthropicTool } from "./anthropic";
 import { addAction, updateAction, type AgentSettings, type AgentActionRecord, type AgentActionType } from "./store";
 import { executeAgentAction } from "./execute";
@@ -50,8 +51,15 @@ const T_updateDraft: AnthropicTool = {
 };
 const T_publish: AnthropicTool = {
   name: "publish_article",
-  description: "Propose PUBLISHING a draft (makes it public). This requires the owner's approval — it returns a pending action, it does NOT publish immediately. (Article scheduling isn't supported; publishing is immediate once approved.)",
-  input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  description: "Propose PUBLISHING or SCHEDULING a draft. Requires the owner's approval — it returns a pending action, it does NOT publish immediately. Pass `when` to schedule it for a future time (the owner can still adjust the time on the approval card); omit `when` to propose publishing immediately on approval.",
+  input_schema: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      when: { type: "string", description: "Optional scheduled publish time in Asia/Phnom_Penh as 'YYYY-MM-DD HH:mm' (24-hour). Resolve natural-language times (e.g. 'tonight 9pm') to this format using the current Phnom Penh time given in the system prompt. Omit to publish immediately." },
+    },
+    required: ["id"],
+  },
 };
 const T_updatePublished: AnthropicTool = {
   name: "update_published_article",
@@ -226,7 +234,28 @@ async function proposePublish(input: Record<string, unknown>, settings: AgentSet
   const a = await prisma.article.findUnique({ where: { id }, select: { id: true, title: true, status: true } });
   if (!a) return { content: "Article not found.", summary: "publish_article: not found", isError: true };
   if (a.status === "published") return { content: `“${a.title}” is already published.`, summary: "publish_article: already live", isError: true };
-  return gate("publish_article", `Publish: ${a.title}`, undefined, { articleId: a.id }, settings);
+
+  // Optional scheduled time (Phnom Penh wall clock the model resolved).
+  let scheduledAt: string | undefined;
+  let whenLabel = "";
+  const whenRaw = typeof input.when === "string" ? input.when.trim() : "";
+  if (whenRaw) {
+    const iso = localInputToUtcISO(whenRaw.replace(" ", "T").slice(0, 16));
+    if (iso && new Date(iso).getTime() > Date.now() + 30_000) {
+      scheduledAt = iso;
+      whenLabel = formatSchedule(iso);
+    }
+  }
+
+  const summary = scheduledAt ? `Schedule: ${a.title}` : `Publish: ${a.title}`;
+  const detail = scheduledAt ? `Publishes ${whenLabel} (Phnom Penh) — adjust the time below if needed` : "Publishes immediately on approval";
+  const params = scheduledAt ? { articleId: a.id, scheduledAt } : { articleId: a.id };
+  const res = await gate("publish_article", summary, detail, params, settings);
+  // Help the model phrase its reply correctly (proposed, not done).
+  if (res.proposedAction && scheduledAt) {
+    res.content = `Proposed scheduling "${a.title}" for ${whenLabel} (Phnom Penh). This is NOT scheduled yet — it applies only when the owner approves the card (they can change the time). Do NOT claim it's scheduled.`;
+  }
+  return res;
 }
 
 async function proposeUpdatePublished(input: Record<string, unknown>, settings: AgentSettings): Promise<ToolResult> {

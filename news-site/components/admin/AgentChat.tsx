@@ -9,9 +9,10 @@ import { AiModelPicker } from "@/components/admin/AiModelPicker";
 import { useAiModel } from "@/lib/useAiModel";
 import { timeAgo } from "@/lib/site";
 import { SparklesIcon, RefreshIcon, CheckIcon, CloseIcon, SettingsIcon } from "@/components/admin/icons";
+import { toLocalInput, nowLocalInput, localInputToUtcISO, formatSchedule } from "@/lib/fbSchedule";
 
 type ToolLogEntry = { tool: string; summary: string; isError?: boolean };
-type AgentAction = { id: string; type: string; status: string; summary: string; detail?: string; createdAt: string; result?: string; error?: string };
+type AgentAction = { id: string; type: string; status: string; summary: string; detail?: string; createdAt: string; result?: string; error?: string; params?: { scheduledAt?: string } };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string; toolLog?: ToolLogEntry[]; actions?: AgentAction[]; error?: boolean };
 type DecideState = { status: string; busy?: boolean; result?: string; error?: string };
 
@@ -38,8 +39,44 @@ export function AgentChat({ aiConfigured }: { aiConfigured: boolean }) {
   const [decide, setDecide] = useState<Record<string, DecideState>>({});
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState<AgentAction[]>([]);
+  // Scheduling for publish approval cards: next free preferred slots + per-card
+  // mode ("now" | "at") and the chosen Phnom-Penh datetime-local value.
+  const [slots, setSlots] = useState<string[]>([]);
+  const [schedMode, setSchedMode] = useState<Record<string, "now" | "at">>({});
+  const [schedTime, setSchedTime] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  const fetchSlots = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/agent/scheduled-slots?count=5");
+      const data = (await res.json().catch(() => ({}))) as { slots?: string[] };
+      setSlots(data.slots ?? []);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // When publish cards appear, fetch slots + seed each card's mode/time from any
+  // time the agent proposed (else default to "Publish now").
+  useEffect(() => {
+    const pub = messages.flatMap((m) => m.actions ?? []).filter((a) => a.type === "publish_article");
+    if (pub.length === 0) return;
+    fetchSlots();
+    setSchedMode((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const a of pub) if (next[a.id] === undefined) { next[a.id] = a.params?.scheduledAt ? "at" : "now"; changed = true; }
+      return changed ? next : prev;
+    });
+    setSchedTime((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const a of pub) if (next[a.id] === undefined && a.params?.scheduledAt) { next[a.id] = toLocalInput(new Date(a.params.scheduledAt)); changed = true; }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -89,13 +126,13 @@ export function AgentChat({ aiConfigured }: { aiConfigured: boolean }) {
     }
   }
 
-  async function decideAction(id: string, decision: "approve" | "reject") {
+  async function decideAction(id: string, decision: "approve" | "reject", scheduledAt?: string | null) {
     setDecide((p) => ({ ...p, [id]: { ...(p[id] ?? { status: "pending" }), busy: true } }));
     try {
       const res = await fetch("/api/admin/agent/action", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, decision }),
+        body: JSON.stringify({ id, decision, scheduledAt: scheduledAt ?? undefined }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; action?: AgentAction; result?: string; error?: string };
       const status = data.action?.status ?? (decision === "reject" ? "rejected" : data.ok ? "done" : "failed");
@@ -104,6 +141,7 @@ export function AgentChat({ aiConfigured }: { aiConfigured: boolean }) {
       setDecide((p) => ({ ...p, [id]: { busy: false, status: "failed", error: "Network error." } }));
     } finally {
       if (showActivity) fetchActivity();
+      fetchSlots(); // a just-scheduled slot is now taken → next card staggers
     }
   }
 
@@ -210,14 +248,64 @@ export function AgentChat({ aiConfigured }: { aiConfigured: boolean }) {
                             <div className="adm-agent-card-summary">{a.summary}</div>
                             {a.detail && <div className="adm-agent-card-detail">{a.detail}</div>}
                             {st.status === "pending" ? (
-                              <div className="adm-agent-card-acts">
-                                <button type="button" className="adm-btn-primary adm-agent-approve" disabled={st.busy} onClick={() => decideAction(a.id, "approve")}>
-                                  {st.busy ? <span className="adm-spinner" aria-hidden /> : <CheckIcon className="h-4 w-4" />} Approve
-                                </button>
-                                <button type="button" className="adm-btn-ghost adm-agent-reject" disabled={st.busy} onClick={() => decideAction(a.id, "reject")}>
-                                  <CloseIcon className="h-4 w-4" /> Reject
-                                </button>
-                              </div>
+                              <>
+                                {a.type === "publish_article" && (() => {
+                                  const mode = schedMode[a.id] ?? "now";
+                                  return (
+                                    <div className="adm-agent-when">
+                                      <div className="adm-agent-when-modes">
+                                        <label className="adm-agent-when-opt">
+                                          <input type="radio" name={`when-${a.id}`} checked={mode === "now"} disabled={st.busy} onChange={() => setSchedMode((p) => ({ ...p, [a.id]: "now" }))} /> Publish now
+                                        </label>
+                                        <label className="adm-agent-when-opt">
+                                          <input type="radio" name={`when-${a.id}`} checked={mode === "at"} disabled={st.busy} onChange={() => setSchedMode((p) => ({ ...p, [a.id]: "at" }))} /> Schedule
+                                        </label>
+                                      </div>
+                                      {mode === "at" && (
+                                        <div className="adm-agent-when-at">
+                                          <input
+                                            type="datetime-local"
+                                            className="adm-input"
+                                            min={nowLocalInput()}
+                                            value={schedTime[a.id] ?? ""}
+                                            disabled={st.busy}
+                                            onChange={(e) => setSchedTime((p) => ({ ...p, [a.id]: e.target.value }))}
+                                          />
+                                          {slots.length > 0 && (
+                                            <div className="adm-agent-presets">
+                                              {slots.slice(0, 4).map((s) => (
+                                                <button key={s} type="button" className="adm-chip" disabled={st.busy} onClick={() => setSchedTime((p) => ({ ...p, [a.id]: toLocalInput(new Date(s)) }))}>
+                                                  {formatSchedule(s)}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <p className="adm-agent-when-tz">All times Asia/Phnom_Penh.</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                                <div className="adm-agent-card-acts">
+                                  <button
+                                    type="button"
+                                    className="adm-btn-primary adm-agent-approve"
+                                    disabled={st.busy}
+                                    onClick={() => {
+                                      const mode = schedMode[a.id] ?? "now";
+                                      const tv = schedTime[a.id] ?? "";
+                                      const sa = a.type === "publish_article" && mode === "at" && tv ? localInputToUtcISO(tv) : null;
+                                      decideAction(a.id, "approve", sa);
+                                    }}
+                                  >
+                                    {st.busy ? <span className="adm-spinner" aria-hidden /> : <CheckIcon className="h-4 w-4" />}{" "}
+                                    {a.type === "publish_article" && (schedMode[a.id] ?? "now") === "at" ? "Approve & schedule" : "Approve"}
+                                  </button>
+                                  <button type="button" className="adm-btn-ghost adm-agent-reject" disabled={st.busy} onClick={() => decideAction(a.id, "reject")}>
+                                    <CloseIcon className="h-4 w-4" /> Reject
+                                  </button>
+                                </div>
+                              </>
                             ) : (
                               <div className={`adm-agent-card-result ${st.status === "done" ? "ok" : st.status === "rejected" ? "muted" : "err"}`}>
                                 {st.status === "done" ? `✓ ${st.result ?? "Done."}` : st.status === "rejected" ? "Rejected." : `✗ ${st.error ?? "Failed."}`}

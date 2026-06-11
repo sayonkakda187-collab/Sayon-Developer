@@ -2206,6 +2206,26 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-agent-card-acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .adm-agent-approve { min-height: 40px; }
 .adm-agent-reject { min-height: 40px; }
+/* Approval-card scheduling controls (publish actions). */
+.adm-agent-when { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--adm-bd); }
+.adm-agent-when-modes { display: flex; gap: 16px; flex-wrap: wrap; }
+.adm-agent-when-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--adm-ink); cursor: pointer; }
+.adm-agent-when-at { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.adm-agent-when-at .adm-input { max-width: 260px; }
+.adm-agent-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-agent-presets .adm-chip { font-size: 12px; }
+.adm-agent-when-tz { margin: 0; font-size: 11.5px; color: var(--adm-muted); }
+
+/* ── Scheduled queue ──────────────────────────────────────────────────────── */
+.adm-sched-list { display: flex; flex-direction: column; gap: 12px; }
+.adm-sched-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.adm-sched-main { min-width: 0; flex: 1; }
+.adm-sched-title { font-weight: 700; color: var(--adm-ink); }
+.adm-sched-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; font-size: 13px; color: var(--adm-muted); }
+.adm-sched-edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.adm-sched-edit .adm-input { max-width: 240px; }
+.adm-sched-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-sched-cancel { color: #b91c1c; }
 
 /* ── Breaking news banner (public, site-wide, above the header) ─────────────── */
 /* Its own red surface (theme-independent) with white text → strong contrast in
