@@ -88,7 +88,7 @@ export function Masthead({ today, nav }: { today: string; nav: MastheadNavItem[]
             <span className="tl-wm-main">Daily&nbsp;Ledger</span>
             <span className="tl-wm-orn tl-right" aria-hidden>❧</span>
           </span>
-          <span className="tl-wm-sub">Morning Edition · Est. MMXXVI</span>
+          <span className="tl-wm-sub">VOL. I · EST. 2026 · WORLD NEWS</span>
         </Link>
         <div className="tl-mh-right">
           <a className="tl-mh-sub" href="#ledger-brief">Subscribe</a>
