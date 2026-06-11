@@ -21,6 +21,7 @@ import { AiImageModal } from "@/components/admin/AiImageModal";
 import { COVER_HANDOFF_KEY } from "@/lib/imageGenClient";
 import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon, AiImageIcon } from "@/components/admin/icons";
 import { AutoShareField, type AutoSharePage } from "@/components/admin/AutoShareField";
+import { AI_MODEL_STORAGE_KEY } from "@/lib/aiModels";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -93,6 +94,7 @@ type ArticleInput = {
   title: string;
   excerpt: string;
   content: string;
+  keyPoints?: string | null;
   coverImage: string | null;
   coverCredit?: string | null;
   coverCreditUrl?: string | null;
@@ -136,6 +138,11 @@ export function ArticleForm({
   const [title, setTitle] = useState(article?.title ?? initial?.title ?? "");
   const [excerpt, setExcerpt] = useState(article?.excerpt ?? "");
   const [content, setContent] = useState(article?.content ?? initial?.content ?? "");
+  // "Key Points" box — one short bullet per line. Auto-generated on first publish
+  // when left empty; the "Generate key points" button fills it from the AI.
+  const [keyPoints, setKeyPoints] = useState(article?.keyPoints ?? "");
+  const [kpBusy, setKpBusy] = useState(false);
+  const [kpError, setKpError] = useState("");
   const [coverImage, setCoverImage] = useState(article?.coverImage ?? "");
   // Stock-photo attribution that travels with the cover image (set when a Pexels
   // photo is chosen; cleared on manual upload / paste / remove).
@@ -436,6 +443,37 @@ export function ArticleForm({
     });
   }
 
+  // Generate "Key Points" from the current (possibly unsaved) title + body, then
+  // fill the editable field. The admin reviews/edits, then saves as usual.
+  async function onGenerateKeyPoints() {
+    if (kpBusy) return;
+    setKpError("");
+    setKpBusy(true);
+    try {
+      let model: string | undefined;
+      try {
+        model = localStorage.getItem(AI_MODEL_STORAGE_KEY) || undefined;
+      } catch {
+        /* localStorage may be unavailable */
+      }
+      const res = await fetch("/api/admin/key-points", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, body: content, model }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; points?: string[]; error?: string };
+      if (!res.ok || !data.ok || !Array.isArray(data.points)) {
+        setKpError(data.error ?? "Couldn’t generate key points.");
+      } else {
+        setKeyPoints(data.points.join("\n"));
+      }
+    } catch {
+      setKpError("Couldn’t reach the server. Please try again.");
+    } finally {
+      setKpBusy(false);
+    }
+  }
+
   function onDuplicate() {
     if (!article?.id) return;
     startDup(async () => {
@@ -561,6 +599,34 @@ export function ArticleForm({
               onChange={(e) => setExcerpt(e.target.value)}
               className={`${inputClass} mt-1`}
             />
+          </div>
+
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-fg-muted">Key points</label>
+              <button
+                type="button"
+                onClick={onGenerateKeyPoints}
+                disabled={kpBusy}
+                className="adm-ai-trigger inline-flex items-center gap-1.5 text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-60"
+                title="Summarize this article into 3 short bullet points with AI"
+              >
+                {kpBusy ? <span className="adm-spinner" aria-hidden /> : <SparklesIcon className="h-[15px] w-[15px]" />}
+                {kpBusy ? "Generating…" : "Generate key points"}
+              </button>
+            </div>
+            <textarea
+              name="keyPoints"
+              rows={3}
+              value={keyPoints}
+              onChange={(e) => setKeyPoints(e.target.value)}
+              placeholder="One key point per line (max ~15 words each)…"
+              className={`${inputClass} mt-1 text-sm`}
+            />
+            <p className="mt-1 text-xs text-fg-faint">
+              Shown in a box near the top of the article. Auto-generated on first publish if left empty.
+            </p>
+            {kpError && <p className="mt-1 text-sm text-red-600">{kpError}</p>}
           </div>
 
           <div>

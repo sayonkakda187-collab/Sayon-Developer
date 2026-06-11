@@ -13,6 +13,8 @@ import {
 } from "@/lib/newsSearch/settings";
 import { saveAdskeeperApiKey, saveAdskeeperClientId, saveAdskeeperLoginCreds } from "@/lib/adskeeper/settings";
 import { clearEarningsCache } from "@/lib/adskeeper/client";
+import { setBreaking } from "@/lib/breaking";
+import { ADSENSE_SETTING_KEY } from "@/lib/adsense";
 
 // Server actions for the API Settings page. Each re-checks requireAdmin. Keys
 // arrive over POST, are encrypted at rest, and are NEVER returned to the client.
@@ -138,5 +140,49 @@ export async function updateDefaultAiModel(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the model." };
+  }
+}
+
+// ── Site extras: breaking-news banner + reserved AdSense slots ────────────────
+
+/** Save the site-wide breaking-news banner (ON/OFF + text + optional link). */
+export async function saveBreakingBanner(input: {
+  enabled: boolean;
+  text: string;
+  link: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  const text = input.text.trim().slice(0, 200);
+  const link = input.link.trim().slice(0, 500);
+  if (link && !/^https?:\/\//i.test(link) && !link.startsWith("/")) {
+    return { ok: false, error: "Link must start with http(s):// or /." };
+  }
+  if (input.enabled && !text) {
+    return { ok: false, error: "Add banner text before turning it on." };
+  }
+  try {
+    await setBreaking({ enabled: input.enabled, text, link });
+    revalidatePath("/admin/settings");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the banner." };
+  }
+}
+
+/** Enable/disable the reserved AdSense slot layout (separate from AdsKeeper). */
+export async function setAdSlotsEnabled(
+  on: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  try {
+    await prisma.appSetting.upsert({
+      where: { key: ADSENSE_SETTING_KEY },
+      update: { value: on ? "true" : "false", encrypted: false },
+      create: { key: ADSENSE_SETTING_KEY, value: on ? "true" : "false", encrypted: false },
+    });
+    revalidatePath("/admin/settings");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the setting." };
   }
 }

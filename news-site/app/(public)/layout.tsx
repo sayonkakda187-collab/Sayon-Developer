@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import { getCategories, getTrending } from "@/lib/queries";
 import { deskClass } from "@/lib/ledger";
 import { AdsHead } from "@/components/AdsHead";
+import { BreakingBanner } from "@/components/BreakingBanner";
 import { Ticker } from "@/components/ledger/Ticker";
+import { MarketsTicker } from "@/components/ledger/MarketsTicker";
 import { Masthead } from "@/components/ledger/Masthead";
 import { LedgerNewsletter } from "@/components/ledger/LedgerNewsletter";
 import { LedgerFooter } from "@/components/ledger/LedgerFooter";
@@ -34,8 +37,14 @@ export default async function PublicLayout({
   return (
     <>
       <AdsHead />
+      <BreakingBanner />
       <Ticker items={tickerItems} />
       <Masthead today={today} nav={nav} />
+      {/* Markets strip under the header. Streams in (Suspense) so a slow/failed
+          markets fetch never delays the page; it hides itself when empty. */}
+      <Suspense fallback={null}>
+        <MarketsTicker />
+      </Suspense>
       <div className="flex-1">{children}</div>
       <LedgerNewsletter />
       <LedgerFooter sections={sections} />

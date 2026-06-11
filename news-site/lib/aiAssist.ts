@@ -12,6 +12,7 @@ import "server-only";
 
 import { DEFAULT_MODEL_ID, isValidModel } from "@/lib/aiModels";
 import { sanitizeDraft, cleanExcerpt } from "@/lib/aiDraft";
+import { normalizeKeyPoints } from "@/lib/keyPoints";
 
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -85,10 +86,14 @@ async function callAnthropic(opts: {
   system: string;
   user: string;
   maxTokens: number;
+  /** Abort the request after this many ms (so a hung call never blocks publish). */
+  timeoutMs?: number;
 }): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new AiAssistError("auth", "ANTHROPIC_API_KEY is not configured.");
 
+  const controller = opts.timeoutMs ? new AbortController() : undefined;
+  const timer = controller ? setTimeout(() => controller.abort(), opts.timeoutMs) : undefined;
   let res: Response;
   try {
     res = await fetch(ANTHROPIC_ENDPOINT, {
@@ -105,9 +110,12 @@ async function callAnthropic(opts: {
         messages: [{ role: "user", content: opts.user }],
       }),
       cache: "no-store",
+      signal: controller?.signal,
     });
   } catch {
     throw new AiAssistError("network", "Could not reach the AI service.");
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   if (!res.ok) {
@@ -265,4 +273,67 @@ export async function editArticle(input: {
     body: newBody || undefined,
     summary: str(obj.summary) || "Updated the article.",
   };
+}
+
+// ── "Key Points" summary ─────────────────────────────────────────────────────
+// Summarize OUR OWN published article into 3 short, original bullet points for
+// the "Key Points" box. Sent the article's own title + body (the publisher's own
+// content) and asked to summarize in original words — never to copy sentences.
+
+const KEY_POINTS_SYSTEM_PROMPT = `You are an editorial assistant for an independent news publisher. Given the publisher's OWN article (the title and markdown body they wrote), write a concise "Key Points" summary: the 3 most important takeaways a reader should know.
+
+STRICT RULES:
+- Summarize THIS article in your OWN original words. Do NOT copy or closely paraphrase sentences from the body verbatim.
+- Exactly 3 bullets when the article supports it (fewer only if it is very short). Each bullet is a short, self-contained statement — MAXIMUM 15 words, no trailing period, no markdown bullet characters or numbering.
+- Only include facts actually supported by the article. Do NOT add new information, opinion, speculation, or calls to action.
+- Neutral, factual news tone.
+
+Respond with ONLY a JSON object (no markdown fences, no preamble) matching exactly:
+{ "points": ["first key point", "second key point", "third key point"] }`;
+
+/**
+ * Generate up to 3 original "Key Points" bullets summarizing the given article.
+ * Used both at publish time (auto, when empty) and from the editor's "Generate
+ * key points" button. A short timeout keeps it from ever blocking a publish.
+ */
+export async function generateKeyPoints(input: {
+  title: string;
+  body: string;
+  model?: string;
+}): Promise<string[]> {
+  const title = input.title.trim().slice(0, 300);
+  const body = input.body.slice(0, 16000); // cap protects token usage
+  if (!title && !body.trim()) {
+    throw new AiAssistError("unknown", "There's nothing to summarize yet.");
+  }
+
+  const userMessage =
+    `Write the Key Points summary for my article below.\n\n` +
+    `TITLE:\n${title || "(none)"}\n\n` +
+    `ARTICLE BODY (markdown):\n${body || "(none)"}`;
+
+  const text = await callAnthropic({
+    model: input.model,
+    system: KEY_POINTS_SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 400,
+    timeoutMs: 20000,
+  });
+
+  const raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new AiAssistError("parse", "AI returned an unexpected format.");
+  }
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    throw new AiAssistError("parse", "AI returned malformed JSON.");
+  }
+  const arr = Array.isArray(obj.points) ? obj.points : [];
+  const points = normalizeKeyPoints(arr.map((p) => (typeof p === "string" ? p : "")));
+  if (points.length === 0) throw new AiAssistError("parse", "AI returned no key points.");
+  return points.slice(0, 3);
 }
