@@ -8,6 +8,31 @@ export const ARTICLES_PER_PAGE = 8;
 /** Shape returned for list/grid views (article plus its category). */
 export type ArticleWithCategory = Article & { category: Category | null };
 
+/** Minimal, SERIALIZABLE card shape (publishedAt as ISO string) — safe to pass to
+ *  client components like the category "Load more" feed. */
+export type CardArticle = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  coverImage: string | null;
+  category: { name: string; slug: string } | null;
+  publishedAt: Date | string | null;
+};
+
+/** Project an article into the serializable card shape. */
+export function toCardArticle(a: ArticleWithCategory): CardArticle {
+  return {
+    id: a.id,
+    slug: a.slug,
+    title: a.title,
+    excerpt: a.excerpt,
+    coverImage: a.coverImage,
+    category: a.category ? { name: a.category.name, slug: a.category.slug } : null,
+    publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
+  };
+}
+
 const published = { status: "published" } as const;
 
 export function getCategories() {
@@ -94,6 +119,34 @@ export function getRelatedArticles(args: {
     include: { category: true },
     take,
   });
+}
+
+/** "Read next": same-category articles first (newest first), then backfilled with
+ *  the newest from any category so it always returns a full set even when the
+ *  category is sparse. Excludes the current article. */
+export async function getReadNext(args: {
+  categoryId: string | null;
+  excludeId: string;
+  take?: number;
+}): Promise<ArticleWithCategory[]> {
+  const { categoryId, excludeId, take = 3 } = args;
+  const sameCat = categoryId
+    ? await prisma.article.findMany({
+        where: { ...published, categoryId, id: { not: excludeId } },
+        orderBy: { publishedAt: "desc" },
+        include: { category: true },
+        take,
+      })
+    : [];
+  if (sameCat.length >= take) return sameCat;
+  const have = [excludeId, ...sameCat.map((a) => a.id)];
+  const fill = await prisma.article.findMany({
+    where: { ...published, id: { notIn: have } },
+    orderBy: { publishedAt: "desc" },
+    include: { category: true },
+    take: take - sameCat.length,
+  });
+  return [...sameCat, ...fill];
 }
 
 /** UTC midnight for a given date — the key for per-day view buckets. */
@@ -264,6 +317,22 @@ export async function getCategoryArticles(categoryId: string, page: number) {
     total,
     pageCount: Math.max(1, Math.ceil(total / ARTICLES_PER_PAGE)),
   };
+}
+
+/** A skip/take slice of a category's articles + the total — powers the client
+ *  "Load more" button (12 at a time) without changing ARTICLES_PER_PAGE. */
+export async function getCategoryArticlesRange(categoryId: string, skip: number, take = 12) {
+  const [articles, total] = await Promise.all([
+    prisma.article.findMany({
+      where: { ...published, categoryId },
+      orderBy: { publishedAt: "desc" },
+      include: { category: true },
+      skip: Math.max(0, skip),
+      take,
+    }),
+    prisma.article.count({ where: { ...published, categoryId } }),
+  ]);
+  return { articles, total };
 }
 
 /** Server-side search over title, excerpt, and content (case-insensitive on SQLite). */

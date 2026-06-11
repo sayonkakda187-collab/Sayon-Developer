@@ -7,13 +7,15 @@ import { userAgent } from "next/server";
 import {
   getApprovedComments,
   getArticleBySlug,
-  getRelatedArticles,
+  getReadNext,
   incrementViews,
 } from "@/lib/queries";
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
 import { Reveal } from "@/components/Reveal";
+import { ShareButtons } from "@/components/ShareButtons";
+import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
@@ -92,12 +94,14 @@ export default async function ArticlePage({ params }: Props) {
     userAgent({ headers: h }).device.type,
   );
   const [related, comments] = await Promise.all([
-    getRelatedArticles({
+    getReadNext({
       categoryId: article.categoryId,
       excludeId: article.id,
     }),
     getApprovedComments(article.id),
   ]);
+
+  const shareUrl = `${siteConfig.url}/news/${article.slug}`;
 
   const metaItems = (
     <>
@@ -117,6 +121,8 @@ export default async function ArticlePage({ params }: Props) {
 
   return (
     <main>
+      <ReadingProgress />
+
       {/* Top-of-page ad — placed ABOVE the headline + cover (just under the site
           header) for maximum visibility, per the requested layout. It collapses
           cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
@@ -199,6 +205,8 @@ export default async function ArticlePage({ params }: Props) {
             {article.excerpt}
           </p>
 
+          <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
+
           {/* Body with an optional single in-article ad after the opening (only
               on longer pieces; placeholder until you add an IN_ARTICLE widget id).
               The story always renders first; the ad lazy-loads and collapses
@@ -223,6 +231,10 @@ export default async function ArticlePage({ params }: Props) {
               ))}
             </div>
           )}
+
+          <div className="mt-10 border-t border-border pt-6">
+            <ShareButtons url={shareUrl} title={article.title} />
+          </div>
         </div>
 
         {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"

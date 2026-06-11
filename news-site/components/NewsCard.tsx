@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { ArticleWithCategory } from "@/lib/queries";
+import type { CardArticle } from "@/lib/queries";
 import { timeAgo } from "@/lib/site";
 import { MorphLink } from "./MorphLink";
 
@@ -10,7 +10,7 @@ export function NewsCard({
   article,
   priority = false,
 }: {
-  article: ArticleWithCategory;
+  article: CardArticle;
   priority?: boolean;
 }) {
   return (
@@ -45,7 +45,7 @@ export function NewsCard({
               <span aria-hidden>·</span>
             </>
           )}
-          <time dateTime={article.publishedAt?.toISOString()}>{timeAgo(article.publishedAt)}</time>
+          <time dateTime={article.publishedAt ? new Date(article.publishedAt).toISOString() : undefined}>{timeAgo(article.publishedAt)}</time>
         </div>
 
         <h3 className="mt-2 text-pretty font-display text-lg font-bold leading-snug tracking-tight">
