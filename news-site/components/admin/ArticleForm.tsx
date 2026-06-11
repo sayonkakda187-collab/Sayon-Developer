@@ -98,6 +98,7 @@ type ArticleInput = {
   coverImage: string | null;
   coverCredit?: string | null;
   coverCreditUrl?: string | null;
+  coverImageSource?: string | null;
   categoryId: string | null;
   status: string;
   tagIds: string[];
@@ -148,6 +149,14 @@ export function ArticleForm({
   // photo is chosen; cleared on manual upload / paste / remove).
   const [coverCredit, setCoverCredit] = useState(article?.coverCredit ?? "");
   const [coverCreditUrl, setCoverCreditUrl] = useState(article?.coverCreditUrl ?? "");
+  // Which free source the cover came from ("Pexels"|"Unsplash"|"Pixabay"|
+  // "Wikimedia Commons"); cleared on manual upload / paste / AI / remove.
+  const [coverImageSource, setCoverImageSource] = useState(article?.coverImageSource ?? "");
+  // Latest coverImage (for the async auto-suggest guard) + a one-shot flag so a
+  // suggested image is only auto-attached once per new draft.
+  const coverImageRef = useRef(coverImage);
+  coverImageRef.current = coverImage;
+  const autoImageTried = useRef(false);
   const [stockOpen, setStockOpen] = useState(false);
   const [aiImgOpen, setAiImgOpen] = useState(false);
   // Credit pending while a freshly-picked stock photo goes through the cropper;
@@ -216,6 +225,8 @@ export function ArticleForm({
           if (data.title) setTitle(data.title);
           if (summary) setExcerpt(summary);
           if (body) setContent(body);
+          // Auto-attach a relevant featured image for the handed-off draft.
+          void autoSuggestImage(data.title ?? "", summary);
           setAiNotice(true);
           return; // don't also pop the recovery banner
         }
@@ -241,10 +252,20 @@ export function ArticleForm({
         setCoverImage(url);
         setCoverCredit("");
         setCoverCreditUrl("");
+        setCoverImageSource("");
+        autoImageTried.current = true; // a handed-off cover supersedes auto-suggest
       }
     } catch {
       /* sessionStorage may be unavailable */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // News Finder "Write article about this" seeds a title (no AI handoff) → auto-
+  // attach a relevant featured image for that new draft.
+  useEffect(() => {
+    if (article?.id || aiHandoff) return;
+    if (initial?.title) void autoSuggestImage(initial.title, "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -295,6 +316,7 @@ export function ArticleForm({
     pendingCredit.current = null; // a manual upload has no stock credit
     setCoverCredit("");
     setCoverCreditUrl("");
+    setCoverImageSource("");
     setUploadError("");
     if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
     const url = URL.createObjectURL(file);
@@ -356,17 +378,50 @@ export function ArticleForm({
     // so the user can retry or cancel without losing their framing.
   }
 
-  // A free stock photo was chosen: remember its credit, then open it in the
-  // cropper (the cropped result uploads to Blob like any other cover).
-  function onStockPick(pick: { url: string; credit: string; creditUrl: string }) {
-    pendingCredit.current = { credit: pick.credit, url: pick.creditUrl };
+  // A free photo was picked. The server already resolved it per the source's
+  // terms (Unsplash download triggered / Pixabay re-hosted), so set it directly
+  // as the featured image with its credit + source. No cropping — the hero uses
+  // object-cover and the share card is the branded image.
+  function onImagePick(pick: { url: string; credit: string; creditUrl: string; source: string }) {
+    pendingCredit.current = null;
+    autoImageTried.current = true; // a manual pick supersedes any auto-suggest
     setStockOpen(false);
-    if (cropObjectUrl.current) {
-      URL.revokeObjectURL(cropObjectUrl.current);
-      cropObjectUrl.current = null;
-    }
     setUploadError("");
-    setCropSrc(pick.url);
+    setCoverImage(pick.url);
+    setCoverCredit(pick.credit);
+    setCoverCreditUrl(pick.creditUrl);
+    setCoverImageSource(pick.source);
+  }
+
+  // Auto-suggest a featured image for a NEW draft seeded from News Finder / AI
+  // Assist (title in hand, no cover yet). Best-effort + one-shot; it never
+  // overrides a cover the user has set, and silently keeps the branded fallback
+  // on any failure.
+  async function autoSuggestImage(seedTitle: string, seedExcerpt: string) {
+    if (autoImageTried.current || article?.id) return;
+    autoImageTried.current = true;
+    const t = seedTitle.trim();
+    if (t.length < 3 || coverImageRef.current) return;
+    try {
+      const usp = new URLSearchParams({ suggest: "1", title: t, excerpt: seedExcerpt || "" });
+      const res = await fetch(`/api/admin/image-search?${usp.toString()}`);
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; hits?: unknown[] };
+      if (!res.ok || !data.ok || !Array.isArray(data.hits) || data.hits.length === 0) return;
+      const pres = await fetch("/api/admin/image-search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hit: data.hits[0] }),
+      });
+      const pdata = (await pres.json().catch(() => ({}))) as { ok?: boolean; cover?: { url: string; credit: string; creditUrl: string; source: string } };
+      if (!pres.ok || !pdata.ok || !pdata.cover) return;
+      if (coverImageRef.current) return; // user picked one meanwhile — don't override
+      setCoverImage(pdata.cover.url);
+      setCoverCredit(pdata.cover.credit);
+      setCoverCreditUrl(pdata.cover.creditUrl);
+      setCoverImageSource(pdata.cover.source);
+    } catch {
+      /* keep the branded-card fallback */
+    }
   }
 
   // An AI-generated image was chosen: it has no stock credit, so open it in the
@@ -376,6 +431,7 @@ export function ArticleForm({
     pendingCredit.current = null;
     setCoverCredit("");
     setCoverCreditUrl("");
+    setCoverImageSource("");
     setAiImgOpen(false);
     if (cropObjectUrl.current) {
       URL.revokeObjectURL(cropObjectUrl.current);
@@ -748,7 +804,7 @@ export function ArticleForm({
                   <button
                     type="button"
                     className="adm-cover-remove"
-                    onClick={() => { setCoverImage(""); setCoverCredit(""); setCoverCreditUrl(""); pendingCredit.current = null; }}
+                    onClick={() => { setCoverImage(""); setCoverCredit(""); setCoverCreditUrl(""); setCoverImageSource(""); pendingCredit.current = null; }}
                   >
                     Remove
                   </button>
@@ -785,13 +841,14 @@ export function ArticleForm({
               type="text"
               name="coverImage"
               value={coverImage}
-              onChange={(e) => { setCoverImage(e.target.value); setCoverCredit(""); setCoverCreditUrl(""); pendingCredit.current = null; }}
+              onChange={(e) => { setCoverImage(e.target.value); setCoverCredit(""); setCoverCreditUrl(""); setCoverImageSource(""); pendingCredit.current = null; }}
               placeholder="…or paste an image URL"
               className={`${inputClass} mt-2`}
             />
             {/* Credit travels with the cover; read by saveArticle. */}
             <input type="hidden" name="coverCredit" value={coverCredit} />
             <input type="hidden" name="coverCreditUrl" value={coverCreditUrl} />
+            <input type="hidden" name="coverImageSource" value={coverImageSource} />
             {uploadError && <p className="adm-cover-err">{uploadError}</p>}
           </div>
 
@@ -847,7 +904,7 @@ export function ArticleForm({
       <StockPhotoModal
         initialTitle={title}
         initialExcerpt={excerpt}
-        onPick={onStockPick}
+        onPick={onImagePick}
         onClose={() => setStockOpen(false)}
       />
     )}

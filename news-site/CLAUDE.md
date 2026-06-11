@@ -914,6 +914,42 @@ agent settings/activity store.
   `AppSetting`). Cron jobs fire on the **production** deployment only — test a
   preview with the **Run now** button.
 
+## Automatic featured images (free, license-clean)
+
+Every AI/automated draft gets a relevant, legal, free featured image automatically,
+plus a unified manual picker in the editor. Reuses the existing cover fields + cover
+UI; adds one nullable `Article.coverImageSource` column (migration
+`20260611160000_article_cover_source`) so the credit line is source-accurate.
+
+- **Unified search** (`lib/imageSearch.ts`, server-only): one search across
+  **Pexels** (`PEXELS_API_KEY`), **Unsplash** (`UNSPLASH_ACCESS_KEY`), **Pixabay**
+  (`PIXABAY_API_KEY`), and **Wikimedia Commons** (keyless, always on). Each key is
+  optional; missing sources are skipped. Prefers landscape ≥1200px; results merged +
+  cached **~1h** to respect the small free tiers. Per-source **terms** are honored:
+  Pexels/Unsplash/Wikimedia are **hotlinked** (hosts allow-listed in
+  `next.config.mjs`), **Pixabay is re-hosted to Blob** (its terms disallow
+  hotlinking), Unsplash's **download endpoint is triggered** on use and its
+  photographer + Unsplash get **UTM credit links**, and Wikimedia carries **author +
+  license** + a file-page link. NEVER scrapes news sites / Google / Pinterest / social.
+- **Auto-attach on draft creation:** the agent's `create_draft` tool (used by the
+  **AI agent + Auto-Pilot**) calls `pickFeaturedImage(title, category)` after creating
+  the draft (best-effort — image failure never blocks the draft). The editor
+  auto-attaches one for **News Finder** ("Write article about this") and **AI Assist**
+  hand-offs on load (one-shot; never overrides a cover you set). No match → the
+  branded-card fallback stays.
+- **Manual picker** (`StockPhotoModal` → unified): a search box + "Suggest from title"
+  → a grid of results from all sources (thumbnail + **source badge** + author) → click
+  to set. Picks are finalized server-side via `POST /api/admin/image-search` (triggers
+  Unsplash download / re-hosts Pixabay). Direct **upload** (Blob, via the cropper) and
+  **Generate with AI** are unchanged; **Remove** returns to the branded-card fallback.
+- **Credit line:** under the hero, source-accurate ("Photo: {author} · {Source}",
+  Source links out — UTM for Unsplash; legacy covers show "Pexels"). Always shown for
+  Wikimedia (author + license); subtle for the others.
+- **Env:** `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY`, `PIXABAY_API_KEY` (all optional;
+  add ≥1 of Pexels/Unsplash for good photos — Wikimedia works with none).
+  `BLOB_READ_WRITE_TOKEN` re-hosts Pixabay (already set in production). Route:
+  `app/api/admin/image-search` (GET search + POST resolve, `requireAdmin`).
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

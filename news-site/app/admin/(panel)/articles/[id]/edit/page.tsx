@@ -66,6 +66,7 @@ export default async function EditArticlePage({
           coverImage: article.coverImage,
           coverCredit: article.coverCredit,
           coverCreditUrl: article.coverCreditUrl,
+          coverImageSource: article.coverImageSource,
           categoryId: article.categoryId,
           status: article.status,
           tagIds: article.tags.map((t) => t.id),

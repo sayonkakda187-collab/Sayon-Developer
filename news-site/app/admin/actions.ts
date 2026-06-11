@@ -27,6 +27,7 @@ export async function saveArticle(formData: FormData) {
   // Stock-photo attribution (only meaningful when a cover is set).
   const coverCredit = coverImage ? String(formData.get("coverCredit") ?? "").trim() || null : null;
   const coverCreditUrl = coverImage ? String(formData.get("coverCreditUrl") ?? "").trim() || null : null;
+  const coverImageSource = coverImage ? String(formData.get("coverImageSource") ?? "").trim() || null : null;
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   // "Key Points" box: editable bullets (one per line); normalized to the stored
   // newline form (or null when empty). When left empty on first publish it's
@@ -84,6 +85,7 @@ export async function saveArticle(formData: FormData) {
         coverImage,
         coverCredit,
         coverCreditUrl,
+        coverImageSource,
         categoryId,
         status,
         publishedAt,
@@ -106,6 +108,7 @@ export async function saveArticle(formData: FormData) {
         coverImage,
         coverCredit,
         coverCreditUrl,
+        coverImageSource,
         categoryId,
         status,
         publishedAt,

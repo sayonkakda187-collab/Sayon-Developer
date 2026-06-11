@@ -6,6 +6,7 @@ import { getActiveSiteId } from "@/lib/sites";
 import { aggregateTrending, isSourceConfigured } from "@/lib/news/aggregate";
 import { NEWS_SOURCE_IDS } from "@/lib/news/sources";
 import { generateAiAssist } from "@/lib/aiAssist";
+import { pickFeaturedImage } from "@/lib/imageSearch";
 import { permalinkForPost } from "@/lib/facebook";
 import type { AnthropicTool } from "./anthropic";
 import { addAction, updateAction, type AgentSettings, type AgentActionRecord, type AgentActionType } from "./store";
@@ -182,7 +183,25 @@ async function createDraft(input: Record<string, unknown>, model?: string): Prom
   const slug = await uniqueArticleSlug(title);
   const siteId = await getActiveSiteId();
   const created = await prisma.article.create({ data: { title, slug, excerpt: ai.excerpt, content, status: "draft", categoryId, siteId }, select: { id: true } });
-  return { content: JSON.stringify({ id: created.id, title, status: "draft", excerpt: ai.excerpt, editUrl: `/admin/articles/${created.id}/edit` }), summary: `Drafted “${title}”` };
+
+  // Auto-attach a relevant, license-clean featured image from the free sources
+  // (headline keywords + category). Best-effort: any failure keeps the branded-
+  // card fallback and never blocks the draft.
+  let image = false;
+  try {
+    const cover = await pickFeaturedImage(title, categoryName || undefined);
+    if (cover) {
+      await prisma.article.update({
+        where: { id: created.id },
+        data: { coverImage: cover.url, coverCredit: cover.credit, coverCreditUrl: cover.creditUrl, coverImageSource: cover.source },
+      });
+      image = true;
+    }
+  } catch {
+    /* keep the branded-card fallback */
+  }
+
+  return { content: JSON.stringify({ id: created.id, title, status: "draft", excerpt: ai.excerpt, image, editUrl: `/admin/articles/${created.id}/edit` }), summary: `Drafted “${title}”${image ? " + image" : ""}` };
 }
 
 async function updateDraft(input: Record<string, unknown>): Promise<ToolResult> {
