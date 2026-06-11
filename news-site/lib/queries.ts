@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import type { Article, Category } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { normalizeDevice } from "@/lib/devices";
@@ -148,6 +149,53 @@ export async function getReadNext(args: {
   });
   return [...sameCat, ...fill];
 }
+
+export type MostReadItem = { id: string; title: string; slug: string; category: string | null };
+
+/** Top `take` articles by views over the last 7 days (rank order). Falls back to
+ *  the newest articles so the section is never empty on a fresh site. Cached
+ *  ~15 minutes (the DailyView counters update continuously). */
+export const getMostRead = unstable_cache(
+  async (take = 5): Promise<MostReadItem[]> => {
+    const since = utcDayStart(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)); // last 7 days incl. today
+    const grouped = await prisma.dailyView.groupBy({
+      by: ["articleId"],
+      where: { date: { gte: since } },
+      _sum: { count: true },
+      orderBy: { _sum: { count: "desc" } },
+      take: take * 2,
+    });
+    const ids = grouped.map((g) => g.articleId);
+    const ranked = ids.length
+      ? await prisma.article.findMany({
+          where: { id: { in: ids }, status: "published" },
+          select: { id: true, title: true, slug: true, category: { select: { name: true } } },
+        })
+      : [];
+    const order = new Map(ids.map((id, i) => [id, i]));
+    ranked.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    let result: MostReadItem[] = ranked
+      .slice(0, take)
+      .map((a) => ({ id: a.id, title: a.title, slug: a.slug, category: a.category?.name ?? null }));
+
+    if (result.length < take) {
+      const have = new Set(result.map((r) => r.id));
+      const fill = await prisma.article.findMany({
+        where: { status: "published", id: { notIn: [...have] } },
+        orderBy: { publishedAt: "desc" },
+        take: take - result.length,
+        select: { id: true, title: true, slug: true, category: { select: { name: true } } },
+      });
+      result = [
+        ...result,
+        ...fill.map((a) => ({ id: a.id, title: a.title, slug: a.slug, category: a.category?.name ?? null })),
+      ];
+    }
+    return result;
+  },
+  ["most-read-7d"],
+  { revalidate: 900 },
+);
 
 /** UTC midnight for a given date — the key for per-day view buckets. */
 export function utcDayStart(d: Date = new Date()): Date {

@@ -2,6 +2,7 @@ import { getHomepage } from "@/lib/queries";
 import { toLedgerStory } from "@/lib/ledger";
 import { LedgerHero } from "@/components/ledger/LedgerHero";
 import { Latest } from "@/components/ledger/Latest";
+import { MostRead } from "@/components/MostRead";
 import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 
@@ -37,6 +38,9 @@ export default async function Home() {
   return (
     <main className="tl-wrap tl-home">
       <LedgerHero hero={hero} leads={leads} />
+
+      {/* Most Read — top stories by views over the last 7 days (cached ~15 min). */}
+      <MostRead />
 
       {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
       <div style={{ padding: "28px 0" }}>
