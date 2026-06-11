@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCategoryArticles, getCategoryBySlug } from "@/lib/queries";
-import { NewsCard } from "@/components/NewsCard";
-import { Pagination } from "@/components/Pagination";
-import { Reveal } from "@/components/Reveal";
+import { getCategoryArticlesRange, getCategoryBySlug, toCardArticle } from "@/lib/queries";
+import { CategoryFeed } from "@/components/CategoryFeed";
 
-type Props = {
-  params: { slug: string };
-  searchParams: { page?: string };
-};
+type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = await getCategoryBySlug(params.slug);
@@ -19,52 +14,34 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function CategoryPage({ params, searchParams }: Props) {
+export default async function CategoryPage({ params }: Props) {
   const category = await getCategoryBySlug(params.slug);
   if (!category) notFound();
 
-  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
-  const { articles, total, pageCount } = await getCategoryArticles(
-    category.id,
-    page,
-  );
+  // First 12 are server-rendered (SEO); the rest load on demand via "Load more".
+  const { articles, total } = await getCategoryArticlesRange(category.id, 0, 12);
+  const initial = articles.map(toCardArticle);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
       <header className="border-b border-border pb-5">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-link">
-          Category
-        </p>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-link">Category</p>
         <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
           {category.name}
         </h1>
         {category.description && (
-          <p className="mt-3 max-w-2xl text-base text-fg-muted">
-            {category.description}
-          </p>
+          <p className="mt-3 max-w-2xl text-base text-fg-muted">{category.description}</p>
         )}
         <p className="mt-3 text-xs font-medium uppercase tracking-wide text-fg-faint">
           {total} {total === 1 ? "article" : "articles"}
         </p>
       </header>
 
-      {articles.length === 0 ? (
+      {initial.length === 0 ? (
         <p className="mt-10 text-fg-muted">No articles in this category yet.</p>
       ) : (
-        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {articles.map((article, i) => (
-            <Reveal key={article.id} delay={Math.min(i, 4) * 55}>
-              <NewsCard article={article} priority={i < 3} />
-            </Reveal>
-          ))}
-        </div>
+        <CategoryFeed categoryId={category.id} initial={initial} total={total} />
       )}
-
-      <Pagination
-        basePath={`/category/${category.slug}`}
-        page={page}
-        pageCount={pageCount}
-      />
     </main>
   );
 }
