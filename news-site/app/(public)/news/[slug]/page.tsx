@@ -69,7 +69,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: "article",
       url: `/news/${article.slug}`,
       publishedTime: article.publishedAt?.toISOString(),
-      images: article.coverImage ? [{ url: article.coverImage }] : undefined,
+      modifiedTime: article.updatedAt.toISOString(),
+      // og:image / twitter:image come from the branded opengraph-image.tsx card
+      // (per-article headline + category) — do not set images here or it overrides it.
     },
   };
 }
@@ -103,6 +105,26 @@ export default async function ArticlePage({ params }: Props) {
 
   const shareUrl = `${siteConfig.url}/news/${article.slug}`;
 
+  // NewsArticle structured data (schema.org) — helps Google News/Search render
+  // the story with headline, image, dates, author, and publisher logo. Server-
+  // rendered so crawlers read it in the raw HTML without executing JS.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: article.title,
+    description: article.excerpt,
+    ...(article.coverImage ? { image: [article.coverImage] } : {}),
+    datePublished: (article.publishedAt ?? article.createdAt).toISOString(),
+    dateModified: article.updatedAt.toISOString(),
+    author: { "@type": "Organization", name: siteConfig.name, url: siteConfig.url },
+    publisher: {
+      "@type": "Organization",
+      name: siteConfig.name,
+      logo: { "@type": "ImageObject", url: `${siteConfig.url}/icons/icon-512` },
+    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": shareUrl },
+  };
+
   const metaItems = (
     <>
       <span className="font-semibold">By {siteConfig.name}</span>
@@ -121,6 +143,10 @@ export default async function ArticlePage({ params }: Props) {
 
   return (
     <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ReadingProgress />
 
       {/* Top-of-page ad — placed ABOVE the headline + cover (just under the site
