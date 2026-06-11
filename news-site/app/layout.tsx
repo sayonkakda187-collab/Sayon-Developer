@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Newsreader, Schibsted_Grotesk } from "next/font/google";
+import { Newsreader, Schibsted_Grotesk, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
@@ -23,6 +23,15 @@ const schibsted = Schibsted_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-ui",
+  display: "swap",
+});
+// Display serif for the masthead wordmark ONLY (navy + gold serif look) —
+// exposed as --font-masthead, used by .tl-wm-* in globals.css.
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  weight: ["400", "700"],
+  variable: "--font-masthead",
   display: "swap",
 });
 
@@ -66,7 +75,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${newsreader.variable} ${schibsted.variable}`}
+      className={`${newsreader.variable} ${schibsted.variable} ${playfair.variable}`}
     >
       <body className="flex min-h-screen flex-col bg-bg font-sans text-fg antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
