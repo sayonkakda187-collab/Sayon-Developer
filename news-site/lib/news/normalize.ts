@@ -38,7 +38,7 @@ export function makeItem(input: {
 
 /** Canonical URL key for exact-duplicate detection (host + path, no query/hash,
  *  no trailing slash, no www). */
-function urlKey(url: string): string {
+export function urlKey(url: string): string {
   try {
     const u = new URL(url);
     const host = u.host.replace(/^www\./, "").toLowerCase();
@@ -55,7 +55,7 @@ const TITLE_STOP = new Set([
 ]);
 
 /** Significant title tokens for fuzzy comparison. */
-function titleTokens(title: string): Set<string> {
+export function titleTokens(title: string): Set<string> {
   return new Set(
     title
       .toLowerCase()
@@ -65,7 +65,7 @@ function titleTokens(title: string): Set<string> {
   );
 }
 
-function jaccard(a: Set<string>, b: Set<string>): number {
+export function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let shared = 0;
   for (const w of a) if (b.has(w)) shared++;

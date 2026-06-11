@@ -872,6 +872,48 @@ article model, AppSetting store, AI pipeline, and public layout.
   `<ins class="adsbygoogle">` ships yet** (AdSense approval pending) — structure
   only, with the publisher id (`ca-pub-5470257305108580`) noted for later wiring.
 
+## Morning Auto-Pilot (daily AI drafting)
+
+A once-daily job that finds top trending stories and writes original **drafts**
+for review, then sends ONE push. It **only ever drafts — never publishes or
+shares** (the approval gates are untouched). Everything is **reused**, not
+duplicated: the news-finder, the AI pipeline, the drafts tool, web-push, and the
+agent settings/activity store.
+
+- **Job** (`lib/autopilot.ts`, `runAutopilot({ manual })`): pulls trending per
+  selected category via `aggregateTrending` (its existing per-source cache + quota
+  backoff protect the small daily quotas), de-dupes across categories AND against
+  existing articles (canonical source URL cited in a body + near-identical title,
+  Jaccard ≥ 0.82, reusing `lib/news/normalize` helpers), then writes N drafts by
+  calling the agent's **existing** `create_draft` tool (`executeTool` in
+  `lib/agent/tools.ts`) — which reuses `generateAiAssist`, picks an ORIGINAL
+  headline, appends a **source-attribution link**, and sets the category. Key
+  Points are **not** generated here — they're produced by the existing publish
+  flow when the owner later publishes the draft. Logs the run to the agent
+  **activity log** (`addAction`, new `autopilot_run` type) and sends ONE push
+  (`sendAutopilotPush`) → tapping opens `/admin/articles`. Sources missing / quota
+  exhausted / no candidates → it logs + pushes "couldn't run" instead of crashing.
+- **Cron** (`/api/cron/autopilot`, `vercel.json` `0 23 * * *` = 06:00 Asia/
+  Phnom_Penh): protected by **`CRON_SECRET`** (Bearer, same fail-closed scheme as
+  the Facebook cron — unauthenticated calls are rejected). `maxDuration = 60`; the
+  job self-limits how many drafts it starts so it always finishes (push + log)
+  inside the Hobby 60s ceiling. The daily toggle is checked here (off → no-op).
+- **Run now** (`/api/admin/agent/autopilot-run`, admin-session gated,
+  `maxDuration = 60`): the Settings button runs the same job on demand (even while
+  the daily toggle is off) for testing.
+- **Settings** (Agent Settings card): ON/OFF (**default OFF**), run time (stored
+  UTC, shown as Phnom Penh, default 06:00 PP), drafts per run (1–5, default 3), and
+  which categories to include. ⚠️ **Hobby cron caveat:** Vercel Hobby fires a cron
+  **once daily at the fixed `vercel.json` time** (within ±1h) — changing the run
+  time in Settings shows the cron line to paste into `vercel.json` (redeploy to
+  change the real fire time; or upgrade to Pro for finer control). Default ships
+  matching 06:00 PP, so no edit is needed out of the box.
+- **Env:** `CRON_SECRET` (cron auth) + `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
+  (push; reused from the approval notifications) + `ANTHROPIC_API_KEY` (drafting) +
+  at least one news-source key. **No DB migration** (settings/log live in
+  `AppSetting`). Cron jobs fire on the **production** deployment only — test a
+  preview with the **Run now** button.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

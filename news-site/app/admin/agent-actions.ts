@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { isValidModel } from "@/lib/aiModels";
-import { saveAgentSettings, type AgentSettings } from "@/lib/agent/store";
+import { saveAgentSettings, normalizeAutopilot, type AgentSettings } from "@/lib/agent/store";
 
 /** Save Agent Settings. Publishing + sharing approval are hard-required and are
  *  re-forced here + in saveAgentSettings regardless of what the form sends. */
@@ -26,6 +26,7 @@ export async function updateAgentSettings(input: AgentSettings): Promise<{ ok: b
     },
     customInstructions: typeof input?.customInstructions === "string" ? input.customInstructions.slice(0, 4000) : "",
     model: isValidModel(input?.model) ? input.model : null,
+    autopilot: normalizeAutopilot(input?.autopilot),
   };
   await saveAgentSettings(safe);
   revalidatePath("/admin/ai-assistant/settings");

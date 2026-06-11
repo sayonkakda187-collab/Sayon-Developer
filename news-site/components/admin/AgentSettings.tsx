@@ -6,9 +6,24 @@ import { useRouter } from "next/navigation";
 import { AI_MODELS } from "@/lib/aiModels";
 import { useToast } from "@/components/admin/Toast";
 import { updateAgentSettings } from "@/app/admin/agent-actions";
-import type { AgentSettings } from "@/lib/agent/store";
+import type { AgentSettings, AutopilotSettings } from "@/lib/agent/store";
 import { PushToggle } from "@/components/admin/PushToggle";
 import { CheckIcon } from "@/components/admin/icons";
+
+// Asia/Phnom_Penh is a fixed UTC+7 (no DST), so a plain hour shift is exact.
+const PP_OFFSET_MIN = 7 * 60;
+function shiftHHMM(hhmm: string, deltaMin: number): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const total = (h * 60 + m + deltaMin + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+const utcToPp = (hhmm: string) => shiftHHMM(hhmm, PP_OFFSET_MIN);
+const ppToUtc = (hhmm: string) => shiftHHMM(hhmm, -PP_OFFSET_MIN);
+/** The vercel.json cron expression (UTC) for a given UTC HH:MM. */
+function cronFromUtc(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${m} ${h} * * *`;
+}
 
 function Toggle({
   checked,
@@ -41,14 +56,58 @@ function Toggle({
   );
 }
 
-export function AgentSettingsForm({ initial, aiConfigured }: { initial: AgentSettings; aiConfigured: boolean }) {
+export function AgentSettingsForm({
+  initial,
+  aiConfigured,
+  categories,
+}: {
+  initial: AgentSettings;
+  aiConfigured: boolean;
+  categories: { name: string; slug: string }[];
+}) {
   const router = useRouter();
   const { success, error } = useToast();
   const [s, setS] = useState<AgentSettings>(initial);
   const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
 
   const setCap = (k: keyof AgentSettings["capabilities"]) => (v: boolean) =>
     setS((p) => ({ ...p, capabilities: { ...p.capabilities, [k]: v } }));
+
+  const ap = s.autopilot;
+  const setAp = (patch: Partial<AutopilotSettings>) =>
+    setS((p) => ({ ...p, autopilot: { ...p.autopilot, ...patch } }));
+  const toggleCat = (slug: string) =>
+    setAp({
+      categories: ap.categories.includes(slug)
+        ? ap.categories.filter((x) => x !== slug)
+        : [...ap.categories, slug],
+    });
+
+  // "Run now": triggers the same job via the admin route (runs even while OFF).
+  // It can take ~30–60s; the push + activity log capture the result too.
+  async function runNow() {
+    if (running) return;
+    setRunning(true);
+    try {
+      const res = await fetch("/api/admin/agent/autopilot-run", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        created?: number;
+        message?: string;
+      };
+      if (res.ok && data.ok && (data.created ?? 0) > 0) {
+        success(`Auto-Pilot created ${data.created} draft${data.created === 1 ? "" : "s"}.`);
+        router.refresh();
+      } else {
+        error(data.message || "No new drafts were created — see the activity log.");
+      }
+    } catch {
+      error("Couldn’t reach the server. Please try again.");
+    } finally {
+      setRunning(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -122,6 +181,82 @@ export function AgentSettingsForm({ initial, aiConfigured }: { initial: AgentSet
             <option key={m.id} value={m.id}>{m.label} — {m.note}</option>
           ))}
         </select>
+      </div>
+
+      <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>
+        <div className="adm-card-title">Morning Auto-Pilot</div>
+        <div className="adm-card-sub" style={{ marginBottom: 8 }}>
+          Once a day, automatically find top trending stories and write original <strong>drafts</strong> for
+          your review. It <strong>never publishes or shares</strong> — only drafts. You get one push when they’re ready.
+        </div>
+
+        <Toggle
+          label="Enable Auto-Pilot"
+          hint="Off by default — turn it on when you’re ready"
+          checked={ap.enabled}
+          onChange={(v) => setAp({ enabled: v })}
+        />
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+            <span className="adm-agset-rowlabel">Run time (Phnom Penh)</span>
+            <input
+              type="time"
+              className="adm-input"
+              style={{ maxWidth: 160 }}
+              value={utcToPp(ap.runTimeUtc)}
+              onChange={(e) => e.target.value && setAp({ runTimeUtc: ppToUtc(e.target.value) })}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+            <span className="adm-agset-rowlabel">Drafts per run (1–5)</span>
+            <input
+              type="number"
+              min={1}
+              max={5}
+              className="adm-input"
+              style={{ maxWidth: 100 }}
+              value={ap.draftCount}
+              onChange={(e) => setAp({ draftCount: Math.min(5, Math.max(1, Number(e.target.value) || 1)) })}
+            />
+          </label>
+        </div>
+
+        <div className="adm-card-sub" style={{ marginTop: 12, marginBottom: 6 }}>
+          Categories to include {ap.categories.length === 0 && <em>(all categories)</em>}
+        </div>
+        {categories.length === 0 ? (
+          <p className="adm-card-sub">No categories yet — add some under Categories.</p>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {categories.map((c) => (
+              <label key={c.slug} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <input type="checkbox" checked={ap.categories.includes(c.slug)} onChange={() => toggleCat(c.slug)} />
+                {c.name}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <p className="adm-card-sub" style={{ marginTop: 12 }}>
+          ⏰ On the Vercel <strong>Hobby</strong> plan the job runs <strong>once a day</strong> at the time set in{" "}
+          <code>vercel.json</code> (Vercel may fire it up to an hour late). It ships at <strong>06:00 Phnom Penh</strong>.
+          To change when it actually fires, set this schedule in <code>vercel.json</code> and redeploy (or upgrade to
+          Pro for finer control):
+          <br />
+          <code>{cronFromUtc(ap.runTimeUtc)}</code> — {utcToPp(ap.runTimeUtc)} Phnom Penh / {ap.runTimeUtc} UTC
+        </p>
+
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <button type="button" className="adm-btn-ghost" onClick={runNow} disabled={running || !aiConfigured}>
+            {running && <span className="adm-spinner" aria-hidden />}
+            {running ? "Running… (up to ~60s)" : "Run now"}
+          </button>
+          <span className="adm-card-sub" style={{ margin: 0 }}>
+            Drafts immediately (even while off) for testing — they appear in{" "}
+            <Link href="/admin/articles" className="adm-link">Articles</Link>.
+          </span>
+        </div>
       </div>
 
       <PushToggle />
