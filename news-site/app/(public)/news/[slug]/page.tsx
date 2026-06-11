@@ -17,12 +17,15 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { ADS } from "@/lib/ads";
+import { adsenseEnabled } from "@/lib/adsense";
+import { parseKeyPoints } from "@/lib/keyPoints";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
-type ArticlePart = { type: "md"; content: string } | { type: "ad" };
+type ArticlePart = { type: "md"; content: string } | { type: "ad" } | { type: "adsense" };
 
 /**
  * Split the article body so a single in-article ad can sit after the opening
@@ -52,6 +55,9 @@ function buildArticleParts(content: string): ArticlePart[] {
   return [
     { type: "md", content: blocks.slice(0, cut).join("\n\n") },
     { type: "ad" },
+    // Reserved Google AdSense slot, after the ~3rd paragraph (renders nothing
+    // unless AdSense slots are enabled — see lib/adsense.ts).
+    { type: "adsense" },
     { type: "md", content: blocks.slice(cut).join("\n\n") },
   ];
 }
@@ -124,6 +130,11 @@ export default async function ArticlePage({ params }: Props) {
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": shareUrl },
   };
+
+  // "Key Points" bullets (empty → box doesn't render) and whether the reserved
+  // AdSense slots should render (resolved once, passed to each slot).
+  const keyPoints = parseKeyPoints(article.keyPoints);
+  const adsOn = await adsenseEnabled();
 
   const metaItems = (
     <>
@@ -231,6 +242,25 @@ export default async function ArticlePage({ params }: Props) {
             {article.excerpt}
           </p>
 
+          {keyPoints.length > 0 && (
+            <aside
+              className="mb-9 rounded-xl border border-border bg-surface p-5 motion-safe:animate-fade-up sm:p-6"
+              aria-label="Key points"
+            >
+              <h2 className="font-display text-xs font-bold uppercase tracking-[0.16em] text-accent-link">
+                Key Points
+              </h2>
+              <ul className="mt-3 space-y-2.5">
+                {keyPoints.map((point, i) => (
+                  <li key={i} className="flex gap-3 text-pretty leading-snug text-fg-muted">
+                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+
           <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
           {/* Body with an optional single in-article ad after the opening (only
@@ -240,8 +270,10 @@ export default async function ArticlePage({ params }: Props) {
           {parts.map((p, i) =>
             p.type === "md" ? (
               <Markdown key={i} content={p.content} />
-            ) : (
+            ) : p.type === "ad" ? (
               <AdSlot key={i} name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
+            ) : (
+              <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
             ),
           )}
 
@@ -312,6 +344,9 @@ export default async function ArticlePage({ params }: Props) {
             <CommentForm articleId={article.id} />
           </div>
         </section>
+
+        {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
+        <AdSenseSlot enabled={adsOn} slot="article-end" minHeight={300} />
 
         {related.length > 0 && (
           <section className="mt-16 border-t border-border pt-10">

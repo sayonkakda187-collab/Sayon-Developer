@@ -2,6 +2,11 @@ import { prisma } from "@/lib/db";
 import { saveArticle } from "@/app/admin/actions";
 import { ArticleForm } from "@/components/admin/ArticleForm";
 
+// Publishing a brand-new article here can auto-generate its Key Points via the AI
+// (a few seconds); give the server action room beyond the 10s default so it never
+// truncates the publish (60s is the Vercel Hobby ceiling).
+export const maxDuration = 60;
+
 export default async function NewArticlePage({
   searchParams,
 }: {

@@ -4,7 +4,9 @@ import { LedgerHero } from "@/components/ledger/LedgerHero";
 import { Latest } from "@/components/ledger/Latest";
 import { MostRead } from "@/components/MostRead";
 import { AdSlot } from "@/components/AdSlot";
+import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { ADS } from "@/lib/ads";
+import { adsenseEnabled } from "@/lib/adsense";
 
 // Desk order used when a category is present (others append alphabetically).
 const DESK_ORDER = ["Business", "Sports", "Technology", "World"];
@@ -26,6 +28,7 @@ export default async function Home() {
   const hero = toLedgerStory(featured);
   const leads = feed.slice(0, 2).map(toLedgerStory);
   const pool = feed.slice(2).map(toLedgerStory);
+  const adsOn = await adsenseEnabled();
 
   // Filter pills = "Top" + the desks actually present in the pool.
   const present = Array.from(new Set(pool.map((s) => s.cat)));
@@ -46,6 +49,9 @@ export default async function Home() {
       <div style={{ padding: "28px 0" }}>
         <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={120} />
       </div>
+
+      {/* Reserved Google AdSense slot between the upper sections and the feed. */}
+      <AdSenseSlot enabled={adsOn} slot="home-mid" className="max-w-3xl" />
 
       <Latest stories={pool} filters={filters} />
     </main>
