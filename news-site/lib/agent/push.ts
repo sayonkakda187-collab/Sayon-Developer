@@ -55,6 +55,31 @@ export async function sendApprovalPush(action: AgentActionRecord): Promise<void>
   await Promise.all(subs.map((s) => sendTo(s, payload)));
 }
 
+/** One push summarizing a Morning Auto-Pilot run. On success it announces the
+ *  draft count and deep-links to the articles list; on failure it says the run
+ *  couldn't complete. Best-effort — never throws. */
+export async function sendAutopilotPush(opts: {
+  ok: boolean;
+  count?: number;
+  message?: string;
+  url?: string;
+}): Promise<void> {
+  if (!ensure()) return;
+  const subs = await getPushSubs();
+  if (subs.length === 0) return;
+  const n = opts.count ?? 0;
+  const body = opts.ok
+    ? `${n} draft${n === 1 ? "" : "s"} ready for review`
+    : opts.message || "Auto-Pilot could not run today";
+  const payload = {
+    title: "Auto-Pilot",
+    body,
+    url: opts.url || "/admin/articles",
+    tag: "agent-autopilot",
+  };
+  await Promise.all(subs.map((s) => sendTo(s, payload)));
+}
+
 /** A confirmation push when a device first enables notifications. */
 export async function sendTestPush(): Promise<number> {
   if (!ensure()) return 0;

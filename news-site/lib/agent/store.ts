@@ -13,11 +13,30 @@ const SETTINGS_KEY = "agent_settings";
 const ACTIONS_KEY = "agent_actions";
 const MAX_ACTIONS = 80;
 
+// Morning Auto-Pilot: a once-daily job that drafts trending stories for review.
+// Default OFF; the owner enables it. runTimeUtc is "HH:MM" 24h UTC (shown in the
+// admin as Asia/Phnom_Penh). categories = category slugs to include ([] = all).
+export type AutopilotSettings = {
+  enabled: boolean;
+  runTimeUtc: string;
+  draftCount: number;
+  categories: string[];
+};
+
 export type AgentSettings = {
   capabilities: { newsSearch: boolean; drafting: boolean; editing: boolean; publishing: boolean; sharing: boolean };
   requireApproval: { editLive: boolean; publishing: boolean; sharing: boolean };
   customInstructions: string;
   model: string | null;
+  autopilot: AutopilotSettings;
+};
+
+// 23:00 UTC == 06:00 Asia/Phnom_Penh (UTC+7, no DST) — the default run time.
+export const AUTOPILOT_DEFAULTS: AutopilotSettings = {
+  enabled: false,
+  runTimeUtc: "23:00",
+  draftCount: 3,
+  categories: [],
 };
 
 export const AGENT_DEFAULTS: AgentSettings = {
@@ -26,9 +45,26 @@ export const AGENT_DEFAULTS: AgentSettings = {
   requireApproval: { editLive: true, publishing: true, sharing: true },
   customInstructions: "",
   model: null,
+  autopilot: AUTOPILOT_DEFAULTS,
 };
 
-export type AgentActionType = "publish_article" | "update_published_article" | "share_to_facebook";
+/** Coerce a stored/partial autopilot blob into a valid AutopilotSettings. */
+export function normalizeAutopilot(p: Partial<AutopilotSettings> | undefined): AutopilotSettings {
+  const time = typeof p?.runTimeUtc === "string" && /^\d{2}:\d{2}$/.test(p.runTimeUtc) ? p.runTimeUtc : AUTOPILOT_DEFAULTS.runTimeUtc;
+  const count = Number(p?.draftCount);
+  return {
+    enabled: Boolean(p?.enabled),
+    runTimeUtc: time,
+    draftCount: Number.isFinite(count) ? Math.min(5, Math.max(1, Math.round(count))) : AUTOPILOT_DEFAULTS.draftCount,
+    categories: Array.isArray(p?.categories) ? p.categories.filter((c): c is string => typeof c === "string") : [],
+  };
+}
+
+export type AgentActionType =
+  | "publish_article"
+  | "update_published_article"
+  | "share_to_facebook"
+  | "autopilot_run";
 export type AgentActionStatus = "pending" | "rejected" | "done" | "failed";
 export type AgentActionRecord = {
   id: string;
@@ -53,6 +89,7 @@ export async function getAgentSettings(): Promise<AgentSettings> {
       requireApproval: { ...AGENT_DEFAULTS.requireApproval, ...(p.requireApproval ?? {}) },
       customInstructions: typeof p.customInstructions === "string" ? p.customInstructions : "",
       model: typeof p.model === "string" ? p.model : null,
+      autopilot: normalizeAutopilot(p.autopilot),
     };
   } catch {
     return AGENT_DEFAULTS;
@@ -65,6 +102,7 @@ export async function saveAgentSettings(s: AgentSettings): Promise<void> {
     ...s,
     requireApproval: { ...s.requireApproval, publishing: true, sharing: true },
     customInstructions: (s.customInstructions ?? "").slice(0, 4000),
+    autopilot: normalizeAutopilot(s.autopilot),
   };
   const value = JSON.stringify(safe);
   await prisma.appSetting.upsert({
