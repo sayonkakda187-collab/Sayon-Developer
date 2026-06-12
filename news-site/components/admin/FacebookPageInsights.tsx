@@ -840,7 +840,7 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
             <SearchIcon className="h-4 w-4" aria-hidden />
             <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search Pages or groups…" aria-label="Search Pages" />
             {query && (
-              <button type="button" className="adm-iconbtn" aria-label="Clear search" onClick={() => setQuery("")} style={{ width: 24, height: 24 }}>
+              <button type="button" className="adm-iconbtn" aria-label="Clear search" onClick={() => setQuery("")} style={{ width: 32, height: 32 }}>
                 <CloseIcon className="h-4 w-4" />
               </button>
             )}
