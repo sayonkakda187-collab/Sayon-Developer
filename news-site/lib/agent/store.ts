@@ -14,14 +14,34 @@ const SETTINGS_KEY = "agent_settings";
 const ACTIONS_KEY = "agent_actions";
 const MAX_ACTIONS = 80;
 
-// Morning Auto-Pilot: a once-daily job that drafts trending stories for review.
-// Default OFF; the owner enables it. runTimeUtc is "HH:MM" 24h UTC (shown in the
-// admin as Asia/Phnom_Penh). categories = category slugs to include ([] = all).
+// Morning Auto-Pilot: now a list of scheduled "Runs" (up to 6/day). Each Run finds
+// trending stories and either DRAFTS them for approval (DEFAULT) or AUTO-PUBLISHES
+// them (explicit opt-in). Times are stored as UTC "HH:MM" (shown in the admin as
+// Asia/Phnom_Penh). categories = category slugs ([] = all); keyword = optional focus.
+export type AutopilotRunMode = "draft" | "publish";
+export type AutopilotPublishMode = "now" | "stagger";
+export type AutopilotRun = {
+  id: string;
+  timeUtc: string; // "HH:MM" 24h UTC
+  categories: string[];
+  keyword: string;
+  count: number; // 1-5
+  mode: AutopilotRunMode; // "draft" (DEFAULT) | "publish"
+  publishMode: AutopilotPublishMode; // publish-mode only: "now" | "stagger" into preferred slots
+  enabled: boolean;
+};
+
+// Master switch (`enabled`) + a "pause all auto-publish" kill switch + a global
+// daily cap on auto-published articles. `runs` is the new source of truth; the
+// legacy single-run fields are kept so old saved settings migrate cleanly.
 export type AutopilotSettings = {
   enabled: boolean;
-  runTimeUtc: string;
-  draftCount: number;
-  categories: string[];
+  pauseAutoPublish: boolean;
+  dailyAutoPublishCap: number;
+  runs: AutopilotRun[];
+  runTimeUtc: string; // legacy (seed)
+  draftCount: number; // legacy (seed)
+  categories: string[]; // legacy (seed)
 };
 
 export type AgentSettings = {
@@ -35,9 +55,14 @@ export type AgentSettings = {
   preferredTimes: string[];
 };
 
+export const MAX_AUTOPILOT_RUNS = 6;
+
 // 23:00 UTC == 06:00 Asia/Phnom_Penh (UTC+7, no DST) — the default run time.
 export const AUTOPILOT_DEFAULTS: AutopilotSettings = {
   enabled: false,
+  pauseAutoPublish: false,
+  dailyAutoPublishCap: 10,
+  runs: [],
   runTimeUtc: "23:00",
   draftCount: 3,
   categories: [],
@@ -53,15 +78,47 @@ export const AGENT_DEFAULTS: AgentSettings = {
   preferredTimes: ["19:00", "21:00", "23:00"],
 };
 
-/** Coerce a stored/partial autopilot blob into a valid AutopilotSettings. */
+/** Coerce a stored/partial Run into a valid AutopilotRun. New Runs default to the
+ *  SAFE "draft" mode — auto-publish is always an explicit opt-in. */
+export function normalizeRun(p: Partial<AutopilotRun> | undefined): AutopilotRun {
+  const time = typeof p?.timeUtc === "string" && /^\d{2}:\d{2}$/.test(p.timeUtc) ? p.timeUtc : "23:00";
+  const count = Number(p?.count);
+  return {
+    id: typeof p?.id === "string" && p.id ? p.id : randomUUID(),
+    timeUtc: time,
+    categories: Array.isArray(p?.categories) ? p.categories.filter((c): c is string => typeof c === "string") : [],
+    keyword: typeof p?.keyword === "string" ? p.keyword.slice(0, 80) : "",
+    count: Number.isFinite(count) ? Math.min(5, Math.max(1, Math.round(count))) : 3,
+    mode: p?.mode === "publish" ? "publish" : "draft",
+    publishMode: p?.publishMode === "now" ? "now" : "stagger",
+    enabled: p?.enabled !== false,
+  };
+}
+
+/** Coerce a stored/partial autopilot blob into a valid AutopilotSettings. Migrates
+ *  the old single-run config into one DRAFT Run, so existing setups keep behaving
+ *  exactly as before (drafts for approval). */
 export function normalizeAutopilot(p: Partial<AutopilotSettings> | undefined): AutopilotSettings {
-  const time = typeof p?.runTimeUtc === "string" && /^\d{2}:\d{2}$/.test(p.runTimeUtc) ? p.runTimeUtc : AUTOPILOT_DEFAULTS.runTimeUtc;
-  const count = Number(p?.draftCount);
+  const legacyTime = typeof p?.runTimeUtc === "string" && /^\d{2}:\d{2}$/.test(p.runTimeUtc) ? p.runTimeUtc : AUTOPILOT_DEFAULTS.runTimeUtc;
+  const legacyCountRaw = Number(p?.draftCount);
+  const legacyCount = Number.isFinite(legacyCountRaw) ? Math.min(5, Math.max(1, Math.round(legacyCountRaw))) : AUTOPILOT_DEFAULTS.draftCount;
+  const legacyCats = Array.isArray(p?.categories) ? p.categories.filter((c): c is string => typeof c === "string") : [];
+
+  let runs: AutopilotRun[] = Array.isArray(p?.runs) ? p.runs.slice(0, MAX_AUTOPILOT_RUNS).map((r) => normalizeRun(r)) : [];
+  if (runs.length === 0) {
+    // Back-compat / first run: a single DRAFT run at the legacy time.
+    runs = [normalizeRun({ timeUtc: legacyTime, categories: legacyCats, count: legacyCount, mode: "draft", publishMode: "stagger", enabled: true })];
+  }
+
+  const capRaw = Number(p?.dailyAutoPublishCap);
   return {
     enabled: Boolean(p?.enabled),
-    runTimeUtc: time,
-    draftCount: Number.isFinite(count) ? Math.min(5, Math.max(1, Math.round(count))) : AUTOPILOT_DEFAULTS.draftCount,
-    categories: Array.isArray(p?.categories) ? p.categories.filter((c): c is string => typeof c === "string") : [],
+    pauseAutoPublish: Boolean(p?.pauseAutoPublish),
+    dailyAutoPublishCap: Number.isFinite(capRaw) ? Math.min(100, Math.max(0, Math.round(capRaw))) : AUTOPILOT_DEFAULTS.dailyAutoPublishCap,
+    runs,
+    runTimeUtc: legacyTime,
+    draftCount: legacyCount,
+    categories: legacyCats,
   };
 }
 
