@@ -18,7 +18,6 @@ import {
   type InsightsPageRow,
 } from "@/components/admin/FacebookPageInsights";
 import { FacebookShareSettings } from "@/components/admin/FacebookShareSettings";
-import { FacebookShareModeCard } from "@/components/admin/FacebookShareModeCard";
 import { getFacebookConnectStatus } from "@/lib/facebookSettings";
 import { getFbShareSettings } from "@/lib/facebookShareSettings";
 
@@ -108,7 +107,6 @@ export default async function AdminFacebookPage() {
     <ToastProvider>
       <FacebookTopActions userTokenSaved={Boolean(connect?.userTokenSaved)} />
       <FacebookStats pages={view} />
-      <FacebookShareModeCard initial={shareSettings} />
       <FacebookTabs
         defaultId="share"
         tabs={[
