@@ -983,6 +983,37 @@ auto-share fires at publish time, not approval time**. Additive `Article.schedul
   (next FREE preferred slots, excluding already-scheduled times), so approving several
   drafts in a row lands each on the next open slot.
 
+## Facebook share mode: "Photo + link in comments"
+
+A second Facebook share mode (alongside the original "Link post"): post the
+article's featured **image as a native photo post** with a caption that points to
+the comments, then add the article link as the **first comment from the Page**.
+Built entirely on the existing chokepoint (`publishArticleToPage`), so **every**
+trigger respects the mode — auto-share on publish, scheduled publish-time shares,
+agent shares, manual "Share now", Re-share, and the cron. Additive migration
+(`ScheduledPost.mode` + `commentId` + `commentError`).
+
+- **Graph** (`lib/facebook.ts`): `postPhotoToPage` (`POST /{page}/photos` with the
+  image url + caption) + `commentOnPost` (`POST /{post}/comments` AS THE PAGE).
+  `FacebookApiError.permission` is set on a missing-scope error (codes 200/10/3/299
+  or a `pages_manage_engagement` message) with a clear reconnect message.
+- **Chokepoint** (`lib/facebookPublish.ts`): photo mode posts the photo, then adds
+  the link comment with a **transient-only retry**. If the photo lands but the
+  comment fails it returns `ok:true` + `commentError` (never silently missing). No
+  featured image → the **branded OG card** (`/news/[slug]/opengraph-image`) is used.
+  Image **credit** (incl. Wikimedia author+license) is included in the caption.
+- **Settings + records:** global default mode + editable caption/comment templates
+  (`lib/facebookShareSettings.ts`, `lib/facebookShareTemplates.ts`; tokens
+  `{headline} {excerpt} {credit} {url}`) on a new **Settings** tab in `/admin/facebook`.
+  A **per-share override** sits in "Share now". Records store both the post id and
+  the comment id; metrics work for photo posts. **Results** tab surfaces a
+  "comment didn't post" warning + a one-click **"Add comment"** retry
+  (`retryShareComment`).
+- ⚠️ Commenting as the Page needs **`pages_manage_engagement`** on the Page token —
+  reconnect Pages granting that scope (added to `pages_show_list` +
+  `pages_read_engagement` + `pages_manage_posts`). The default mode stays **Link
+  post**, so nothing changes until you switch it.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

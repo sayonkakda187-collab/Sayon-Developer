@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { publishArticleToPage } from "@/lib/facebookPublish";
+import { getFbShareSettings } from "@/lib/facebookShareSettings";
+import { isShareMode } from "@/lib/facebookShareTemplates";
 
 // Always run dynamically on the server (never statically cached): this route
 // mutates the DB and calls the Graph API.
@@ -31,6 +33,8 @@ function authorize(req: Request): boolean {
 
 async function runDuePosts() {
   const now = new Date();
+  // Templates for photo-mode shares (the per-row mode is stored on each post).
+  const shareSettings = await getFbShareSettings();
 
   // Find due, still-pending posts.
   const due = await prisma.scheduledPost.findMany({
@@ -55,7 +59,7 @@ async function runDuePosts() {
     const post = await prisma.scheduledPost.findUnique({
       where: { id },
       include: {
-        article: { select: { id: true, title: true, slug: true, excerpt: true } },
+        article: { select: { id: true, title: true, slug: true, excerpt: true, coverImage: true, coverCredit: true, coverImageSource: true } },
         facebookPage: true,
       },
     });
@@ -73,11 +77,25 @@ async function runDuePosts() {
     }
 
     try {
-      const result = await publishArticleToPage(post.article, post.facebookPage, post.caption ?? undefined);
+      const shareConfig = {
+        mode: isShareMode(post.mode) ? post.mode : "link",
+        caption: post.caption ?? undefined,
+        captionTemplate: shareSettings.captionTemplate,
+        commentTemplate: shareSettings.commentTemplate,
+      };
+      const result = await publishArticleToPage(post.article, post.facebookPage, shareConfig);
       await prisma.scheduledPost.update({
         where: { id },
         data: result.ok
-          ? { status: "posted", postedAt: new Date(), graphPostId: result.graphPostId ?? null, error: null }
+          ? {
+              status: "posted",
+              postedAt: new Date(),
+              graphPostId: result.graphPostId ?? null,
+              error: null,
+              mode: result.mode ?? null,
+              commentId: result.commentId ?? null,
+              commentError: result.commentError ?? null,
+            }
           : { status: "failed", error: result.error ?? "Unknown error." },
       });
       processed.push({ id, ok: result.ok, error: result.ok ? undefined : result.error });

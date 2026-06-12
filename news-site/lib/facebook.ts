@@ -29,17 +29,20 @@ export class FacebookApiError extends Error {
   readonly expired: boolean;
   /** True when Facebook is rate-limiting us (codes 4/17/32/341/613 or HTTP 429). */
   readonly rateLimited: boolean;
+  /** True when the token lacks a required permission (e.g. pages_manage_engagement). */
+  readonly permission: boolean;
   readonly code?: number;
   readonly subcode?: number;
 
   constructor(
     message: string,
-    opts: { expired?: boolean; rateLimited?: boolean; code?: number; subcode?: number } = {},
+    opts: { expired?: boolean; rateLimited?: boolean; permission?: boolean; code?: number; subcode?: number } = {},
   ) {
     super(message);
     this.name = "FacebookApiError";
     this.expired = opts.expired ?? false;
     this.rateLimited = opts.rateLimited ?? false;
+    this.permission = opts.permission ?? false;
     this.code = opts.code;
     this.subcode = opts.subcode;
   }
@@ -51,6 +54,9 @@ const TOKEN_INVALID_CODES = new Set([190, 102, 463, 467, 2500]);
 /** Graph error codes that mean "you're being throttled / temporarily blocked." */
 const RATE_LIMIT_CODES = new Set([4, 17, 32, 341, 613]);
 
+/** Graph error codes that mean "this token lacks a required permission." */
+const PERMISSION_CODES = new Set([10, 200, 3, 299]);
+
 function toFriendlyError(
   err: GraphError | undefined,
   fallback: string,
@@ -59,13 +65,19 @@ function toFriendlyError(
   const code = err?.code;
   const expired = code != null && TOKEN_INVALID_CODES.has(code);
   const rateLimited = httpStatus === 429 || (code != null && RATE_LIMIT_CODES.has(code));
+  const msgLc = (err?.message || "").toLowerCase();
+  const permission =
+    !expired &&
+    ((code != null && PERMISSION_CODES.has(code)) || msgLc.includes("pages_manage_engagement") || msgLc.includes("permission"));
   const base = err?.message?.trim() || fallback;
   const message = expired
     ? `${base} (the Page access token is invalid or expired — reconnect the page).`
     : rateLimited
       ? `${base} (Facebook rate limit reached — wait a few minutes before trying again).`
-      : base;
-  return new FacebookApiError(message, { expired, rateLimited, code, subcode: err?.error_subcode });
+      : permission
+        ? `${base} (the Page token is missing the "pages_manage_engagement" permission needed to comment as the Page — reconnect the page with that scope granted).`
+        : base;
+  return new FacebookApiError(message, { expired, rateLimited, permission, code, subcode: err?.error_subcode });
 }
 
 /** Parse a Graph response, throwing a categorized error on failure. */
@@ -152,6 +164,65 @@ export async function postToPage(args: {
     throw new FacebookApiError("Facebook accepted the request but returned no post id.");
   }
   return { postId: data.id };
+}
+
+/**
+ * Publish a PHOTO post to a Page from an image URL (official POST /{pageId}/photos
+ * with `url` + `caption`). Facebook fetches the image and creates a native photo
+ * post (not a link preview). Returns the FEED post id (`post_id`, "{page}_{post}")
+ * for permalink / comments / stats — falling back to the photo id if needed.
+ */
+export async function postPhotoToPage(args: {
+  pageId: string;
+  accessToken: string;
+  imageUrl: string;
+  caption: string;
+}): Promise<{ postId: string; photoId?: string }> {
+  const body = new URLSearchParams();
+  body.set("url", args.imageUrl);
+  body.set("caption", args.caption);
+  body.set("published", "true");
+  body.set("access_token", args.accessToken);
+
+  const res = await graphFetch(`${GRAPH_BASE}/${encodeURIComponent(args.pageId)}/photos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+    cache: "no-store",
+  });
+  const data = await parseGraph<{ id?: string; post_id?: string }>(res, "Facebook rejected the photo post");
+  const postId = data.post_id || data.id;
+  if (!postId) {
+    throw new FacebookApiError("Facebook accepted the photo but returned no post id.");
+  }
+  return { postId, photoId: data.id };
+}
+
+/**
+ * Add a comment to a post AS THE PAGE (official POST /{postId}/comments).
+ * Requires the `pages_manage_engagement` permission on the Page token — a missing
+ * permission surfaces as FacebookApiError with `.permission === true`.
+ */
+export async function commentOnPost(args: {
+  postId: string;
+  accessToken: string;
+  message: string;
+}): Promise<{ commentId: string }> {
+  const body = new URLSearchParams();
+  body.set("message", args.message);
+  body.set("access_token", args.accessToken);
+
+  const res = await graphFetch(`${GRAPH_BASE}/${encodeURIComponent(args.postId)}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+    cache: "no-store",
+  });
+  const data = await parseGraph<{ id?: string }>(res, "Facebook rejected the comment");
+  if (!data.id) {
+    throw new FacebookApiError("Facebook accepted the comment but returned no comment id.");
+  }
+  return { commentId: data.id };
 }
 
 /**

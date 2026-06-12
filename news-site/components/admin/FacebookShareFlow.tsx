@@ -14,6 +14,7 @@ import { useToast } from "@/components/admin/Toast";
 import { ConnectModal } from "./FacebookConnectModal";
 import { ArticleThumb } from "./ArticleThumb";
 import type { FacebookPageView } from "./FacebookPagesManager";
+import { type ShareMode, SHARE_MODE_LABEL } from "@/lib/facebookShareTemplates";
 import {
   FacebookIcon,
   PlusIcon,
@@ -37,6 +38,7 @@ type ShareJob = {
   label: string; // group label, e.g. "US News" (or "N pages" when mixed)
   article: ShareArticleItem;
   caption: string;
+  shareMode: ShareMode;
   pages: JobPage[];
   delaySeconds: number;
   jitter: boolean;
@@ -283,7 +285,7 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
         const pg = pages[i];
         pendingRef.current.delete(pg.id); // now owned by the live path — never queue it
         setProgress((p) => ({ ...p, [pg.id]: { status: "posting" } }));
-        const res = await publishArticleNow({ articleId: job.article.id, pageDbIds: [pg.id], caption: job.caption });
+        const res = await publishArticleNow({ articleId: job.article.id, pageDbIds: [pg.id], caption: job.caption, mode: job.shareMode });
         const r = res.ok ? res.data[0] : null;
         if (res.ok && r?.ok) {
           okCount++;
@@ -419,8 +421,10 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
  */
 export function FacebookShareFlow({
   pages,
+  defaultShareMode = "link",
 }: {
   pages: FacebookPageView[];
+  defaultShareMode?: ShareMode;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -446,6 +450,8 @@ export function FacebookShareFlow({
   // Step 2 — compose
   const [article, setArticle] = useState<ShareArticleItem | null>(null);
   const [caption, setCaption] = useState("");
+  // Share mode for this batch (seeded from the global default; overridable here).
+  const [shareMode, setShareMode] = useState<ShareMode>(defaultShareMode);
 
   // Between-pages delay (captured into a job when you launch it).
   const [delaySeconds, setDelaySeconds] = useState(DEFAULT_DELAY);
@@ -635,6 +641,7 @@ export function FacebookShareFlow({
       label,
       article,
       caption,
+      shareMode,
       pages: sel.map((p) => ({ id: p.id, name: p.pageName, status: p.status })),
       delaySeconds,
       jitter,
@@ -669,7 +676,7 @@ export function FacebookShareFlow({
       schedules.push({ pageDbId: id, scheduledAt: iso });
     }
     setScheduling(true);
-    const res = await scheduleArticleShares({ articleId: article.id, caption, schedules });
+    const res = await scheduleArticleShares({ articleId: article.id, caption, mode: shareMode, schedules });
     setScheduling(false);
     if (!res.ok) return error(res.error);
     setScheduledOk(schedules.map((s) => ({
@@ -958,6 +965,19 @@ export function FacebookShareFlow({
                       placeholder="Caption for the Facebook post"
                     />
                     <span className="adm-field-hint">The article link preview is attached automatically by Facebook. Edit the text or leave the default.</span>
+                  </label>
+
+                  <label className="adm-field" style={{ marginTop: 12, maxWidth: 320 }}>
+                    <span>Share as</span>
+                    <select className="adm-input" value={shareMode} onChange={(e) => setShareMode(e.target.value as ShareMode)} aria-label="Share mode">
+                      <option value="link">{SHARE_MODE_LABEL.link}</option>
+                      <option value="photo">{SHARE_MODE_LABEL.photo}</option>
+                    </select>
+                    <span className="adm-field-hint">
+                      {shareMode === "photo"
+                        ? "Posts the featured image as a photo post; the article link is added as the first comment from the Page."
+                        : "Posts the article link (Facebook renders its preview card)."}
+                    </span>
                   </label>
                 </div>
               </div>
