@@ -33,6 +33,27 @@ import {
 
 type SiteOption = { id: string; name: string; isDefault: boolean };
 
+// Route → section id (drives the --section-accent token system in globals.css).
+// Longest/first matching prefix wins; /admin (exact) is the dashboard.
+const SECTION_ROUTES: [string, string][] = [
+  ["audience", "/admin/audience"],
+  ["articles", "/admin/articles"],
+  ["trending", "/admin/trending"],
+  ["categories", "/admin/categories"],
+  ["comments", "/admin/comments"],
+  ["facebook", "/admin/facebook"],
+  ["ai-assistant", "/admin/ai-assistant"],
+  ["ai-images", "/admin/ai-images"],
+  ["scheduled", "/admin/scheduled"],
+  ["sites", "/admin/sites"],
+  ["settings", "/admin/settings"],
+];
+function sectionFor(pathname: string): string {
+  if (pathname === "/admin") return "dashboard";
+  for (const [id, href] of SECTION_ROUTES) if (pathname.startsWith(href)) return id;
+  return "dashboard";
+}
+
 const NAV = [
   { tab: "dashboard", label: "Dashboard", drawerLabel: "Dashboard", href: "/admin", Icon: DashboardIcon },
   { tab: "audience", label: "Audience", drawerLabel: "Audience", href: "/admin/audience", Icon: GlobeIcon },
@@ -124,7 +145,7 @@ export function AdminShell({
   );
 
   return (
-    <div className="admin-shell adm-stage" style={{ flex: 1 }}>
+    <div className="admin-shell adm-stage" data-section={sectionFor(pathname)} style={{ flex: 1 }}>
       {/* ── Desktop top bar (≥1024px) ── */}
       <header className="adm-topbar adm-only-desktop">
         {brand}

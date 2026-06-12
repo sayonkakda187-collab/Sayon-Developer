@@ -306,7 +306,7 @@ body {
 [data-adm-theme="dark"] .admin-shell .adm-ctrack { background: rgba(255, 255, 255, 0.08); }
 [data-adm-theme="dark"] .admin-shell .adm-tag { background: rgba(255, 255, 255, 0.05); color: #cbd5e1; }
 [data-adm-theme="dark"] .admin-shell .adm-input { background: rgba(255, 255, 255, 0.05); color: var(--adm-ink); }
-[data-adm-theme="dark"] .admin-shell .adm-fchip.on { background: #1e293b; border-color: #334155; }
+[data-adm-theme="dark"] .admin-shell .adm-fchip.on { background: var(--section-tint-2); border-color: var(--section-accent); }
 [data-adm-theme="dark"] .admin-shell .adm-pill { background: rgba(52, 211, 123, 0.16); color: #4ade80; }
 [data-adm-theme="dark"] .admin-shell .adm-pill.amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
 [data-adm-theme="dark"] .admin-shell .adm-btn-ghost { background: rgba(255, 255, 255, 0.06); color: var(--adm-ink); }
@@ -540,7 +540,7 @@ body {
 
 /* ── Article rows ────────────────────────────────────────────────────────── */
 .adm-list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-.adm-link { font-size: 13px; font-weight: 600; color: var(--adm-green); cursor: pointer; }
+.adm-link { font-size: 13px; font-weight: 600; color: var(--section-link); cursor: pointer; }
 .adm-arow { display: flex; gap: 11px; padding: 11px 0; border-top: 1px solid var(--adm-bd); }
 .adm-arow:first-of-type { border-top: none; }
 .adm-ini { width: 34px; height: 34px; border-radius: 9px; background: #eef1f4; color: #475569; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -574,10 +574,22 @@ body {
 .adm-page-h { margin-bottom: 16px; }
 .adm-page-h h1 { font-size: 22px; font-weight: 700; color: var(--adm-ink); letter-spacing: -0.5px; }
 .adm-page-h p { font-size: 13px; color: var(--adm-muted); margin-top: 3px; }
+/* Section identity on page headers: a small gradient accent chip before the title
+   + a thin accent underline. Pure CSS (no per-page markup); driven by the
+   --section-* tokens below. */
+.adm-page-h h1::before, .adm-welcome h1::before {
+  content: ""; display: inline-block; vertical-align: -2px; width: 7px; height: 21px;
+  margin-right: 11px; border-radius: 4px;
+  background: linear-gradient(180deg, var(--section-accent), rgb(var(--sa) / 0.5));
+}
+.adm-page-h::after {
+  content: ""; display: block; width: 46px; height: 3px; border-radius: 3px; margin-top: 11px;
+  background: linear-gradient(90deg, var(--section-accent), rgb(var(--sa) / 0));
+}
 .adm-filterbar { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
 .adm-filterbar::-webkit-scrollbar { height: 0; }
 .adm-fchip { font-size: 12.5px; font-weight: 600; color: var(--adm-muted); background: var(--adm-card); border: 1px solid var(--adm-bd); border-radius: 999px; padding: 8px 14px; white-space: nowrap; cursor: pointer; min-height: 36px; }
-.adm-fchip.on { background: var(--adm-navy); color: #fff; border-color: var(--adm-navy); }
+.adm-fchip.on { background: var(--section-tint-2); color: var(--section-link); border-color: var(--section-accent); }
 
 /* ── Categories screen ───────────────────────────────────────────────────── */
 .adm-catcard { padding: 16px; display: flex; align-items: center; gap: 13px; }
@@ -594,7 +606,7 @@ body {
   padding: 11px 13px; font-size: 14px; color: var(--adm-ink); outline: none; transition: border-color 0.15s;
 }
 .adm-input::placeholder { color: #94a3b8; }
-.adm-input:focus { border-color: var(--adm-green); }
+.adm-input:focus { border-color: var(--section-accent); box-shadow: 0 0 0 3px var(--section-tint); }
 
 /* ── Empty state (comments) ──────────────────────────────────────────────── */
 .adm-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 54px 24px; }
@@ -611,18 +623,10 @@ body {
 }
 .adm-tab { flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; cursor: pointer; font-size: 10.5px; font-weight: 600; color: var(--adm-muted-2); }
 .adm-tab svg { width: 23px; height: 23px; padding: 4px 12px; border-radius: 11px; box-sizing: content-box; transition: background 0.18s; }
-.adm-tab[data-tab="dashboard"].on { color: #16a34a; }
-.adm-tab[data-tab="articles"].on { color: #f59e0b; }
-.adm-tab[data-tab="trending"].on { color: #e11d48; }
-.adm-tab[data-tab="categories"].on { color: #a855f7; }
-.adm-tab[data-tab="comments"].on { color: #2563eb; }
-.adm-tab[data-tab="facebook"].on { color: #1877f2; }
-.adm-tab[data-tab="dashboard"].on svg { background: rgba(22, 163, 74, 0.12); }
-.adm-tab[data-tab="articles"].on svg { background: rgba(245, 158, 11, 0.14); }
-.adm-tab[data-tab="trending"].on svg { background: rgba(225, 29, 72, 0.12); }
-.adm-tab[data-tab="categories"].on svg { background: rgba(168, 85, 247, 0.13); }
-.adm-tab[data-tab="comments"].on svg { background: rgba(37, 99, 235, 0.12); }
-.adm-tab[data-tab="facebook"].on svg { background: rgba(24, 119, 242, 0.13); }
+/* Active bottom-tab uses the page's section accent (label = AA-safe variant,
+   icon = vivid accent on a soft tint). Driven by the --section-* tokens below. */
+.adm-tab.on { color: var(--section-link); }
+.adm-tab.on svg { color: var(--section-accent); background: var(--section-tint); }
 /* Six tabs now share the bottom bar — tighten icon padding + label size so
    nothing overflows on the narrowest phones. */
 .adm-tab { min-width: 0; font-size: 10px; letter-spacing: -0.1px; }
@@ -667,11 +671,8 @@ body {
 .adm-dlink:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 .adm-dlink:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.12); }
 .adm-dlink.on { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.adm-dlink[data-tab="dashboard"].on svg { color: #34d27b; }
-.adm-dlink[data-tab="articles"].on svg { color: #fbbf24; }
-.adm-dlink[data-tab="categories"].on svg { color: #c084fc; }
-.adm-dlink[data-tab="comments"].on svg { color: #60a5fa; }
-.adm-dlink[data-tab="facebook"].on svg { color: #60a5fa; }
+/* The drawer is always dark → use the bright accent variant for the active icon. */
+.adm-dlink.on svg { color: var(--section-accent-bright); }
 .adm-dfoot { padding: 0 12px; display: flex; flex-direction: column; gap: 4px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 
 /* Staggered slide-in of drawer links once the panel is open. */
@@ -857,12 +858,9 @@ body {
   .adm-navitem { display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 12px; color: #475569; font-size: 14.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background 0.15s; }
   .adm-navitem svg { width: 19px; height: 19px; flex: none; }
   .adm-navitem:hover { background: rgba(255, 255, 255, 0.45); }
-  .adm-navitem.on { background: rgba(255, 255, 255, 0.78); border-color: rgba(255, 255, 255, 0.9); color: var(--adm-ink-strong); box-shadow: 0 4px 14px rgba(16, 24, 40, 0.07); }
-  .adm-navitem[data-tab="dashboard"].on svg { color: var(--adm-green); }
-  .adm-navitem[data-tab="articles"].on svg { color: var(--adm-amber); }
-  .adm-navitem[data-tab="categories"].on svg { color: var(--adm-purple); }
-  .adm-navitem[data-tab="comments"].on svg { color: var(--adm-blue); }
-  .adm-navitem[data-tab="facebook"].on svg { color: #1877f2; }
+  /* Active item: soft section tint behind it + the section-accent icon. */
+  .adm-navitem.on { background: var(--section-tint); border-color: var(--section-tint-2); color: var(--adm-ink-strong); box-shadow: none; }
+  .adm-navitem.on svg { color: var(--section-accent); }
   /* Continues the nav list directly after Facebook Pages (no bottom-pinning gap). */
   .adm-navfoot { display: flex; flex-direction: column; gap: 5px; padding-top: 5px; }
   .adm-navfoot .adm-navitem { font-weight: 500; font-size: 14px; color: #64748b; }
@@ -1049,9 +1047,9 @@ body {
 .adm-field-hint { font-size: 11.5px; color: var(--adm-muted-2); line-height: 1.45; }
 .adm-check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: var(--adm-ink); cursor: pointer; line-height: 1.4; }
 .adm-check input { margin-top: 2px; accent-color: var(--adm-green); flex: none; }
-.adm-link { color: var(--adm-blue); font-weight: 600; text-decoration: none; }
+.adm-link { color: var(--section-link); font-weight: 600; text-decoration: none; }
 .adm-link:hover { text-decoration: underline; }
-[data-adm-theme="dark"] .admin-shell .adm-link { color: #60a5fa; }
+[data-adm-theme="dark"] .admin-shell .adm-link { color: var(--section-link); }
 
 /* ── Toasts ── */
 .adm-toasts { position: fixed; z-index: 90; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; max-width: min(92vw, 360px); }
@@ -1810,7 +1808,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--adm-soft, rgba(0,0,0,0.05)); }
 [data-adm-theme="dark"] .admin-shell .adm-seg { background: rgba(255,255,255,0.06); }
 .adm-seg-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border: none; background: none; border-radius: 9px; font-size: 13.5px; font-weight: 600; color: var(--adm-muted); cursor: pointer; transition: background 0.15s, color 0.15s; }
-.adm-seg-btn.on { background: var(--adm-card); color: var(--adm-ink); box-shadow: var(--adm-shadow); }
+.adm-seg-btn.on { background: var(--adm-card); color: var(--section-link); box-shadow: var(--adm-shadow); }
 .adm-seg-btn:disabled { opacity: 0.6; cursor: default; }
 .adm-seg-tag { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; border-radius: 999px; background: rgba(245,158,11,0.18); color: #b45309; }
 [data-adm-theme="dark"] .admin-shell .adm-seg-tag { color: #fbbf24; }
@@ -1839,7 +1837,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-fb-modecard { margin-bottom: 16px; }
 .adm-fb-modeopts { display: flex; flex-wrap: wrap; gap: 8px; }
 .adm-fb-modeopts .adm-seg-btn { border: 1.5px solid var(--adm-bd); background: var(--adm-card); }
-.adm-fb-modeopts .adm-seg-btn.on { border-color: var(--adm-blue); color: var(--adm-blue); box-shadow: none; }
+.adm-fb-modeopts .adm-seg-btn.on { border-color: var(--section-accent); color: var(--section-link); box-shadow: none; }
 .adm-fb-modeacts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 
 /* ── Pagination (Prev · 1 2 … N · Next) ─────────────────────────────────────── */
@@ -1848,7 +1846,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   border: 1px solid var(--adm-bd); background: var(--adm-card); color: var(--adm-ink); border-radius: 9px;
   font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .adm-pager-btn:hover:not(:disabled):not(.on) { background: var(--adm-soft, rgba(0,0,0,0.05)); }
-.adm-pager-btn.on { background: var(--adm-blue); border-color: transparent; color: #fff; }
+.adm-pager-btn.on { background: var(--section-tint-2); border-color: var(--section-accent); color: var(--section-link); }
 .adm-pager-btn:disabled { opacity: .45; cursor: default; }
 .adm-pager-gap { color: var(--adm-muted); padding: 0 4px; user-select: none; }
 
@@ -2360,4 +2358,60 @@ a.dl-breaking-text:hover { text-decoration:none; }
      .adm-fb-sub is nowrap by default.) */
   .adm-screen :is(.adm-card, .adm-card-sub, .adm-card-title, td, th) { overflow-wrap: anywhere; }
   .adm-screen table { max-width: 100%; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SECTION ACCENT SYSTEM. Every admin area has its own identity. `data-section`
+   (set on .admin-shell by AdminShell, from the route) selects a section, which
+   sets three RGB triplets: --sa (vivid accent, for icons/rings/borders/tints —
+   UI, ≥3:1), --sa-ink (a darker, AA-safe variant for small TEXT/links in light
+   mode), and --sa-on (a brightened variant for dark surfaces / dark mode). All the
+   accent touchpoints (active nav/tab, page-header chip+underline, active
+   tabs/chips, focus rings, key links) reference the derived --section-* tokens —
+   NO hardcoded hexes in components. Status colors (success green / warning amber /
+   error red) and the neutral cards/backgrounds/body text are deliberately
+   untouched — accents are seasoning, not paint. Brand gold (--adm-gold) stays
+   reserved for premium highlights (totals, key numbers). Contrast: --sa-ink passes
+   WCAG AA as text on light; --sa-on passes AA as text on the dark theme.
+   ════════════════════════════════════════════════════════════════════════════ */
+.admin-shell {
+  /* default = Dashboard navy */
+  --sa: 27 58 95;
+  --sa-ink: 27 58 95;
+  --sa-on: 138 176 214;
+  --section-accent: rgb(var(--sa));         /* vivid — icons, rings, borders, active states */
+  --section-link: rgb(var(--sa-ink));       /* AA-safe — small text + links (light mode) */
+  --section-accent-bright: rgb(var(--sa-on)); /* always-bright — for dark surfaces (the drawer) */
+  --section-tint: rgb(var(--sa) / 0.10);    /* soft background behind the active item */
+  --section-tint-2: rgb(var(--sa) / 0.16);
+  /* Brand gold — reserved for premium highlights (NOT a section accent). */
+  --adm-gold: #b8893b;
+  /* Shared 6-colour chart palette (harmonised with the accents) for all charts. */
+  --chart-1: #2563eb; --chart-2: #0d9488; --chart-3: #7c3aed;
+  --chart-4: #ea580c; --chart-5: #db2777; --chart-6: #0891b2;
+}
+.admin-shell[data-section="dashboard"]    { --sa: 27 58 95;   --sa-ink: 27 58 95;   --sa-on: 138 176 214; }
+.admin-shell[data-section="audience"]     { --sa: 15 118 110;  --sa-ink: 15 118 110;  --sa-on: 45 212 191; }
+.admin-shell[data-section="articles"]     { --sa: 79 70 229;   --sa-ink: 79 70 229;   --sa-on: 165 180 252; }
+.admin-shell[data-section="trending"]     { --sa: 234 88 12;   --sa-ink: 194 65 12;   --sa-on: 251 146 60; }
+.admin-shell[data-section="categories"]   { --sa: 124 58 237;  --sa-ink: 124 58 237;  --sa-on: 196 181 253; }
+.admin-shell[data-section="comments"]     { --sa: 2 132 199;   --sa-ink: 3 105 161;   --sa-on: 56 189 248; }
+.admin-shell[data-section="facebook"]     { --sa: 24 119 242;  --sa-ink: 21 92 196;   --sa-on: 105 169 247; }
+.admin-shell[data-section="ai-assistant"] { --sa: 139 92 246;  --sa-ink: 109 40 217;  --sa-on: 208 180 254; }
+.admin-shell[data-section="scheduled"]    { --sa: 217 119 6;   --sa-ink: 180 83 9;    --sa-on: 251 191 36; }
+.admin-shell[data-section="ai-images"]    { --sa: 219 39 119;  --sa-ink: 190 24 93;   --sa-on: 244 114 182; }
+.admin-shell[data-section="sites"]        { --sa: 8 145 178;   --sa-ink: 14 116 144;  --sa-on: 34 211 238; }
+.admin-shell[data-section="settings"]     { --sa: 100 116 139; --sa-ink: 71 85 105;   --sa-on: 148 163 184; }
+
+/* Dark mode: accents brighten to their AA variant (--sa → --sa-on), tints rise to
+   ~16/22%, gold lifts a touch, and the chart palette brightens. Placed AFTER the
+   per-section rules so it wins at equal specificity. */
+[data-adm-theme="dark"] .admin-shell {
+  --sa: var(--sa-on);
+  --sa-ink: var(--sa-on);
+  --section-tint: rgb(var(--sa) / 0.16);
+  --section-tint-2: rgb(var(--sa) / 0.22);
+  --adm-gold: #d6a85a;
+  --chart-1: #60a5fa; --chart-2: #2dd4bf; --chart-3: #c4b5fd;
+  --chart-4: #fb923c; --chart-5: #f472b6; --chart-6: #22d3ee;
 }
