@@ -235,6 +235,14 @@ Distribute published articles to Facebook Pages from the admin panel using the
 simulation anywhere. All Graph calls are server-side; tokens never touch the
 browser.
 
+> ✅ **Token status — Reconnect ALL pages completed June 12, 2026.** Every Page
+> token now has `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`,
+> `pages_manage_engagement`, `read_insights`, and `business_management`. Commenting
+> as the Page, metrics, and Insights (reach/engagement) all have the scopes they
+> need. **Do not remind about reconnecting again** — assume scopes are present. (If
+> a specific Page later shows Expired or a `#10/#200` permission error, that's a
+> per-Page token issue to handle individually, not a blanket reconnect.)
+
 **Two-step Share flow (default Facebook tab screen):** `FacebookShareFlow`
 (`components/admin/FacebookShareFlow.tsx`) renders **Step 1 — select Page(s)**
 (selectable cards w/ avatar + status + post counts; multi-select checkboxes,
