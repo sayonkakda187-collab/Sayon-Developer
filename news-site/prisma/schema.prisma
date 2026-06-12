@@ -251,6 +251,7 @@ model FacebookPage {
 
   scheduledPosts ScheduledPost[]
   insightCache   PageInsightCache?
+  dailyCache     PageDailyCache[]
 
   @@index([categoryGroup])
   @@index([status])
@@ -264,6 +265,21 @@ model PageInsightCache {
   facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
   data           String // JSON: { followers, reach28, engagement28, status }
   fetchedAt      DateTime     @default(now())
+}
+
+// Per-(Page, date-range) cache of the day-by-day insights series (reach /
+// engagement / follows per day), so the Insights day view doesn't re-hit the
+// Graph API for every Page on each range change. `rangeKey` is "from_to" (PP
+// dates); short TTL for ranges that include today (partial/changing), longer for
+// fully-historical ranges. One row per Page per range.
+model PageDailyCache {
+  facebookPageId String
+  rangeKey       String
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  data           String // JSON: DayPoint[] = [{ date, reach, engagement, follows }]
+  fetchedAt      DateTime     @default(now())
+
+  @@id([facebookPageId, rangeKey])
 }
 
 // A backed-up logged-in browser session for the self-hosted fb-runner. The
