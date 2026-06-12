@@ -2189,7 +2189,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 
 /* ── AI Assistant (admin agent chat) ─────────────────────────────────────────── */
 /* ── AI Assistant chat surface — modern chat-app layout (purple section accent) ── */
-.adm-ac { position: relative; display: flex; flex-direction: column; height: calc(100dvh - 150px); min-height: 440px; --ac-navh: calc(70px + env(safe-area-inset-bottom)); }
+.adm-ac { position: relative; display: flex; flex-direction: column; height: calc(100dvh - 150px); min-height: 440px; }
 
 /* Header row: title + model picker + icon shortcuts + New chat. */
 .adm-ac-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--adm-bd); }
@@ -2297,20 +2297,31 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 }
 
 /* On mobile (≤1023px — where the bottom tab bar exists) the admin shell is a fixed
-   100dvh flex column whose only scroller is .adm-scroll, sitting between the app bar
-   and the bottom nav. So make the Assistant FILL that scroller (height:100%) — the
-   in-flow composer then pins at the bottom of the visible area, directly above the
-   bottom nav, and the chat scrolls inside .adm-ac-scroll. The composer is its own
-   flex row (not overlapping), so the last suggestion card is never hidden. When the
-   iOS keyboard opens, AgentChat sets --ac-kb (visualViewport overlap) and .adm-ac
-   shrinks just enough that the composer rides above the keyboard while the
-   conversation stays scrollable. Scoped to the Assistant via data-section. */
+   100dvh flex column whose only scroller is .adm-scroll, between the app bar and the
+   bottom nav. We make the Assistant FILL that scroller via FLEX (a robust definite
+   height — percentage heights were unreliable in the standalone PWA), so the chat
+   scrolls inside .adm-ac-scroll. The composer is position:FIXED and JS (visualviewport)
+   sets --ac-cb = its bottom offset: on top of the keyboard when open, just above the
+   bottom nav when closed. --ac-extra pads the scroller so the newest message stays
+   clear of the bar (and above the keyboard). Scoped to the Assistant via data-section. */
 @media (max-width: 1023px) {
-  .admin-shell[data-section="ai-assistant"] .adm-scroll { padding: 8px 0 4px; }
-  .admin-shell[data-section="ai-assistant"] .adm-screen { height: 100%; }
-  .adm-ac { height: calc(100% - max(0px, calc(var(--ac-kb, 0px) - var(--ac-navh)))); min-height: 0; padding: 0 14px; }
-  .adm-ac-composer { padding-bottom: 6px; } /* the bottom nav below carries the safe-area inset */
-  .adm-ac-fab { bottom: 86px; }
+  .admin-shell[data-section="ai-assistant"] .adm-scroll { padding: 8px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+  .admin-shell[data-section="ai-assistant"] .adm-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .adm-ac { flex: 1; min-height: 0; height: auto; padding: 0 14px; }
+
+  /* Composer pinned to the visible viewport bottom (above the keyboard when open). */
+  .adm-ac-composer {
+    position: fixed; left: 0; right: 0; z-index: 60;
+    bottom: max(var(--ac-cb, 0px), env(safe-area-inset-bottom));
+    padding: 8px 14px;
+    background: var(--adm-card);
+    -webkit-backdrop-filter: blur(14px) saturate(150%); backdrop-filter: blur(14px) saturate(150%);
+    border-top: 1px solid var(--adm-bd);
+  }
+  /* Keep the newest message clear of the fixed composer (and above the keyboard). */
+  .adm-ac-scroll { padding-bottom: calc(72px + var(--ac-extra, 0px)); }
+  /* Scroll-to-bottom FAB rides just above the composer. */
+  .adm-ac-fab { position: fixed; right: 16px; bottom: calc(max(var(--ac-cb, 0px), env(safe-area-inset-bottom)) + 64px); }
 }
 
 /* ── AI Assistant approval cards (accent border + ≥44px actions) ─────────────── */
