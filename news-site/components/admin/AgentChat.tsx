@@ -91,17 +91,31 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
     autosize();
   }, [input, autosize]);
 
-  // iOS keyboard: track how much the on-screen keyboard overlaps the viewport and
-  // expose it as --ac-kb. The mobile CSS shrinks .adm-ac by that amount so the
-  // fixed-at-the-bottom composer rides above the keyboard (the layout viewport
-  // doesn't shrink for the keyboard on iOS Safari/PWA, so a CSS-only fix can't).
+  // iOS keyboard handling (the layout viewport doesn't shrink for the keyboard in
+  // Safari / standalone PWA, so a CSS-only bottom bar can't ride above it). The
+  // composer is position:fixed; here we drive its bottom offset from the
+  // visualViewport: open → right on top of the keyboard
+  // (innerHeight − vv.height − vv.offsetTop); closed → just above the bottom nav
+  // (its measured height). --ac-extra keeps the latest message clear of the bar.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const root = document.documentElement;
+    const measureNav = () => {
+      const el = document.querySelector(".adm-tabbar");
+      return el ? Math.round(el.getBoundingClientRect().height) : 0;
+    };
     const update = () => {
       const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty("--ac-kb", `${Math.round(overlap)}px`);
+      const open = overlap > 60; // keyboard up
+      const navH = measureNav();
+      const cb = open ? overlap : navH;
+      root.style.setProperty("--ac-cb", `${Math.round(cb)}px`);
+      root.style.setProperty("--ac-extra", `${Math.max(0, Math.round(cb - navH))}px`);
+      if (open && atBottomRef.current) {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight; // keep the newest message visible
+      }
     };
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
@@ -109,7 +123,8 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
-      root.style.removeProperty("--ac-kb");
+      root.style.removeProperty("--ac-cb");
+      root.style.removeProperty("--ac-extra");
     };
   }, []);
 
@@ -514,6 +529,15 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
+                onFocus={() => {
+                  // After the keyboard animates in, jump to the newest message so the
+                  // user sees the conversation + what they're typing.
+                  atBottomRef.current = true;
+                  setTimeout(() => {
+                    const el = scrollRef.current;
+                    if (el) el.scrollTop = el.scrollHeight;
+                  }, 350);
+                }}
                 placeholder="Message the assistant…"
                 aria-label="Message the assistant"
                 disabled={busy}
