@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AI_MODELS } from "@/lib/aiModels";
 import { useToast } from "@/components/admin/Toast";
 import { updateAgentSettings } from "@/app/admin/agent-actions";
-import type { AgentSettings, AutopilotSettings } from "@/lib/agent/store";
+import type { AgentSettings, AutopilotSettings, AutopilotRun } from "@/lib/agent/store";
 import { PushToggle } from "@/components/admin/PushToggle";
 import { CheckIcon, CloseIcon } from "@/components/admin/icons";
 
@@ -19,11 +19,6 @@ function shiftHHMM(hhmm: string, deltaMin: number): string {
 }
 const utcToPp = (hhmm: string) => shiftHHMM(hhmm, PP_OFFSET_MIN);
 const ppToUtc = (hhmm: string) => shiftHHMM(hhmm, -PP_OFFSET_MIN);
-/** The vercel.json cron expression (UTC) for a given UTC HH:MM. */
-function cronFromUtc(hhmm: string): string {
-  const [h, m] = hhmm.split(":").map(Number);
-  return `${m} ${h} * * *`;
-}
 
 function Toggle({
   checked,
@@ -77,12 +72,37 @@ export function AgentSettingsForm({
   const ap = s.autopilot;
   const setAp = (patch: Partial<AutopilotSettings>) =>
     setS((p) => ({ ...p, autopilot: { ...p.autopilot, ...patch } }));
-  const toggleCat = (slug: string) =>
-    setAp({
-      categories: ap.categories.includes(slug)
-        ? ap.categories.filter((x) => x !== slug)
-        : [...ap.categories, slug],
-    });
+
+  // ── Auto-Pilot Runs ─────────────────────────────────────────────────────────
+  const runs = ap.runs;
+  const updateRun = (id: string, patch: Partial<AutopilotRun>) =>
+    setAp({ runs: runs.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
+  const deleteRun = (id: string) => setAp({ runs: runs.filter((r) => r.id !== id) });
+  const toggleRunCat = (run: AutopilotRun, slug: string) =>
+    updateRun(run.id, { categories: run.categories.includes(slug) ? run.categories.filter((x) => x !== slug) : [...run.categories, slug] });
+  function addRun() {
+    if (runs.length >= 6) return;
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `run-${Date.now()}`;
+    setAp({ runs: [...runs, { id, timeUtc: ppToUtc("12:00"), categories: [], keyword: "", count: 3, mode: "draft", publishMode: "stagger", enabled: true }] });
+  }
+
+  // Next-24h upcoming Runs (sorted by next occurrence), for the strip at the top.
+  const upcoming = (() => {
+    const now = Date.now();
+    return runs
+      .filter((r) => r.enabled)
+      .map((r) => {
+        const [h, m] = r.timeUtc.split(":").map(Number);
+        const t = new Date();
+        t.setUTCHours(h, m, 0, 0);
+        let occ = t.getTime();
+        if (occ <= now) occ += 86_400_000;
+        return { run: r, occ };
+      })
+      .filter((x) => x.occ - now <= 24 * 3_600_000)
+      .sort((a, b) => a.occ - b.occ);
+  })();
+  const anyPublish = runs.some((r) => r.enabled && r.mode === "publish");
 
   // "Run now": triggers the same job via the admin route (runs even while OFF).
   // It can take ~30–60s; the push + activity log capture the result too.
@@ -184,76 +204,143 @@ export function AgentSettingsForm({
       </div>
 
       <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>
-        <div className="adm-card-title">Morning Auto-Pilot</div>
+        <div className="adm-card-title">Auto-Pilot Runs</div>
         <div className="adm-card-sub" style={{ marginBottom: 8 }}>
-          Once a day, automatically find top trending stories and write original <strong>drafts</strong> for
-          your review. It <strong>never publishes or shares</strong> — only drafts. You get one push when they’re ready.
+          Schedule one or more daily <strong>Runs</strong> (up to 6). Each finds top trending stories and either
+          saves <strong>drafts for your approval</strong> (default) or <strong>auto-publishes</strong> them. New Runs
+          always start in draft mode — auto-publish is an explicit per-Run choice.
         </div>
 
+        <Toggle label="Enable Auto-Pilot" hint="Master switch — off by default" checked={ap.enabled} onChange={(v) => setAp({ enabled: v })} />
         <Toggle
-          label="Enable Auto-Pilot"
-          hint="Off by default — turn it on when you’re ready"
-          checked={ap.enabled}
-          onChange={(v) => setAp({ enabled: v })}
+          label="Pause all auto-publish"
+          hint="Kill switch — while on, every Run drafts only (nothing auto-publishes)"
+          checked={ap.pauseAutoPublish}
+          onChange={(v) => setAp({ pauseAutoPublish: v })}
         />
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 12 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-            <span className="adm-agset-rowlabel">Run time (Phnom Penh)</span>
-            <input
-              type="time"
-              className="adm-input"
-              style={{ maxWidth: 160 }}
-              value={utcToPp(ap.runTimeUtc)}
-              onChange={(e) => e.target.value && setAp({ runTimeUtc: ppToUtc(e.target.value) })}
-            />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-            <span className="adm-agset-rowlabel">Drafts per run (1–5)</span>
-            <input
-              type="number"
-              min={1}
-              max={5}
-              className="adm-input"
-              style={{ maxWidth: 100 }}
-              value={ap.draftCount}
-              onChange={(e) => setAp({ draftCount: Math.min(5, Math.max(1, Number(e.target.value) || 1)) })}
-            />
-          </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginTop: 12 }}>
+          <span className="adm-agset-rowlabel">Daily auto-publish cap (across all Runs)</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            className="adm-input"
+            style={{ maxWidth: 120 }}
+            value={ap.dailyAutoPublishCap}
+            onChange={(e) => setAp({ dailyAutoPublishCap: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+          />
+        </label>
+
+        {/* Upcoming runs strip (next 24h) */}
+        <div style={{ marginTop: 14, padding: "8px 12px", border: "1px solid var(--adm-bd)", borderRadius: 10, background: "var(--adm-card)" }}>
+          <span className="adm-fb-sub" style={{ fontWeight: 700, marginRight: 8 }}>Next 24h:</span>
+          {!ap.enabled ? (
+            <span className="adm-fb-sub">Auto-Pilot is off</span>
+          ) : upcoming.length === 0 ? (
+            <span className="adm-fb-sub">No runs scheduled</span>
+          ) : (
+            <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
+              {upcoming.map(({ run }) => {
+                const isPub = run.mode === "publish" && !ap.pauseAutoPublish;
+                return (
+                  <span key={run.id} className="adm-pill" style={{ background: isPub ? "rgba(147,51,234,.14)" : "rgba(120,130,150,.14)", color: isPub ? "#7c3aed" : "var(--adm-muted)" }}>
+                    {utcToPp(run.timeUtc)} · {isPub ? (run.publishMode === "now" ? "Publish now" : "Stagger") : "Drafts"}
+                  </span>
+                );
+              })}
+            </span>
+          )}
         </div>
 
-        <div className="adm-card-sub" style={{ marginTop: 12, marginBottom: 6 }}>
-          Categories to include {ap.categories.length === 0 && <em>(all categories)</em>}
-        </div>
-        {categories.length === 0 ? (
-          <p className="adm-card-sub">No categories yet — add some under Categories.</p>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {categories.map((c) => (
-              <label key={c.slug} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                <input type="checkbox" checked={ap.categories.includes(c.slug)} onChange={() => toggleCat(c.slug)} />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        )}
+        {/* Run cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+          {runs.map((run) => {
+            const isPub = run.mode === "publish";
+            return (
+              <div key={run.id} style={{ border: "1px solid var(--adm-bd)", borderRadius: 12, padding: 12, background: "var(--adm-card)" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    <span className="adm-agset-rowlabel">Run time (Phnom Penh)</span>
+                    <input type="time" className="adm-input" style={{ maxWidth: 140 }} value={utcToPp(run.timeUtc)} onChange={(e) => e.target.value && updateRun(run.id, { timeUtc: ppToUtc(e.target.value) })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    <span className="adm-agset-rowlabel">Articles (1–5)</span>
+                    <input type="number" min={1} max={5} className="adm-input" style={{ maxWidth: 90 }} value={run.count} onChange={(e) => updateRun(run.id, { count: Math.min(5, Math.max(1, Number(e.target.value) || 1)) })} />
+                  </label>
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                    <label className="adm-check" style={{ margin: 0 }}>
+                      <input type="checkbox" checked={run.enabled} onChange={(e) => updateRun(run.id, { enabled: e.target.checked })} />
+                      <span>On</span>
+                    </label>
+                    <button type="button" className="adm-iconbtn" aria-label="Delete run" onClick={() => deleteRun(run.id)}>
+                      <CloseIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-        <p className="adm-card-sub" style={{ marginTop: 12 }}>
-          ⏰ On the Vercel <strong>Hobby</strong> plan the job runs <strong>once a day</strong> at the time set in{" "}
-          <code>vercel.json</code> (Vercel may fire it up to an hour late). It ships at <strong>06:00 Phnom Penh</strong>.
-          To change when it actually fires, set this schedule in <code>vercel.json</code> and redeploy (or upgrade to
-          Pro for finer control):
-          <br />
-          <code>{cronFromUtc(ap.runTimeUtc)}</code> — {utcToPp(ap.runTimeUtc)} Phnom Penh / {ap.runTimeUtc} UTC
+                <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                  <div className="adm-seg" role="tablist" aria-label="Run mode">
+                    <button type="button" role="tab" aria-selected={!isPub} className={`adm-seg-btn ${!isPub ? "on" : ""}`} onClick={() => updateRun(run.id, { mode: "draft" })}>Drafts for approval</button>
+                    <button type="button" role="tab" aria-selected={isPub} className={`adm-seg-btn ${isPub ? "on" : ""}`} onClick={() => updateRun(run.id, { mode: "publish" })}>Auto-publish</button>
+                  </div>
+                  {isPub && (
+                    <div className="adm-seg" role="tablist" aria-label="Publish timing">
+                      <button type="button" role="tab" aria-selected={run.publishMode === "now"} className={`adm-seg-btn ${run.publishMode === "now" ? "on" : ""}`} onClick={() => updateRun(run.id, { publishMode: "now" })}>Publish now</button>
+                      <button type="button" role="tab" aria-selected={run.publishMode === "stagger"} className={`adm-seg-btn ${run.publishMode === "stagger" ? "on" : ""}`} onClick={() => updateRun(run.id, { publishMode: "stagger" })}>Stagger into slots</button>
+                    </div>
+                  )}
+                </div>
+                {isPub && (
+                  <p className="adm-fb-sub" style={{ color: "#b45309", marginTop: 8 }}>
+                    ⚠ This Run publishes live automatically{run.publishMode === "stagger" ? " into your preferred posting times" : " as soon as each article is written"}. Facebook auto-share fires at publish time if the article has share pages set.
+                  </p>
+                )}
+
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginTop: 12 }}>
+                  <span className="adm-agset-rowlabel">Keyword focus (optional)</span>
+                  <input type="text" className="adm-input" style={{ maxWidth: 320 }} maxLength={80} value={run.keyword} placeholder="e.g. global news, technology" onChange={(e) => updateRun(run.id, { keyword: e.target.value })} />
+                </label>
+
+                <div className="adm-card-sub" style={{ marginTop: 12, marginBottom: 6 }}>
+                  Categories {run.categories.length === 0 && <em>(all)</em>}
+                </div>
+                {categories.length === 0 ? (
+                  <p className="adm-card-sub">No categories yet — add some under Categories.</p>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                    {categories.map((c) => (
+                      <label key={c.slug} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={run.categories.includes(c.slug)} onChange={() => toggleRunCat(run, c.slug)} />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button type="button" className="adm-btn-ghost" style={{ marginTop: 12 }} disabled={runs.length >= 6} onClick={addRun}>
+          + Add run{runs.length >= 6 ? " (max 6)" : ""}
+        </button>
+
+        <p className="adm-card-sub" style={{ marginTop: 14 }}>
+          ⏰ Runs (and timed scheduled publishes) fire via the <strong>external pinger</strong> that calls{" "}
+          <code>/api/cron/publish-due</code> every ~10 min — see the note below. The once-daily Vercel cron is only a
+          safety net, so on <strong>Hobby</strong> without the pinger, Runs fire at most once a day.{anyPublish && (
+            <> {" "}<strong>Auto-publish is enabled on at least one Run</strong> — articles will go live without review.</>
+          )}
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 12 }}>
           <button type="button" className="adm-btn-ghost" onClick={runNow} disabled={running || !aiConfigured}>
             {running && <span className="adm-spinner" aria-hidden />}
-            {running ? "Running… (up to ~60s)" : "Run now"}
+            {running ? "Running… (up to ~60s)" : "Run now (drafts only)"}
           </button>
           <span className="adm-card-sub" style={{ margin: 0 }}>
-            Drafts immediately (even while off) for testing — they appear in{" "}
+            Safe test — drafts immediately (even while off, never auto-publishes); they appear in{" "}
             <Link href="/admin/articles" className="adm-link">Articles</Link>.
           </span>
         </div>

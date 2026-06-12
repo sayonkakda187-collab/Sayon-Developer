@@ -9,7 +9,7 @@ export default async function ScheduledPage() {
   const rows = await prisma.article.findMany({
     where: { status: "scheduled" },
     orderBy: { scheduledAt: "asc" },
-    select: { id: true, title: true, scheduledAt: true, autoSharePageIds: true, category: { select: { name: true } } },
+    select: { id: true, title: true, scheduledAt: true, autoSharePageIds: true, scheduleSource: true, category: { select: { name: true } } },
   });
   const items = rows.map((r) => ({
     id: r.id,
@@ -17,6 +17,7 @@ export default async function ScheduledPage() {
     category: r.category?.name ?? null,
     scheduledAt: r.scheduledAt ? r.scheduledAt.toISOString() : null,
     shareCount: parsePageIds(r.autoSharePageIds).length,
+    source: r.scheduleSource ?? null,
   }));
   return (
     <ToastProvider>

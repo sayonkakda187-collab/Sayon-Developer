@@ -43,6 +43,9 @@ model Article {
   // JSON array of FacebookPage ids to auto-share to AT PUBLISH TIME (set when an
   // article is scheduled with sharing on). Cleared once the share has fired.
   autoSharePageIds String?
+  // Human label for where a scheduled item came from, shown in the Scheduled list
+  // (e.g. "Auto-Pilot 12:00 run"). Null for manual / agent-approved schedules.
+  scheduleSource String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

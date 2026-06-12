@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { runAutopilot } from "@/lib/autopilot";
+import { runDueAutopilot } from "@/lib/autopilot";
 
-// Mutates the DB + calls the AI; never statically cached. maxDuration is set to
-// the Hobby ceiling (60s) — runAutopilot self-limits how many drafts it starts so
-// it always finishes inside this budget (push + activity log included).
+// A once-daily Vercel-cron SAFETY NET that dispatches any due Auto-Pilot Run (same
+// idempotent dispatcher the pinger-driven /api/cron/publish-due uses, so a Run
+// never runs twice). The external pinger is what fires Runs near their actual
+// times; this guarantees at least one daily attempt if the pinger is down.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const BUDGET_MS = 58_000;
 
 /**
  * Authorize the caller. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`;
@@ -27,10 +30,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const result = await runAutopilot({ manual: false });
-    return NextResponse.json(result);
+    const result = await runDueAutopilot({ budgetMs: BUDGET_MS });
+    return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    // runAutopilot is designed not to throw, but guard anyway.
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Auto-Pilot run failed." },
       { status: 500 },

@@ -7,7 +7,7 @@ import { useToast } from "@/components/admin/Toast";
 import { toLocalInput, nowLocalInput, formatSchedule } from "@/lib/fbSchedule";
 import { rescheduleArticle, publishScheduledNow, cancelScheduledArticle } from "@/app/admin/schedule-actions";
 
-type Item = { id: string; title: string; category: string | null; scheduledAt: string | null; shareCount: number };
+type Item = { id: string; title: string; category: string | null; scheduledAt: string | null; shareCount: number; source: string | null };
 
 /** The "Scheduled" queue: upcoming articles with their Phnom-Penh times — each can
  *  have its time changed, be published now, or be cancelled back to a draft. */
@@ -57,6 +57,9 @@ export function ScheduledManager({ items }: { items: Item[] }) {
                   <div className="adm-sched-title">{it.title}</div>
                   <div className="adm-sched-meta">
                     {it.category && <span className="adm-pill">{it.category}</span>}
+                    <span className="adm-pill" style={{ background: it.source ? "rgba(147,51,234,.14)" : "rgba(120,130,150,.14)", color: it.source ? "#7c3aed" : "var(--adm-muted)" }}>
+                      {it.source ?? "Manual"}
+                    </span>
                     <span>🕒 {it.scheduledAt ? formatSchedule(it.scheduledAt) : "—"}</span>
                     {it.shareCount > 0 && <span>· shares to {it.shareCount} page{it.shareCount === 1 ? "" : "s"}</span>}
                   </div>

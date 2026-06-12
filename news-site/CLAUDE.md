@@ -880,47 +880,60 @@ article model, AppSetting store, AI pipeline, and public layout.
   `<ins class="adsbygoogle">` ships yet** (AdSense approval pending) — structure
   only, with the publisher id (`ca-pub-5470257305108580`) noted for later wiring.
 
-## Morning Auto-Pilot (daily AI drafting)
+## Auto-Pilot Runs (scheduled AI drafting + optional auto-publish)
 
-A once-daily job that finds top trending stories and writes original **drafts**
-for review, then sends ONE push. It **only ever drafts — never publishes or
-shares** (the approval gates are untouched). Everything is **reused**, not
-duplicated: the news-finder, the AI pipeline, the drafts tool, web-push, and the
-agent settings/activity store.
+Multiple daily **Runs** (up to 6) that find top trending stories and either save
+original **drafts for approval** (DEFAULT) or **auto-publish** them. Built entirely
+on existing systems — the news-finder, AI pipeline, `create_draft` tool (with its
+auto featured image + source attribution), the **publish chokepoint**
+(`lib/publish.ts`), the scheduled-publishing executor, web-push, and the agent
+settings/activity store. **Defaults preserve the old behavior:** an existing setup
+migrates to one DRAFT Run; new Runs always start in draft mode (auto-publish is an
+explicit per-Run opt-in).
 
-- **Job** (`lib/autopilot.ts`, `runAutopilot({ manual })`): pulls trending per
-  selected category via `aggregateTrending` (its existing per-source cache + quota
-  backoff protect the small daily quotas), de-dupes across categories AND against
-  existing articles (canonical source URL cited in a body + near-identical title,
-  Jaccard ≥ 0.82, reusing `lib/news/normalize` helpers), then writes N drafts by
-  calling the agent's **existing** `create_draft` tool (`executeTool` in
-  `lib/agent/tools.ts`) — which reuses `generateAiAssist`, picks an ORIGINAL
-  headline, appends a **source-attribution link**, and sets the category. Key
-  Points are **not** generated here — they're produced by the existing publish
-  flow when the owner later publishes the draft. Logs the run to the agent
-  **activity log** (`addAction`, new `autopilot_run` type) and sends ONE push
-  (`sendAutopilotPush`) → tapping opens `/admin/articles`. Sources missing / quota
-  exhausted / no candidates → it logs + pushes "couldn't run" instead of crashing.
-- **Cron** (`/api/cron/autopilot`, `vercel.json` `0 23 * * *` = 06:00 Asia/
-  Phnom_Penh): protected by **`CRON_SECRET`** (Bearer, same fail-closed scheme as
-  the Facebook cron — unauthenticated calls are rejected). `maxDuration = 60`; the
-  job self-limits how many drafts it starts so it always finishes (push + log)
-  inside the Hobby 60s ceiling. The daily toggle is checked here (off → no-op).
-- **Run now** (`/api/admin/agent/autopilot-run`, admin-session gated,
-  `maxDuration = 60`): the Settings button runs the same job on demand (even while
-  the daily toggle is off) for testing.
-- **Settings** (Agent Settings card): ON/OFF (**default OFF**), run time (stored
-  UTC, shown as Phnom Penh, default 06:00 PP), drafts per run (1–5, default 3), and
-  which categories to include. ⚠️ **Hobby cron caveat:** Vercel Hobby fires a cron
-  **once daily at the fixed `vercel.json` time** (within ±1h) — changing the run
-  time in Settings shows the cron line to paste into `vercel.json` (redeploy to
-  change the real fire time; or upgrade to Pro for finer control). Default ships
-  matching 06:00 PP, so no edit is needed out of the box.
-- **Env:** `CRON_SECRET` (cron auth) + `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
-  (push; reused from the approval notifications) + `ANTHROPIC_API_KEY` (drafting) +
-  at least one news-source key. **No DB migration** (settings/log live in
-  `AppSetting`). Cron jobs fire on the **production** deployment only — test a
-  preview with the **Run now** button.
+- **Runs model** (`lib/agent/store.ts`, `AutopilotSettings.runs: AutopilotRun[]`):
+  each Run has a time (UTC, shown PP), categories + optional keyword focus, count
+  (1–5), `mode` ("draft" | "publish"), and `publishMode` ("now" | "stagger"). Plus a
+  master **enabled** switch, a **`pauseAutoPublish`** kill switch (forces every Run
+  to draft), and a **`dailyAutoPublishCap`** (default 10). `normalizeAutopilot`
+  migrates the legacy single-run fields into one draft Run.
+- **Engine** (`lib/autopilot.ts`): `runAutopilotRun(run)` drafts N articles
+  (per-category `aggregateTrending` with the keyword as the query; dedupe across
+  categories + against existing titles/URLs via `lib/news/normalize`; `create_draft`
+  reused) then, in publish mode (and not paused, within the daily cap), either
+  publishes immediately (`publishScheduledArticleById`) or **staggers** into the next
+  free **preferred slots** (`nextFreeSlots`) tagged with `Article.scheduleSource`
+  ("Auto-Pilot HH:MM run"). No featured image found → the branded OG card is the
+  social image (publishing is never blocked). Logs each Run to the activity log +
+  sends ONE mode-aware push. `runAutopilot({ manual })` (the **Run now** button) is
+  always **draft-only** for safe testing.
+- **Dispatcher** (`runDueAutopilot`): the **pinger-driven `/api/cron/publish-due`**
+  now runs due scheduled publishes **and** due Runs in one call. Each Run is claimed
+  **atomically once per day** (a unique `autopilot_mark:<runId>:<date>` row in
+  `AppSetting` — a duplicate create throws → never runs twice). Scheduled publishing
+  goes first; a due Run gets the remaining budget and **skips itself if under ~22s
+  left** (runs next tick — never half-publishes). Both Vercel crons
+  (`/api/cron/publish-due` `0 1`, `/api/cron/autopilot` `0 23`) are idempotent daily
+  **safety nets**.
+- **Scheduled list** (`/admin/scheduled`): every item — manual, agent-approved, and
+  Auto-pilot-staggered — shows a **source label** (`scheduleSource`, "Manual" when
+  null) alongside title / PP time / share count, with change-time / publish-now /
+  cancel actions (unchanged).
+- **Agent Settings**: the Runs manager (add/edit/delete up to 6), the master switch +
+  pause-all kill switch + daily cap, and an **"Next 24h" upcoming-runs strip** with
+  each Run's mode. Per-Run mode + publish-timing are segmented controls with a clear
+  auto-publish warning.
+- **Safety rails (hard-coded):** auto-publish never exceeds a Run's count or the
+  global daily cap; the kill switch forces draft; every action is logged; new Runs
+  default to draft.
+- **⚠️ External pinger required for timing.** Auto-publish Runs (and timed scheduled
+  publishes) fire on time only if an external scheduler hits
+  `POST https://DOMAIN/api/cron/publish-due` with `Authorization: Bearer <CRON_SECRET>`
+  every ~10 min (cron-job.org, a GitHub Action, …). Without it, Vercel Hobby's
+  once-daily crons are the only trigger, so Runs fire at most once a day (±1h).
+- **Migration:** additive `Article.scheduleSource` (`20260612200000_article_schedule_source`,
+  auto-applies). **Env:** unchanged (`CRON_SECRET`, `VAPID_*`, `ANTHROPIC_API_KEY`, ≥1
+  news-source key). Crons fire on **production** only — test a preview via **Run now**.
 
 ## Automatic featured images (free, license-clean)
 

@@ -63,14 +63,17 @@ export async function sendAutopilotPush(opts: {
   count?: number;
   message?: string;
   url?: string;
+  body?: string; // explicit body (mode-aware: "published"/"scheduled"/"drafts ready")
 }): Promise<void> {
   if (!ensure()) return;
   const subs = await getPushSubs();
   if (subs.length === 0) return;
   const n = opts.count ?? 0;
-  const body = opts.ok
-    ? `${n} draft${n === 1 ? "" : "s"} ready for review`
-    : opts.message || "Auto-Pilot could not run today";
+  const body = opts.body
+    ? opts.body
+    : opts.ok
+      ? `${n} draft${n === 1 ? "" : "s"} ready for review`
+      : opts.message || "Auto-Pilot could not run today";
   const payload = {
     title: "Auto-Pilot",
     body,
