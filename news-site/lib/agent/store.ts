@@ -127,7 +127,8 @@ export type AgentActionType =
   | "update_published_article"
   | "share_to_facebook"
   | "autopilot_run"
-  | "publish_scheduled";
+  | "publish_scheduled"
+  | "cron_ping";
 export type AgentActionStatus = "pending" | "rejected" | "done" | "failed";
 export type AgentActionRecord = {
   id: string;

@@ -349,6 +349,15 @@ export async function runAutopilot({ manual }: { manual: boolean }): Promise<Aut
   return { ok: r.ok, created: r.created, titles: r.titles, errors: r.errors, message: r.message };
 }
 
+/** Cheap count of Runs that are currently DUE (enabled + their time has passed
+ *  within the grace window). Used for the fast-ack ping summary — it does not
+ *  claim or check whether they already ran (the dispatcher does that). */
+export async function countDueRuns(now: Date = new Date()): Promise<number> {
+  const settings = await getAgentSettings();
+  if (!settings.autopilot.enabled) return 0;
+  return settings.autopilot.runs.filter((r) => r.enabled && dueMarkKey(now, r) !== null).length;
+}
+
 /**
  * Dispatch due Runs — called from the pinger-driven /api/cron/publish-due (and the
  * daily Vercel cron safety net). Processes at most ONE due Run per call (bounded by

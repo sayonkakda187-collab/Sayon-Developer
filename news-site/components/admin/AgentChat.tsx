@@ -26,6 +26,7 @@ const TYPE_LABEL: Record<string, string> = {
   publish_article: "Publish",
   update_published_article: "Edit live article",
   share_to_facebook: "Share to Facebook",
+  cron_ping: "Auto-Pilot ping",
 };
 
 let idSeq = 0;

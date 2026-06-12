@@ -915,6 +915,16 @@ explicit per-Run opt-in).
   left** (runs next tick — never half-publishes). Both Vercel crons
   (`/api/cron/publish-due` `0 1`, `/api/cron/autopilot` `0 23`) are idempotent daily
   **safety nets**.
+- **Fast-ack** (`/api/cron/publish-due`): so a pinger (cron-job.org waits ~30s)
+  never times out, the route **responds in <2s** with `{ claimed: { publishes, runs } }`
+  (a cheap due-count) and does the heavy work **after the response** via the Vercel
+  request-context `waitUntil` (no new dep), bounded by `maxDuration`. Idempotent
+  claims mean overlapping pings never double-execute, and anything not finished stays
+  claimed-but-pending for the next ping. A working ping logs one `cron_ping` activity
+  entry (claim → completion); no-op pings don't log (keeps the capped log clean).
+  **`HEAD`** → cheap 200 probe; an **unauthenticated** GET/POST → cheap 200 probe
+  (no work); only an **authorized** call (`Authorization: Bearer <CRON_SECRET>`) does
+  the work.
 - **Scheduled list** (`/admin/scheduled`): every item — manual, agent-approved, and
   Auto-pilot-staggered — shows a **source label** (`scheduleSource`, "Manual" when
   null) alongside title / PP time / share count, with change-time / publish-now /
