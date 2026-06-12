@@ -5,23 +5,22 @@ import { decryptSecret } from "@/lib/crypto";
 import { FacebookApiError, getPostStats, permalinkForPost } from "@/lib/facebook";
 import { getPageOverview, getPageDaily, type PageOverview, type DayPoint } from "@/lib/facebookInsights";
 import { refreshPageAvatar, avatarIsStale } from "@/lib/facebookAvatars";
-import { rangeToUnix, rangeKey, ppToday, ppDate, addDays } from "@/lib/fbInsightsRange";
+import { rangeToUnix, rangeKey, ppToday, ppDate, addDays, previousPeriod } from "@/lib/fbInsightsRange";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Serve a cached overview for ~12h before re-hitting the Graph API (the client's
-// Refresh button forces a fresh fetch). With ~264 Pages this keeps the tab fast
-// and well under Facebook's rate limits.
+// Refresh button forces a fresh fetch).
 const FRESH_MS = 12 * 60 * 60 * 1000;
 // Daily series TTL: short when the range includes today (today's numbers are
 // partial + keep changing), long for fully-historical ranges (stable).
 const DAILY_TTL_TODAY_MS = 3 * 60 * 60 * 1000;
 const DAILY_TTL_PAST_MS = 24 * 60 * 60 * 1000;
-// Cap one POST batch so a cold fetch always finishes inside the 60s function limit.
 const MAX_BATCH = 30;
 const MAX_RANGE_DAYS = 92;
+const TOP_POSTS_CANDIDATES = 40; // recent posts in range we pull live stats for
 
 /** Bounded-concurrency async map (keeps Graph calls under control per request). */
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -152,6 +151,10 @@ async function sharesByDay(from: string, to: string, pageDbId?: string): Promise
   return map;
 }
 
+function sumValues(map: Record<string, number>): number {
+  return Object.values(map).reduce((s, n) => s + n, 0);
+}
+
 type OverviewRow = PageOverview & { pageDbId: string; avatarUrl: string | null; cachedAt: string };
 
 function parseCache(data: string): PageOverview | null {
@@ -172,13 +175,12 @@ function parseCache(data: string): PageOverview | null {
 }
 
 /**
- * POST — batched Page overviews + (optional) day-by-day series for a range.
- * Body: `{ pageDbIds: string[], refresh?: boolean, from?: string, to?: string }`.
- * Per Page: serve the ~12h overview cache (unless `refresh`), else recompute; and
- * when from/to is given, fetch each Page's daily series (per-(page,range) cache)
- * and return the BATCH SUM as `daily` — the client adds up batches into the
- * network total, so the network daily chart is built from cached per-page data,
- * never one giant request. One Page failing never blocks the batch.
+ * POST — batched Page overviews + (optional) day-by-day series for a range AND the
+ * previous equal-length period (for the dashboard's % change + compare overlay).
+ * Body: `{ pageDbIds, refresh?, from?, to? }`. One combined Graph fetch per Page
+ * (prev-start..to) is split into current/previous, so the comparison costs no
+ * extra Graph calls. Returns the BATCH SUMS as `daily` + `dailyPrev`; the client
+ * adds batches up into the network totals — never one giant request.
  */
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -197,8 +199,9 @@ export async function POST(req: Request) {
     to?: unknown;
   };
   const ids = Array.isArray(pageDbIds) ? pageDbIds.filter((x): x is string => typeof x === "string") : [];
-  if (ids.length === 0) return NextResponse.json({ ok: true, rows: [], daily: [] });
+  if (ids.length === 0) return NextResponse.json({ ok: true, rows: [], daily: [], dailyPrev: [] });
   const range = from != null && to != null ? parseRange(from, to) : null;
+  const prev = range ? previousPeriod(range.from, range.to) : null;
 
   const batch = ids.slice(0, MAX_BATCH);
   const pages = await prisma.facebookPage.findMany({
@@ -208,7 +211,8 @@ export async function POST(req: Request) {
 
   const now = Date.now();
   const wantFresh = refresh === true;
-  const acc: DailyAcc = new Map();
+  const accCur: DailyAcc = new Map();
+  const accPrev: DailyAcc = new Map();
 
   const rows = await mapLimit(pages, 6, async (p): Promise<OverviewRow> => {
     // Refresh the cached avatar as part of the insights flow when missing/stale.
@@ -217,10 +221,13 @@ export async function POST(req: Request) {
       avatarUrl = await refreshPageAvatar(p);
     }
 
-    // Day-by-day series for this Page (cached per range), summed into the batch.
-    if (range) {
-      const d = await dailyData(p, range.from, range.to, wantFresh);
-      for (const dp of d.days) addInto(acc, dp); // sync after await → safe under mapLimit
+    // One combined daily fetch (prev-start..to), split into current vs previous.
+    if (range && prev) {
+      const combined = await dailyData(p, prev.from, range.to, wantFresh);
+      for (const dp of combined.days) {
+        if (dp.date >= range.from && dp.date <= range.to) addInto(accCur, dp); // sync after await → safe
+        else if (dp.date >= prev.from && dp.date <= prev.to) addInto(accPrev, dp);
+      }
     }
 
     const cache = p.insightCache;
@@ -249,7 +256,7 @@ export async function POST(req: Request) {
     return { pageDbId: p.id, ...overview, avatarUrl, cachedAt: fetchedAt.toISOString() };
   });
 
-  return NextResponse.json({ ok: true, rows, daily: range ? accToDays(acc) : [] });
+  return NextResponse.json({ ok: true, rows, daily: range ? accToDays(accCur) : [], dailyPrev: range ? accToDays(accPrev) : [] });
 }
 
 type RecentPost = {
@@ -294,17 +301,71 @@ async function recentPostsForPage(pageDbId: string, token: string): Promise<Rece
   });
 }
 
+type TopPost = {
+  id: string;
+  pageDbId: string;
+  pageName: string;
+  avatarUrl: string | null;
+  title: string;
+  postedAt: string | null;
+  permalink: string;
+  reactions: number | null;
+  comments: number | null;
+  shares: number | null;
+  reach: number | null;
+  engagement: number;
+};
+
+/** Best posts WE published in a range, ranked by engagement then reach. Pulls live
+ *  stats for the most-recent candidates in the window (capped) — reuses getPostStats. */
+async function topPostsForRange(from: string, to: string): Promise<TopPost[]> {
+  const { since, until } = rangeToUnix(from, to);
+  const rows = await prisma.scheduledPost.findMany({
+    where: { status: "posted", graphPostId: { not: null }, postedAt: { gte: new Date(since * 1000), lt: new Date(until * 1000) } },
+    orderBy: { postedAt: "desc" },
+    take: TOP_POSTS_CANDIDATES,
+    include: { article: { select: { title: true } }, facebookPage: { select: { id: true, pageName: true, avatarUrl: true, accessToken: true } } },
+  });
+  const out = await mapLimit(rows, 6, async (r): Promise<TopPost> => {
+    const postId = r.graphPostId as string;
+    const base: TopPost = {
+      id: r.id,
+      pageDbId: r.facebookPage.id,
+      pageName: r.facebookPage.pageName,
+      avatarUrl: r.facebookPage.avatarUrl,
+      title: r.article?.title ?? "(untitled)",
+      postedAt: r.postedAt ? r.postedAt.toISOString() : null,
+      permalink: permalinkForPost(postId),
+      reactions: null,
+      comments: null,
+      shares: null,
+      reach: null,
+      engagement: 0,
+    };
+    try {
+      const s = await getPostStats(postId, decryptSecret(r.facebookPage.accessToken));
+      const engagement = (s.reactions ?? 0) + (s.comments ?? 0) + (s.shares ?? 0);
+      return { ...base, permalink: s.permalink || base.permalink, reactions: s.reactions, comments: s.comments, shares: s.shares, reach: s.reach, engagement };
+    } catch {
+      return base;
+    }
+  });
+  out.sort((a, b) => b.engagement - a.engagement || (b.reach ?? 0) - (a.reach ?? 0));
+  return out.slice(0, 10);
+}
+
 function defaultRange(): { from: string; to: string } {
   const today = ppToday();
   return { from: addDays(today, -27), to: today };
 }
 
 /**
- * GET — two modes:
- *  • `?detail={pageDbId}&from=&to=` → one Page's day-by-day series + per-day share
- *    counts (posts WE published) + recent posts. Reconnect/empty degrade gracefully.
- *  • `?networkShares=1&from=&to=` → posts-we-shared per day across ALL Pages (for
- *    the overview per-day table; the Graph daily totals come from the POST batches).
+ * GET — three modes:
+ *  • `?detail={pageDbId}&from=&to=` → one Page's day-by-day series (current +
+ *    previous period) + per-day share counts + recent posts.
+ *  • `?networkShares=1&from=&to=` → posts-we-shared per day (current) + the
+ *    previous period's total (for the "Our posts" % change).
+ *  • `?topPosts=1&from=&to=` → best posts we published in the range (network).
  */
 export async function GET(req: Request) {
   const user = await getSessionUser();
@@ -312,11 +373,17 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const range = parseRange(searchParams.get("from"), searchParams.get("to")) ?? defaultRange();
+  const prev = previousPeriod(range.from, range.to);
 
-  // Network shares-by-day (overview per-day table).
+  if (searchParams.get("topPosts")) {
+    const posts = await topPostsForRange(range.from, range.to);
+    return NextResponse.json({ ok: true, from: range.from, to: range.to, posts });
+  }
+
   if (searchParams.get("networkShares")) {
     const shares = await sharesByDay(range.from, range.to);
-    return NextResponse.json({ ok: true, from: range.from, to: range.to, shares });
+    const prevShares = await sharesByDay(prev.from, prev.to);
+    return NextResponse.json({ ok: true, from: range.from, to: range.to, shares, prevPostsTotal: sumValues(prevShares) });
   }
 
   const pageDbId = searchParams.get("detail");
@@ -328,14 +395,20 @@ export async function GET(req: Request) {
   });
   if (!page) return NextResponse.json({ ok: false, error: "Page not found" }, { status: 404 });
 
-  const daily = await dailyData(page, range.from, range.to, searchParams.get("refresh") === "1");
+  const combined = await dailyData(page, prev.from, range.to, searchParams.get("refresh") === "1");
+  const days: DayPoint[] = [];
+  const daysPrev: DayPoint[] = [];
+  for (const dp of combined.days) {
+    if (dp.date >= range.from && dp.date <= range.to) days.push(dp);
+    else if (dp.date >= prev.from && dp.date <= prev.to) daysPrev.push(dp);
+  }
   const shares = await sharesByDay(range.from, range.to, page.id);
+  const prevShares = await sharesByDay(prev.from, prev.to, page.id);
 
   // Recent posts come from our own records, so they work even when trends don't.
   let posts: RecentPost[] = [];
   try {
-    const token = decryptSecret(page.accessToken);
-    posts = await recentPostsForPage(page.id, token);
+    posts = await recentPostsForPage(page.id, decryptSecret(page.accessToken));
   } catch {
     posts = [];
   }
@@ -347,9 +420,11 @@ export async function GET(req: Request) {
       pageName: page.pageName,
       from: range.from,
       to: range.to,
-      status: daily.status,
-      days: daily.days,
+      status: combined.status,
+      days,
+      daysPrev,
       shares,
+      prevPostsTotal: sumValues(prevShares),
       posts,
     },
   });

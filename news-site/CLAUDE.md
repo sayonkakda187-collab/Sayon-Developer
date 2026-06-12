@@ -1030,32 +1030,42 @@ Pages · **Insights** · Settings) showing per-Page performance pulled from the
 Vercel Hobby's 60s limit: batched fetching + a server-side cache, never one giant
 request.
 
-- **Overview table** (`FacebookPageInsights.tsx`): one sortable row per connected
-  Page — **followers**, **28-day reach**, **28-day engagement**, **posts via our
-  system**, **last shared** — with a **network totals** card (followers + 28-day
-  reach), a **search** box, **20/page** pagination, and click-through to a detail
-  panel. Default sort **reach desc**; sort + search are remembered in
-  `sessionStorage`. Overviews load **progressively in batches of 25** with a
-  progress bar (first load), so the table fills in without a giant request. A Page
-  whose token can't read insights shows a **"Needs reconnect"** badge instead of
-  breaking the table.
-- **Detail panel** (click a row): the same **range control**, that Page's
-  day-by-day reach / engagement / new-follows charts + per-day table, plus its
-  **recent posts** from our share records with per-post reactions / comments /
-  shares / reach (reuses the Results-tab `getPostStats`). Friendly empty states for
-  new/sparse Pages — never an error.
-- **Day-by-day view** (range control on the overview **and** detail): quick
-  buttons **Today · Yesterday · 7d · 28d · 90d · Custom** (custom = from–to or a
-  single day) — all in **Asia/Phnom_Penh** (`lib/fbInsightsRange.ts`, fixed +07:00,
-  shared client+server so day buckets match). For the selected range: **daily
-  charts** (reach + engagement + net follows — network on the overview, per-Page in
-  the detail) and a **per-day table** (date · reach · engagement · follower change ·
-  **posts WE shared** that day, joined from `ScheduledPost`). Uses `period=day` with
-  `since`/`until`; **limited-history / retired metrics degrade to "—"** (only the
-  days Facebook returns are filled). **Today is labelled "partial"** (Facebook is
-  still finalizing it) so it doesn't look broken. The **network** daily series is
-  **summed from cached per-page data** (each POST batch returns its own sum; the
-  client adds batches up) — never one giant request.
+- **Business-Suite-style dashboard** (`FacebookPageInsights.tsx`), driven by the
+  range chips **Today · Yesterday · 7d · 28d · 90d · Custom** (custom = from–to or
+  a single day) in **Asia/Phnom_Penh** (`lib/fbInsightsRange.ts`, fixed +07:00,
+  shared client+server so day buckets match; remembered in `sessionStorage`). Layout:
+  **KPI cards** → **trend chart** → **Top posts** → **Top pages table** → day-by-day
+  table.
+  - **KPI cards** (Reach · Engagement · Net follows · Our posts): big number + **%
+    change vs the previous equal-length period** (green ▲ / red ▼ / gray — when the
+    prior period has no base) + a sparkline. Summed from the cached daily data
+    (network = sum across pages; detail = one page).
+  - **Trend chart**: one large lightweight SVG area/line with a **metric switcher**
+    (Reach / Engagement / Followers) and an optional **"Compare to previous period"**
+    dashed overlay.
+  - **Top posts** (network): best of OUR shares in the range, ranked by engagement
+    then reach (live `getPostStats` over the most-recent ~40 candidates), showing
+    page avatar + name, article title, date, reactions/comments/shares + View. Top 5
+    with "show more".
+  - **Top pages table**: sortable / searchable / **20-per-page** per-Page rows
+    (followers · 28-day reach · 28-day engagement · posts · last shared) with
+    avatars; **"Needs reconnect"** badge when a token can't read insights. Default
+    sort reach desc.
+  - **Day-by-day table**: date · reach · engagement · follower change · **posts WE
+    shared** that day (joined from `ScheduledPost`).
+- **Per-Page detail** (click a row): the **same dashboard scoped to that Page** —
+  KPI cards + trend chart + its top posts + day table — over its own range control.
+- **Period comparison is free**: one combined Graph daily fetch per Page
+  (prev-start..to) is split into current vs previous, so % change + the overlay add
+  **no extra Graph calls**. `period=day` with `since`/`until`; **limited-history /
+  retired metrics degrade to "—"**. **Today is labelled "partial"** (Facebook is
+  still finalizing it). The **network** series is **summed from cached per-page
+  data** (each POST batch returns its own current+previous sum; the client adds
+  batches up) — never one giant request.
+- **Omitted on purpose (verified against v25.0):** a **Link-clicks** KPI (no
+  reliable page-level daily clicks metric survives) and an **audience/demographics**
+  section (`page_fans_*` country/city/age-gender were removed/limited) — skipped
+  entirely rather than shown as empty boxes.
 - **Self-healing metrics** (`lib/facebook.ts`): Meta keeps retiring Page metrics
   (`page_impressions*` / `page_fans` removed Nov 2025; more reach/viewer metrics
   retire mid-2026, replaced by "Views"). `fetchPageInsights` requests a list of
@@ -1069,11 +1079,12 @@ request.
   `PageInsightCache`) + `getPageDaily` (per-(page,range) `PageDailyCache`, keyed
   `from_to`; short TTL when the range includes today, longer for historical
   ranges). The API route `app/api/admin/facebook/page-insights` (session-gated,
-  `maxDuration = 60`) **POST**s batched overviews **+ the batch's summed daily
-  series** for a range, and **GET**s either a Page's detail (`?detail=&from=&to=`)
-  or the network posts-per-day (`?networkShares=1`). A **Refresh** busts both
-  caches. Tokens decrypted **server-side only**; one Page failing never blocks the
-  batch (`mapLimit` 6, batch of 20).
+  `maxDuration = 60`) **POST**s batched overviews **+ the batch's summed current
+  and previous daily series** for a range, and **GET**s a Page's detail
+  (`?detail=&from=&to=`, current+previous), the network posts-per-day + prev total
+  (`?networkShares=1`), or the network **top posts** (`?topPosts=1`). A **Refresh**
+  busts the caches. Tokens decrypted **server-side only**; one Page failing never
+  blocks the batch (`mapLimit` 6, client batch of 18).
 - **Env / migration:** no new env. Additive `PageInsightCache`
   (`20260612080000_page_insight_cache`) + `PageDailyCache`
   (`20260612160000_page_daily_cache`), both auto-apply via `prisma migrate
