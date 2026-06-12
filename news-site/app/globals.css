@@ -2516,6 +2516,7 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .admin-shell[data-section="categories"]   { --sa: 124 58 237;  --sa-ink: 124 58 237;  --sa-on: 196 181 253; }
 .admin-shell[data-section="comments"]     { --sa: 2 132 199;   --sa-ink: 3 105 161;   --sa-on: 56 189 248; }
 .admin-shell[data-section="facebook"]     { --sa: 24 119 242;  --sa-ink: 21 92 196;   --sa-on: 105 169 247; }
+.admin-shell[data-section="page-control"] { --sa: 5 150 105;   --sa-ink: 4 120 87;    --sa-on: 52 211 153; }
 .admin-shell[data-section="ai-assistant"] { --sa: 139 92 246;  --sa-ink: 109 40 217;  --sa-on: 208 180 254; }
 .admin-shell[data-section="scheduled"]    { --sa: 217 119 6;   --sa-ink: 180 83 9;    --sa-on: 251 191 36; }
 .admin-shell[data-section="ai-images"]    { --sa: 219 39 119;  --sa-ink: 190 24 93;   --sa-on: 244 114 182; }
@@ -2533,4 +2534,59 @@ a.dl-breaking-text:hover { text-decoration:none; }
   --adm-gold: #d6a85a;
   --chart-1: #60a5fa; --chart-2: #2dd4bf; --chart-3: #c4b5fd;
   --chart-4: #fb923c; --chart-5: #f472b6; --chart-6: #22d3ee;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE CONTROL — per-Page dashboard (list + Summary/Content/Analytics sub-tabs).
+   Reuses the .adm-* design system + the section-accent tokens (emerald). Mobile
+   first: ≥44px targets, swipeable sub-tab row, responsive post grid.
+   ════════════════════════════════════════════════════════════════════════════ */
+.adm-pc-list { display: flex; flex-direction: column; gap: 8px; }
+.adm-pc-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  text-decoration: none; color: inherit; min-height: 64px;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.adm-pc-row:hover { border-color: var(--section-accent); transform: translateY(-1px); box-shadow: 0 6px 18px rgb(0 0 0 / 0.06); }
+.adm-pc-row-name { font-weight: 600; color: var(--adm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-pc-chev { flex: none; color: var(--section-accent); font-size: 22px; line-height: 1; opacity: .8; }
+
+/* Dashboard header (back · identity · open) */
+.adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.adm-pc-back { flex-basis: 100%; font-size: 13px; }
+.adm-pc-id { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 60%; }
+.adm-pc-open { flex: none; }
+
+/* Swipeable sub-tab row (Summary · Content · Analytics) */
+.adm-pc-subtabs {
+  display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--adm-bd); margin-bottom: 12px; scrollbar-width: none;
+}
+.adm-pc-subtabs::-webkit-scrollbar { display: none; }
+.adm-pc-subtab {
+  flex: none; appearance: none; background: none; border: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 11px 16px; min-height: 44px; font: inherit; font-weight: 600; font-size: 14px;
+  color: var(--adm-ink); opacity: .6; cursor: pointer; white-space: nowrap;
+}
+.adm-pc-subtab:hover { opacity: .85; }
+.adm-pc-subtab.on { opacity: 1; color: var(--section-link); border-bottom-color: var(--section-accent); }
+.adm-pc-range { margin-bottom: 6px; }
+.adm-pc-panel { min-height: 200px; }
+
+/* Real-post grid + cards (Content + Summary preview) */
+.adm-pc-posts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 12px; }
+.adm-pc-post { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.adm-pc-post-img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--adm-bd); display: block; }
+.adm-pc-post-noimg { display: grid; place-items: center; color: var(--adm-ink); opacity: .4; font-size: 12px; }
+.adm-pc-post-body { padding: 12px; display: flex; flex-direction: column; }
+.adm-pc-post-cap {
+  margin: 0; color: var(--adm-ink); font-size: 13.5px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.adm-pc-skel { background: var(--adm-bd); animation: adm-pc-pulse 1.2s ease-in-out infinite; }
+@keyframes adm-pc-pulse { 0%, 100% { opacity: .5; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) {
+  .adm-pc-skel { animation: none; }
+  .adm-pc-row { transition: none; }
 }

@@ -388,6 +388,114 @@ export async function getPostStats(postId: string, accessToken: string): Promise
   return stats;
 }
 
+/**
+ * Best-effort per-post reach + impressions from the post-insights edge (needs the
+ * `read_insights` permission). Returns nulls + `available: false` on any failure
+ * (missing scope / retired metric / network) so a posts list never breaks over
+ * one post. Used to enrich the Page Control posts list without re-reading the
+ * engagement counts (those come inline with the list).
+ */
+export async function getPostReach(
+  postId: string,
+  accessToken: string,
+): Promise<{ reach: number | null; impressions: number | null; available: boolean }> {
+  try {
+    const url =
+      `${GRAPH_BASE}/${encodeURIComponent(postId)}/insights/post_impressions,post_impressions_unique` +
+      `?access_token=${encodeURIComponent(accessToken)}`;
+    const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+    const data = await parseGraph<{ data?: { name?: string; values?: { value?: number }[] }[] }>(res, "Could not load reach");
+    let reach: number | null = null;
+    let impressions: number | null = null;
+    for (const m of data.data ?? []) {
+      const v = m.values?.[0]?.value ?? null;
+      if (m.name === "post_impressions") impressions = typeof v === "number" ? v : null;
+      else if (m.name === "post_impressions_unique") reach = typeof v === "number" ? v : null;
+    }
+    return { reach, impressions, available: true };
+  } catch {
+    return { reach: null, impressions: null, available: false };
+  }
+}
+
+/** One REAL published post on a Page (Page Control → Content). `reach` is filled
+ *  best-effort from the insights edge (null when `read_insights` is unavailable). */
+export type PagePost = {
+  id: string; // "{page}_{post}"
+  message: string | null;
+  createdTime: string | null; // ISO 8601
+  permalink: string;
+  thumbnail: string | null; // full_picture CDN url (null when the post has no image)
+  reactions: number | null;
+  comments: number | null;
+  shares: number | null;
+  reach: number | null;
+};
+
+/** A page of real posts + the cursor for the next page (null = no more posts). */
+export type PagePostsPage = { posts: PagePost[]; after: string | null };
+
+/**
+ * List a Page's REAL published posts via the OFFICIAL Graph API
+ * (GET /{pageId}/published_posts) with cursor paging. Returns each post's caption,
+ * created time, permalink, a thumbnail (full_picture), and inline engagement
+ * (reactions / comments / shares summary counts). Reach is left null here and
+ * enriched separately/best-effort via getPostReach (it needs read_insights and a
+ * single retired metric must never fail the whole list). `pages_read_engagement`
+ * is required; a missing scope / invalid token throws FacebookApiError so the
+ * caller can show the "needs reconnect" state. SERVER-SIDE ONLY (Page token).
+ */
+export async function getPagePosts(
+  pageId: string,
+  accessToken: string,
+  opts: { after?: string | null; limit?: number } = {},
+): Promise<PagePostsPage> {
+  const limit = Math.min(25, Math.max(1, Math.round(opts.limit ?? 15)));
+  // Conservative, well-supported field set on v25.0 — deep attachment media is
+  // intentionally omitted (it can error a whole post); full_picture is reliable.
+  const fields = "id,message,created_time,permalink_url,full_picture,shares,reactions.summary(true).limit(0),comments.summary(true).limit(0)";
+  const params = new URLSearchParams();
+  params.set("fields", fields);
+  params.set("limit", String(limit));
+  if (opts.after) params.set("after", opts.after);
+  params.set("access_token", accessToken);
+
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}/published_posts?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{
+    data?: {
+      id?: string;
+      message?: string;
+      created_time?: string;
+      permalink_url?: string;
+      full_picture?: string;
+      shares?: { count?: number };
+      reactions?: { summary?: { total_count?: number } };
+      comments?: { summary?: { total_count?: number } };
+    }[];
+    paging?: { next?: string; cursors?: { after?: string } };
+  }>(res, "Could not load this Page's posts");
+
+  const posts: PagePost[] = (data.data ?? [])
+    .filter((p) => p.id)
+    .map((p) => ({
+      id: p.id as string,
+      message: p.message?.trim() || null,
+      createdTime: p.created_time ?? null,
+      permalink: p.permalink_url || permalinkForPost(p.id as string),
+      thumbnail: p.full_picture || null,
+      reactions: p.reactions?.summary?.total_count ?? null,
+      comments: p.comments?.summary?.total_count ?? null,
+      shares: p.shares?.count ?? 0,
+      reach: null,
+    }));
+
+  // Only advertise a cursor when Facebook says there's a next page, so the client
+  // knows when to stop "Load more".
+  const after = data.paging?.next ? data.paging?.cursors?.after ?? null : null;
+  return { posts, after };
+}
+
 // ── Page Insights (Pages performance overview + trends) ──────────────────────
 //
 // Meta has retired many Page metrics (e.g. page_impressions* / page_fans were

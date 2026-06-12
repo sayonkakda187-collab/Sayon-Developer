@@ -29,9 +29,9 @@ type Overview = {
 };
 
 type SeriesPoint = { date: string; value: number };
-type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
-type DayRow = DayPoint & { shares: number; partial: boolean };
-type Range = { preset: RangePreset; from: string; to: string };
+export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
+export type DayRow = DayPoint & { shares: number; partial: boolean };
+export type Range = { preset: RangePreset; from: string; to: string };
 type Metric = "reach" | "engagement" | "follows";
 
 type RecentPost = {
@@ -45,7 +45,7 @@ type RecentPost = {
   reach: number | null;
 };
 type TopPost = RecentPost & { pageDbId: string; pageName: string; avatarUrl: string | null; engagement: number };
-type DetailData = {
+export type DetailData = {
   pageDbId: string;
   pageName: string;
   from: string;
@@ -116,7 +116,7 @@ function fmtSigned(x: number | null): string {
   return x == null ? "—" : (x > 0 ? "+" : "") + formatNumber(x);
 }
 
-function buildDayRows(from: string, to: string, daily: Map<string, DayPoint>, shares: Record<string, number>): DayRow[] {
+export function buildDayRows(from: string, to: string, daily: Map<string, DayPoint>, shares: Record<string, number>): DayRow[] {
   const today = ppToday();
   return eachDate(from, to).map((date) => {
     const d = daily.get(date);
@@ -159,8 +159,9 @@ function deltaInfo(cur: number, prev: number): { pct: number; dir: "up" | "down"
   return { pct, dir: pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat" };
 }
 
-/** Quick-range buttons (Today · Yesterday · 7d · 28d · 90d · Custom). */
-function RangeControl({ range, onChange, busy }: { range: Range; onChange: (r: Range) => void; busy?: boolean }) {
+/** Quick-range buttons (Today · Yesterday · 7d · 28d · 90d · Custom). Exported so
+ *  the Page Control dashboard can drive one shared range across its sub-tabs. */
+export function RangeControl({ range, onChange, busy }: { range: Range; onChange: (r: Range) => void; busy?: boolean }) {
   const today = ppToday();
   const [open, setOpen] = useState(range.preset === "custom");
   const [cf, setCf] = useState(range.from);
@@ -353,7 +354,7 @@ function PartialNote() {
 
 /** KPI cards + metric-switchable trend chart, shared by the network overview and
  *  the per-Page detail. `curRows`/`prevRows` are equal-length day rows. */
-function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesToday }: { curRows: DayRow[]; prevRows: DayRow[]; prevPostsTotal: number; includesToday: boolean }) {
+export function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesToday }: { curRows: DayRow[]; prevRows: DayRow[]; prevPostsTotal: number; includesToday: boolean }) {
   const [metric, setMetric] = useState<Metric>("reach");
   const [comparePrev, setComparePrev] = useState(false);
   const metricInfo = METRICS.find((m) => m.key === metric) ?? METRICS[0];
@@ -497,10 +498,26 @@ function TopPosts({ posts, loading }: { posts: TopPost[]; loading: boolean }) {
 }
 
 /** Detail panel for one Page: KPI cards + trend chart + its posts (same dashboard
- *  treatment scoped to the page) over a selectable range. */
-function PageDetail({ page, initialRange, onClose }: { page: InsightsPageRow; initialRange: Range; onClose: () => void }) {
+ *  treatment scoped to the page) over a selectable range. Exported + embeddable so
+ *  the Page Control → Analytics sub-tab reuses it verbatim: pass `embedded` to drop
+ *  the duplicate header / close button / inner range control (Page Control owns
+ *  those) and a controlled `range` to drive it from the shared dashboard chips. */
+export function PageDetail({
+  page,
+  initialRange,
+  range: controlledRange,
+  onClose,
+  embedded,
+}: {
+  page: InsightsPageRow;
+  initialRange: Range;
+  range?: Range;
+  onClose?: () => void;
+  embedded?: boolean;
+}) {
   const { error } = useToast();
-  const [range, setRange] = useState<Range>(initialRange);
+  const [internalRange, setRange] = useState<Range>(initialRange);
+  const range = controlledRange ?? internalRange;
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -539,21 +556,28 @@ function PageDetail({ page, initialRange, onClose }: { page: InsightsPageRow; in
   const includesToday = range.to === ppToday();
 
   return (
-    <div className="adm-card adm-card-pad" style={{ marginBottom: 16, borderColor: "var(--adm-green, #16a34a)" }}>
-      <div className="adm-list-head" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <FacebookPageAvatar key={page.id} dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={48} />
-          <div style={{ minWidth: 0 }}>
-            <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{page.pageName}</div>
-            <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · dashboard &amp; posts</div>
+    <div
+      className={embedded ? "" : "adm-card adm-card-pad"}
+      style={embedded ? undefined : { marginBottom: 16, borderColor: "var(--adm-green, #16a34a)" }}
+    >
+      {!embedded && (
+        <div className="adm-list-head" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <FacebookPageAvatar key={page.id} dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={48} />
+            <div style={{ minWidth: 0 }}>
+              <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{page.pageName}</div>
+              <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · dashboard &amp; posts</div>
+            </div>
           </div>
+          {onClose && (
+            <button type="button" className="adm-iconbtn" aria-label="Close detail" onClick={onClose}>
+              <CloseIcon className="h-5 w-5" />
+            </button>
+          )}
         </div>
-        <button type="button" className="adm-iconbtn" aria-label="Close detail" onClick={onClose}>
-          <CloseIcon className="h-5 w-5" />
-        </button>
-      </div>
+      )}
 
-      <RangeControl range={range} onChange={setRange} busy={loading} />
+      {!embedded && <RangeControl range={range} onChange={setRange} busy={loading} />}
 
       {loading ? (
         <p className="adm-card-sub" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>

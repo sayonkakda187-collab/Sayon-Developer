@@ -255,6 +255,7 @@ model FacebookPage {
   scheduledPosts ScheduledPost[]
   insightCache   PageInsightCache?
   dailyCache     PageDailyCache[]
+  postsCache     PagePostsCache?
 
   @@index([categoryGroup])
   @@index([status])
@@ -283,6 +284,19 @@ model PageDailyCache {
   fetchedAt      DateTime     @default(now())
 
   @@id([facebookPageId, rangeKey])
+}
+
+// ~6h cache of a Page's REAL published posts (the first page of ~15, pulled live
+// from the Graph API for the Page Control → Content view). One row per Page; lets
+// opening a Page's dashboard show its posts without re-hitting Graph each time —
+// essential at ~264 Pages on Vercel Hobby. `data` is a small JSON snapshot
+// { posts: PagePost[], after: cursor|null }. "Load more" (cursor paging) and
+// Refresh fetch live; Refresh also rewrites this first-page cache.
+model PagePostsCache {
+  facebookPageId String       @id
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  data           String // JSON: { posts: PagePost[], after: string | null }
+  fetchedAt      DateTime     @default(now())
 }
 
 // A backed-up logged-in browser session for the self-hosted fb-runner. The
