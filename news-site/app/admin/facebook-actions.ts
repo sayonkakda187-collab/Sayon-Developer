@@ -52,6 +52,8 @@ export type ShareArticleItem = {
   slug: string;
   excerpt: string;
   coverImage: string | null;
+  coverCredit: string | null;
+  coverImageSource: string | null;
   views: number;
   publishedAt: string | null;
 };
@@ -81,7 +83,7 @@ export async function listPublishedArticlesForShare(input: {
         orderBy: { publishedAt: "desc" },
         skip: (page - 1) * perPage,
         take: perPage,
-        select: { id: true, title: true, slug: true, excerpt: true, coverImage: true, views: true, publishedAt: true },
+        select: { id: true, title: true, slug: true, excerpt: true, coverImage: true, coverCredit: true, coverImageSource: true, views: true, publishedAt: true },
       }),
       prisma.article.count({ where }),
     ]);
@@ -94,6 +96,8 @@ export async function listPublishedArticlesForShare(input: {
           slug: a.slug,
           excerpt: a.excerpt,
           coverImage: a.coverImage,
+          coverCredit: a.coverCredit,
+          coverImageSource: a.coverImageSource,
           views: a.views,
           publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
         })),
