@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { uniqueArticleSlug } from "@/lib/slug";
 import { permalinkForPost } from "@/lib/facebook";
 import { publishArticleNow } from "@/app/admin/facebook-actions";
+import { publishScheduledArticleById, scheduleArticle } from "@/lib/publish";
+import { formatSchedule } from "@/lib/fbSchedule";
 import type { AgentActionRecord } from "./store";
 
 export type ExecResult = { ok: boolean; result?: string; error?: string };
@@ -33,17 +35,25 @@ export async function executeAgentAction(action: AgentActionRecord): Promise<Exe
 
 async function doPublish(params: Record<string, unknown>): Promise<ExecResult> {
   const articleId = String(params.articleId ?? "");
-  const a = await prisma.article.findUnique({ where: { id: articleId }, select: { id: true, title: true, slug: true, status: true, publishedAt: true } });
+  const a = await prisma.article.findUnique({ where: { id: articleId }, select: { id: true, title: true, status: true } });
   if (!a) return { ok: false, error: "Article not found." };
   if (a.status === "published") return { ok: true, result: `“${a.title}” is already published.` };
-  await prisma.article.update({
-    where: { id: a.id },
-    data: { status: "published", publishedAt: a.publishedAt ?? new Date() },
-  });
-  revalidatePath("/");
-  revalidatePath(`/news/${a.slug}`);
-  revalidatePath("/admin/articles");
-  return { ok: true, result: `Published “${a.title}”.` };
+
+  // The approval may carry a scheduled time (set by the agent or overridden in the
+  // approval card). A valid FUTURE time → schedule; otherwise publish now.
+  const iso = typeof params.scheduledAt === "string" ? params.scheduledAt : "";
+  const when = iso ? new Date(iso) : null;
+  if (when && !Number.isNaN(when.getTime()) && when.getTime() > Date.now() + 30_000) {
+    await scheduleArticle(a.id, when);
+    return { ok: true, result: `Scheduled “${a.title}” to publish ${formatSchedule(when)} (Phnom Penh).` };
+  }
+
+  // Publish now via the shared chokepoint (Key Points + Facebook auto-share to any
+  // pages stored on the article fire here, at publish time).
+  const res = await publishScheduledArticleById(a.id);
+  if (!res.ok) return { ok: false, error: res.error ?? "Publish failed." };
+  const shareNote = res.shared ? ` Auto-shared to ${res.shared} Facebook page${res.shared === 1 ? "" : "s"}.` : "";
+  return { ok: true, result: `Published “${a.title}”.${shareNote}` };
 }
 
 async function doUpdatePublished(params: Record<string, unknown>): Promise<ExecResult> {

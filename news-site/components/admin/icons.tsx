@@ -23,6 +23,12 @@ export const BellIcon = (p: P) => (
     <path d="M13.7 21a2 2 0 0 1-3.4 0" />
   </svg>
 );
+export const ClockIcon = (p: P) => (
+  <svg {...base} className={p.className} aria-hidden>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+);
 export const SearchIcon = (p: P) => (
   <svg {...base} strokeWidth={2} className={p.className} aria-hidden>
     <circle cx="11" cy="11" r="7" />

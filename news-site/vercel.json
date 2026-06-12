@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/autopilot",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/publish-due",
+      "schedule": "0 1 * * *"
     }
   ]
 }

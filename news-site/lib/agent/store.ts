@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
+import { normalizePreferredTimes } from "@/lib/scheduleSlots";
 
 // Phase-2 persistence WITHOUT a schema migration: agent settings + the action /
 // approval log live as JSON in the existing AppSetting key-value table (the
@@ -29,6 +30,9 @@ export type AgentSettings = {
   customInstructions: string;
   model: string | null;
   autopilot: AutopilotSettings;
+  // Preferred publish times (Asia/Phnom_Penh "HH:mm", 24h) — the scheduling preset
+  // chips + "auto-stagger" + the agent's suggestions all draw from these.
+  preferredTimes: string[];
 };
 
 // 23:00 UTC == 06:00 Asia/Phnom_Penh (UTC+7, no DST) — the default run time.
@@ -46,6 +50,7 @@ export const AGENT_DEFAULTS: AgentSettings = {
   customInstructions: "",
   model: null,
   autopilot: AUTOPILOT_DEFAULTS,
+  preferredTimes: ["19:00", "21:00", "23:00"],
 };
 
 /** Coerce a stored/partial autopilot blob into a valid AutopilotSettings. */
@@ -64,7 +69,8 @@ export type AgentActionType =
   | "publish_article"
   | "update_published_article"
   | "share_to_facebook"
-  | "autopilot_run";
+  | "autopilot_run"
+  | "publish_scheduled";
 export type AgentActionStatus = "pending" | "rejected" | "done" | "failed";
 export type AgentActionRecord = {
   id: string;
@@ -90,6 +96,7 @@ export async function getAgentSettings(): Promise<AgentSettings> {
       customInstructions: typeof p.customInstructions === "string" ? p.customInstructions : "",
       model: typeof p.model === "string" ? p.model : null,
       autopilot: normalizeAutopilot(p.autopilot),
+      preferredTimes: normalizePreferredTimes(p.preferredTimes),
     };
   } catch {
     return AGENT_DEFAULTS;
@@ -103,6 +110,7 @@ export async function saveAgentSettings(s: AgentSettings): Promise<void> {
     requireApproval: { ...s.requireApproval, publishing: true, sharing: true },
     customInstructions: (s.customInstructions ?? "").slice(0, 4000),
     autopilot: normalizeAutopilot(s.autopilot),
+    preferredTimes: normalizePreferredTimes(s.preferredTimes),
   };
   const value = JSON.stringify(safe);
   await prisma.appSetting.upsert({

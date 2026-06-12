@@ -3,6 +3,7 @@ import "server-only";
 import { anthropicCall, type AnthropicMessage, type ContentBlock } from "./anthropic";
 import { buildTools, executeTool } from "./tools";
 import type { AgentSettings, AgentActionRecord } from "./store";
+import { formatSchedule, toLocalInput } from "@/lib/fbSchedule";
 
 export type AgentTurnInput = {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -47,6 +48,12 @@ SAFETY RULES — never violate:
 GATED ACTIONS — these need the owner's explicit approval:
 - publish_article, update_published_article (editing a LIVE article), and share_to_facebook do NOT execute when you call them. They PROPOSE an action that the owner must Approve. Tell the owner you've proposed it and what it will do. NEVER claim something was published, edited live, or shared until it is actually approved and done. Do not call the same gated tool repeatedly for one request.
 - Reading (list_articles, get_article, get_share_stats), searching news, and creating/updating DRAFTS happen immediately (no approval).
+
+SCHEDULING (all times Asia/Phnom_Penh):
+- The current time in Asia/Phnom_Penh is ${formatSchedule(new Date())} (right now it is ${toLocalInput(new Date())} in 'YYYY-MM-DD HH:mm').
+- When the owner asks to publish at a specific or relative time ("at 9pm", "tonight 9pm", "tomorrow 7am", "in 2 hours"), resolve it to an absolute Asia/Phnom_Penh time and pass it to publish_article as the 'when' parameter ('YYYY-MM-DD HH:mm', 24-hour). The owner can still adjust the time on the approval card before approving.
+- The owner's preferred posting times are: ${settings.preferredTimes.join(", ")} (Phnom Penh). If they say "schedule it for tonight" without a specific time, suggest the next upcoming preferred time.
+- Publishing/scheduling still needs approval — propose it; never claim it's scheduled or published until approved.
 
 Currently enabled capabilities: ${capLine(settings)}. If a capability is off, its tool isn't available — tell the owner to enable it in Agent Settings rather than trying.
 

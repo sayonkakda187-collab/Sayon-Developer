@@ -22,6 +22,7 @@ import { COVER_HANDOFF_KEY } from "@/lib/imageGenClient";
 import { SparklesIcon, CloseIcon, ShareIcon, ImageIcon, AiImageIcon } from "@/components/admin/icons";
 import { AutoShareField, type AutoSharePage } from "@/components/admin/AutoShareField";
 import { AI_MODEL_STORAGE_KEY } from "@/lib/aiModels";
+import { toLocalInput, nowLocalInput } from "@/lib/fbSchedule";
 
 // Save draft / Publish buttons with a live saving state. Reads the parent
 // form's pending status (useFormStatus) so the clicked button shows a spinner
@@ -99,6 +100,7 @@ type ArticleInput = {
   coverCredit?: string | null;
   coverCreditUrl?: string | null;
   coverImageSource?: string | null;
+  scheduledAt?: string | null;
   categoryId: string | null;
   status: string;
   tagIds: string[];
@@ -198,6 +200,9 @@ export function ArticleForm({
   const [aiNotice, setAiNotice] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [aiEditOpen, setAiEditOpen] = useState(false);
+  // Schedule picker (Phnom-Penh wall clock). Seeded from an already-scheduled
+  // article; empty otherwise. Submitting with status="scheduled" stores it.
+  const [scheduledLocal, setScheduledLocal] = useState(article?.scheduledAt ? toLocalInput(new Date(article.scheduledAt)) : "");
   const isPublished = article?.status === "published";
 
   // Apply an AI edit into the editor as an UNSAVED change (autosave + the
@@ -882,6 +887,36 @@ export function ArticleForm({
 
           {fbPages && fbPages.length > 0 && (
             <AutoShareField pages={fbPages} active={autoShareActive} />
+          )}
+
+          {/* Schedule for later: auto-publishes at this Phnom-Penh time, and the
+              Facebook auto-share above fires THEN (not now). */}
+          {!isPublished && (
+            <div>
+              <label className="block text-sm font-medium text-fg-muted">Schedule</label>
+              <p className="mt-1 text-xs text-fg-faint">
+                Pick a time to auto-publish later (Phnom Penh). Any Facebook auto-share fires when it goes live.
+              </p>
+              <input
+                type="datetime-local"
+                name="scheduledLocal"
+                min={nowLocalInput()}
+                value={scheduledLocal}
+                onChange={(e) => setScheduledLocal(e.target.value)}
+                className={`${inputClass} mt-2`}
+              />
+              <button
+                type="submit"
+                name="status"
+                value="scheduled"
+                disabled={!scheduledLocal}
+                onClick={() => clear()}
+                className="adm-btn-ghost mt-2 w-full justify-center disabled:opacity-50"
+                style={{ minHeight: 44 }}
+              >
+                {article?.status === "scheduled" ? "Update schedule" : "Schedule"}
+              </button>
+            </div>
           )}
         </div>
       </div>
