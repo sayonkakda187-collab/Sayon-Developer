@@ -402,6 +402,40 @@ export async function facebookConnectPage(input: {
  * account now manages (filed under "Uncategorized" until you set a group). Lets a
  * Page you just created on Facebook show up here without re-pasting anything.
  */
+/** Re-derive + re-store the PAGE token of every Page the user token manages
+ *  (refresh existing, add new). Shared by Refresh Pages + the one-pass reconnect,
+ *  so a fresh user token re-grants every connected Page's token at once. */
+async function syncPagesFromUserToken(userToken: string): Promise<{ refreshed: number; added: number }> {
+  const pages = await getUserPages(userToken);
+  const existing = await prisma.facebookPage.findMany({ select: { pageId: true } });
+  const known = new Set(existing.map((p) => p.pageId));
+  let refreshed = 0;
+  let added = 0;
+  for (const p of pages) {
+    const isNew = !known.has(p.id);
+    await prisma.facebookPage.upsert({
+      where: { pageId: p.id },
+      update: {
+        pageName: p.name,
+        accessToken: encryptSecret(p.accessToken),
+        status: "Connected",
+        lastSyncedAt: new Date(),
+      },
+      create: {
+        pageId: p.id,
+        pageName: p.name,
+        accessToken: encryptSecret(p.accessToken),
+        categoryGroup: "Uncategorized",
+        status: "Connected",
+        lastSyncedAt: new Date(),
+      },
+    });
+    if (isNew) added++;
+    else refreshed++;
+  }
+  return { refreshed, added };
+}
+
 export async function facebookRefreshPages(): Promise<ActionResult<{ refreshed: number; added: number }>> {
   await requireAdmin();
   try {
@@ -409,37 +443,43 @@ export async function facebookRefreshPages(): Promise<ActionResult<{ refreshed: 
     if (!userToken) {
       return fail("Connect with the Auto flow first (App ID + Secret + user token) — then Refresh Pages can re-sync.");
     }
-    const pages = await getUserPages(userToken);
-    const existing = await prisma.facebookPage.findMany({ select: { pageId: true } });
-    const known = new Set(existing.map((p) => p.pageId));
-    let refreshed = 0;
-    let added = 0;
-    for (const p of pages) {
-      const isNew = !known.has(p.id);
-      await prisma.facebookPage.upsert({
-        where: { pageId: p.id },
-        update: {
-          pageName: p.name,
-          accessToken: encryptSecret(p.accessToken),
-          status: "Connected",
-          lastSyncedAt: new Date(),
-        },
-        create: {
-          pageId: p.id,
-          pageName: p.name,
-          accessToken: encryptSecret(p.accessToken),
-          categoryGroup: "Uncategorized",
-          status: "Connected",
-          lastSyncedAt: new Date(),
-        },
-      });
-      if (isNew) added++;
-      else refreshed++;
-    }
+    const res = await syncPagesFromUserToken(userToken);
     revalidatePath("/admin/facebook");
-    return { ok: true, data: { refreshed, added } };
+    return { ok: true, data: res };
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Couldn’t refresh your Pages from Facebook.");
+  }
+}
+
+/**
+ * ONE-PASS reconnect: take a fresh user token (with all the scopes), exchange it
+ * for a long-lived one, save it, and re-derive + re-store the PAGE token of EVERY
+ * connected Page from it — so a single Facebook login re-grants every page's
+ * scopes (e.g. pages_manage_engagement for commenting) without per-page work.
+ */
+export async function facebookReconnectAll(input: {
+  appId?: string;
+  appSecret?: string;
+  userToken: string;
+}): Promise<ActionResult<{ refreshed: number; added: number }>> {
+  await requireAdmin();
+  const userToken = input.userToken?.trim();
+  if (!userToken) return fail("Paste your Facebook user access token first.");
+  try {
+    if (input.appId?.trim() && input.appSecret?.trim()) {
+      await saveFacebookAppCreds({ appId: input.appId.trim(), appSecret: input.appSecret.trim() });
+    }
+    const creds = await getFacebookAppCreds();
+    if (!creds.appId || !creds.appSecret) {
+      return fail("Enter your App ID and App Secret (App Dashboard → Settings → Basic).");
+    }
+    const longLived = await exchangeForLongLivedUserToken(userToken, creds);
+    await saveFacebookUserToken(longLived.accessToken, longLived.expiresInSeconds);
+    const res = await syncPagesFromUserToken(longLived.accessToken);
+    revalidatePath("/admin/facebook");
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Couldn’t reconnect your Pages.");
   }
 }
 

@@ -5,6 +5,7 @@ import {
   connectFacebookPage,
   facebookFetchPages,
   facebookConnectPage,
+  facebookReconnectAll,
 } from "@/app/admin/facebook-actions";
 import { FACEBOOK_CATEGORY_GROUPS } from "@/lib/facebookGroups";
 import { CloseIcon } from "@/components/admin/icons";
@@ -56,6 +57,20 @@ export function ConnectModal({
     if (!res.ok) return onError(res.error);
     setPages(res.data.pages);
     setSelectedPage(res.data.pages[0]?.id ?? "");
+  }
+
+  // One pass: save the new token + re-grant EVERY connected Page's token from it.
+  async function onReconnectAll() {
+    if (!userToken.trim()) return onError("Paste your user access token first.");
+    setBusy(true);
+    const res = await facebookReconnectAll({
+      appId: appId.trim(),
+      appSecret: appSecret.trim(),
+      userToken: userToken.trim(),
+    });
+    setBusy(false);
+    if (res.ok) onConnected();
+    else onError(res.error);
   }
 
   async function onConnectAuto(e: React.FormEvent) {
@@ -128,9 +143,14 @@ export function ConnectModal({
               <form onSubmit={onFetch}>
                 <p className="adm-field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
                   Paste your <strong>App ID</strong> + <strong>App Secret</strong> (App Dashboard → Settings → Basic) and a
-                  short-lived <strong>User token</strong> from the Graph API Explorer (scopes: pages_show_list,
-                  pages_read_engagement, pages_manage_posts, business_management). We exchange it for a long-lived token and list your Pages —
-                  all stored encrypted, server-side.
+                  short-lived <strong>User token</strong> from the Graph API Explorer. Grant <strong>all</strong> of these
+                  scopes: <code>pages_show_list</code>, <code>pages_manage_posts</code>, <code>pages_read_engagement</code>,{" "}
+                  <code>pages_manage_engagement</code> (needed to comment as the Page), <code>read_insights</code> (optional —
+                  reach/views) <em>+ <code>business_management</code> if your Pages are in a Business Manager</em>. We exchange
+                  it for a long-lived token, stored encrypted server-side.
+                  <br />
+                  <strong>Re-granting scopes?</strong> Generate a new token with the scopes above and click{" "}
+                  <strong>“Reconnect ALL pages”</strong> — it refreshes every connected Page’s token in one pass.
                 </p>
                 <label className="adm-field">
                   <span>App ID</span>
@@ -144,8 +164,12 @@ export function ConnectModal({
                   <span>User Access Token (short-lived is fine)</span>
                   <textarea className="adm-input" value={userToken} onChange={(e) => setUserToken(e.target.value)} rows={3} placeholder="Paste the token from Graph API Explorer" required style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5 }} />
                 </label>
-                <div className="adm-modal-foot">
+                <div className="adm-modal-foot" style={{ flexWrap: "wrap", gap: 8 }}>
                   <button type="button" className="adm-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+                  <button type="button" className="adm-btn-ghost" onClick={onReconnectAll} disabled={busy} title="Save this token + refresh every connected Page's token in one pass">
+                    {busy && <span className="adm-spinner" aria-hidden />}
+                    Reconnect ALL pages
+                  </button>
                   <button type="submit" className="adm-btn-primary" disabled={busy}>
                     {busy && <span className="adm-spinner" aria-hidden />}
                     {busy ? "Fetching…" : "Fetch my Pages"}
