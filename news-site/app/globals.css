@@ -1817,9 +1817,30 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-seg-ok { display: inline-flex; color: var(--adm-green); }
 
 /* ── Facebook tab: section switcher bar ─────────────────────────────────────── */
-.adm-fb-tabbar { display: flex; justify-content: center; margin: 2px 0 18px; }
-.adm-fb-tabbar .adm-seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
-.adm-fb-tabbar .adm-seg-btn { white-space: nowrap; }
+/* The TABBAR is the horizontal scroller. `margin:auto` on the inner pill centers
+   it when it fits but resolves to 0 when it overflows, so the FIRST tab is always
+   reachable (justify-content:center clips the start on a narrow screen). The
+   -webkit-overflow-scrolling + touch-action keep it swipeable in iOS Safari and
+   the installed PWA, where the old clipped, non-scrollable row hid the last tabs. */
+.adm-fb-tabbar {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  margin: 2px 0 18px;
+  scrollbar-width: none; /* hide the bar — it's swipeable */
+}
+.adm-fb-tabbar::-webkit-scrollbar { display: none; }
+.adm-fb-tabbar .adm-seg { margin: 0 auto; flex: none; max-width: none; overflow: visible; flex-wrap: nowrap; }
+.adm-fb-tabbar .adm-seg-btn { white-space: nowrap; flex: none; }
+
+/* ── Facebook: always-visible "Share mode" card (above the tab row) ─────────── */
+.adm-fb-modecard { margin-bottom: 16px; }
+.adm-fb-modeopts { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-fb-modeopts .adm-seg-btn { border: 1.5px solid var(--adm-bd); background: var(--adm-card); }
+.adm-fb-modeopts .adm-seg-btn.on { border-color: var(--adm-blue); color: var(--adm-blue); box-shadow: none; }
+.adm-fb-modeacts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 
 /* ── Pagination (Prev · 1 2 … N · Next) ─────────────────────────────────────── */
 .adm-pager { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
