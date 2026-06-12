@@ -91,6 +91,28 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
     autosize();
   }, [input, autosize]);
 
+  // iOS keyboard: track how much the on-screen keyboard overlaps the viewport and
+  // expose it as --ac-kb. The mobile CSS shrinks .adm-ac by that amount so the
+  // fixed-at-the-bottom composer rides above the keyboard (the layout viewport
+  // doesn't shrink for the keyboard on iOS Safari/PWA, so a CSS-only fix can't).
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty("--ac-kb", `${Math.round(overlap)}px`);
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      root.style.removeProperty("--ac-kb");
+    };
+  }, []);
+
   const fetchSlots = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/agent/scheduled-slots?count=5");
