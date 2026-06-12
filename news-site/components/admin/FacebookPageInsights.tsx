@@ -101,10 +101,12 @@ const PRESETS: { key: RangePreset; label: string }[] = [
   { key: "28d", label: "28d" },
   { key: "90d", label: "90d" },
 ];
+// Chart colours come from the section-accent token system (globals.css): the
+// PRIMARY metric uses the page's section accent, the rest the shared chart palette.
 const METRICS: { key: Metric; label: string; color: string }[] = [
-  { key: "reach", label: "Reach", color: "#2563eb" },
-  { key: "engagement", label: "Engagement", color: "#16a34a" },
-  { key: "follows", label: "Followers", color: "#9333ea" },
+  { key: "reach", label: "Reach", color: "var(--section-accent)" },
+  { key: "engagement", label: "Engagement", color: "var(--chart-2)" },
+  { key: "follows", label: "Followers", color: "var(--chart-3)" },
 ];
 
 function fmtNum(x: number | null): string {
@@ -357,10 +359,10 @@ function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesToday }:
   const metricInfo = METRICS.find((m) => m.key === metric) ?? METRICS[0];
 
   const kpis: { label: string; value: number; prev: number; points: SeriesPoint[]; color: string; signed?: boolean }[] = [
-    { label: "Reach", value: sumRows(curRows, "reach"), prev: sumRows(prevRows, "reach"), points: seriesOf(curRows, "reach"), color: "#2563eb" },
-    { label: "Engagement", value: sumRows(curRows, "engagement"), prev: sumRows(prevRows, "engagement"), points: seriesOf(curRows, "engagement"), color: "#16a34a" },
-    { label: "Net follows", value: sumRows(curRows, "follows"), prev: sumRows(prevRows, "follows"), points: seriesOf(curRows, "follows"), color: "#9333ea", signed: true },
-    { label: "Our posts", value: sumShares(curRows), prev: prevPostsTotal, points: postsSeries(curRows), color: "#0ea5e9" },
+    { label: "Reach", value: sumRows(curRows, "reach"), prev: sumRows(prevRows, "reach"), points: seriesOf(curRows, "reach"), color: "var(--section-accent)" },
+    { label: "Engagement", value: sumRows(curRows, "engagement"), prev: sumRows(prevRows, "engagement"), points: seriesOf(curRows, "engagement"), color: "var(--chart-2)" },
+    { label: "Net follows", value: sumRows(curRows, "follows"), prev: sumRows(prevRows, "follows"), points: seriesOf(curRows, "follows"), color: "var(--chart-3)", signed: true },
+    { label: "Our posts", value: sumShares(curRows), prev: prevPostsTotal, points: postsSeries(curRows), color: "var(--chart-6)" },
   ];
 
   return (

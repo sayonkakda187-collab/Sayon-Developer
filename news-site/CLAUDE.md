@@ -145,6 +145,26 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   overflow (long URLs/IDs wrap, media capped at 100%), modals become **bottom
   sheets**, and the editor gets a **sticky Save/Publish bar** (`.adm-editbar`).
   Keep new admin UI working at 320–414px; respect `prefers-reduced-motion`.
+- **Section accent colors (admin):** every admin area has its own identity via a
+  token system in `app/globals.css`. `AdminShell` sets **`data-section`** on
+  `.admin-shell` from the route; each `[data-section]` defines three RGB triplets —
+  **`--sa`** (vivid accent: icons/rings/borders/tints), **`--sa-ink`** (a darker
+  AA-safe variant for small text/links in light mode), **`--sa-on`** (a brightened
+  variant for dark surfaces / dark mode) — which derive `--section-accent`,
+  `--section-link`, `--section-accent-bright`, `--section-tint(-2)`. The accent
+  appears ONLY on: active nav/bottom-tab/drawer item (icon + soft tint), page-header
+  gradient chip + underline (`.adm-page-h`/`.adm-welcome`, pure CSS), active
+  tabs/chips (`.adm-seg-btn.on`, `.adm-fchip.on`, `.adm-pager-btn.on`), focus rings
+  (`.adm-input:focus`), and key links (`.adm-link`). Sections: dashboard navy ·
+  audience teal · articles indigo · trending orange · categories violet · comments
+  sky · facebook #1877f2 · ai-assistant purple · scheduled amber · ai-images rose ·
+  sites cyan · settings slate. **Rules:** status colors (success green / warning
+  amber / error red) and neutral cards/backgrounds/text are NOT section-tinted —
+  accents are seasoning. Brand **gold `--adm-gold` (#b8893b)** is reserved for
+  premium highlights. A shared 6-colour chart palette (`--chart-1..6`) backs charts
+  (Insights uses `--section-accent` for the primary metric + the palette). Dark mode
+  brightens accents (`--sa → --sa-on`, AA) and lifts tints to ~16/22%. **Don't
+  hardcode section hexes in components — reference the `--section-*` tokens.**
 
 ## Ads (AdsKeeper)
 
