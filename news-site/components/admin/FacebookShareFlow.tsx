@@ -14,7 +14,7 @@ import { useToast } from "@/components/admin/Toast";
 import { ConnectModal } from "./FacebookConnectModal";
 import { ArticleThumb } from "./ArticleThumb";
 import type { FacebookPageView } from "./FacebookPagesManager";
-import { type ShareMode, SHARE_MODE_LABEL } from "@/lib/facebookShareTemplates";
+import { type ShareMode, SHARE_MODE_LABEL, buildPhotoCaption } from "@/lib/facebookShareTemplates";
 import {
   FacebookIcon,
   PlusIcon,
@@ -422,9 +422,11 @@ function ShareJobCard({ job, onDismiss }: { job: ShareJob; onDismiss: (id: strin
 export function FacebookShareFlow({
   pages,
   defaultShareMode = "link",
+  photoCaptionTemplate,
 }: {
   pages: FacebookPageView[];
   defaultShareMode?: ShareMode;
+  photoCaptionTemplate?: string;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -452,6 +454,9 @@ export function FacebookShareFlow({
   const [caption, setCaption] = useState("");
   // Share mode for this batch (seeded from the global default; overridable here).
   const [shareMode, setShareMode] = useState<ShareMode>(defaultShareMode);
+  // The caption we last AUTO-seeded — lets us re-seed on mode change without ever
+  // clobbering a caption the user hand-edited.
+  const seededCaption = useRef("");
 
   // Between-pages delay (captured into a job when you launch it).
   const [delaySeconds, setDelaySeconds] = useState(DEFAULT_DELAY);
@@ -621,10 +626,30 @@ export function FacebookShareFlow({
     return parts.join("\n");
   }
 
+  // The default caption for an article in a given mode. Photo mode uses the photo
+  // caption template (headline + excerpt + credit, NO link — the link goes in the
+  // comment); link mode keeps the link-style caption.
+  function captionFor(a: ShareArticleItem, m: ShareMode): string {
+    return m === "photo" ? buildPhotoCaption(a, photoCaptionTemplate) : defaultCaption(a);
+  }
+
   function chooseArticle(a: ShareArticleItem) {
     setArticle(a);
-    setCaption(defaultCaption(a));
+    const c = captionFor(a, shareMode);
+    setCaption(c);
+    seededCaption.current = c;
     setScheduledOk(null);
+  }
+
+  // Switch share mode AND re-seed the caption to that mode's default — unless the
+  // user has hand-edited the caption, in which case we leave their text alone.
+  function changeMode(m: ShareMode) {
+    setShareMode(m);
+    if (article && caption === seededCaption.current) {
+      const c = captionFor(article, m);
+      setCaption(c);
+      seededCaption.current = c;
+    }
   }
 
   // Spawn a live share job from the current selection + article, then reset the
@@ -964,12 +989,16 @@ export function FacebookShareFlow({
                       aria-label="Post caption"
                       placeholder="Caption for the Facebook post"
                     />
-                    <span className="adm-field-hint">The article link preview is attached automatically by Facebook. Edit the text or leave the default.</span>
+                    <span className="adm-field-hint">
+                      {shareMode === "photo"
+                        ? "This is the photo caption. The article link is added as the first comment — don’t put the link here."
+                        : "The article link preview is attached automatically by Facebook. Edit the text or leave the default."}
+                    </span>
                   </label>
 
                   <label className="adm-field" style={{ marginTop: 12, maxWidth: 320 }}>
                     <span>Share as</span>
-                    <select className="adm-input" value={shareMode} onChange={(e) => setShareMode(e.target.value as ShareMode)} aria-label="Share mode">
+                    <select className="adm-input" value={shareMode} onChange={(e) => changeMode(e.target.value as ShareMode)} aria-label="Share mode">
                       <option value="link">{SHARE_MODE_LABEL.link}</option>
                       <option value="photo">{SHARE_MODE_LABEL.photo}</option>
                     </select>

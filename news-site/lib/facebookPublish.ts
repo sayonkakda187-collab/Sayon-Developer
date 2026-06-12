@@ -79,6 +79,24 @@ export type PublishResult = {
   commentPermission?: boolean;
 };
 
+/** Defense-in-depth for PHOTO mode: the article link belongs in the comment, never
+ *  the photo caption. Drop any caption line that carries the URL (or host) or a
+ *  dangling "Read more on …:" lead-in (e.g. from an edited/seeded link-style caption). */
+function stripArticleUrlFromCaption(caption: string, url: string): string {
+  const host = url.replace(/^https?:\/\//, "");
+  return caption
+    .split("\n")
+    .filter(
+      (line) =>
+        !line.includes(url) &&
+        !(host && line.includes(host)) &&
+        !/^\s*read more on .+?:?\s*$/i.test(line),
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function markConnected(pageDbId: string): Promise<void> {
   await prisma.facebookPage
     .update({ where: { id: pageDbId }, data: { status: "Connected", lastSyncedAt: new Date() } })
@@ -144,14 +162,16 @@ export async function publishArticleToPage(
   try {
     if (mode === "photo") {
       const imageUrl = (article.coverImage || "").trim() || ogCardImageUrl(article.slug);
-      const caption =
+      const rawCaption =
         share?.caption?.trim() ||
         renderTemplate(share?.captionTemplate || DEFAULT_PHOTO_CAPTION, {
           headline: article.title,
           excerpt: article.excerpt || "",
           credit: creditLine(article.coverCredit, article.coverImageSource),
-          url,
+          // No {url} — the link goes in the comment, never the caption.
         });
+      // Belt-and-suspenders: never let the article link leak into the photo caption.
+      const caption = stripArticleUrlFromCaption(rawCaption, url);
       const { postId } = await postPhotoToPage({ pageId: page.pageId, accessToken: token, imageUrl, caption });
       await markConnected(page.id);
 

@@ -58,3 +58,17 @@ export function creditLine(coverCredit: string | null | undefined, coverImageSou
   const src = (coverImageSource || "").trim();
   return `Photo: ${author}${src ? ` · ${src}` : ""}`;
 }
+
+/** Render the PHOTO caption for an article (headline + excerpt + credit; the link
+ *  intentionally goes in the comment, so there's NO {url} here). Client-safe — used
+ *  to seed the Share-now caption box when photo mode is selected. */
+export function buildPhotoCaption(
+  article: { title: string; excerpt?: string | null; coverCredit?: string | null; coverImageSource?: string | null },
+  template?: string,
+): string {
+  return renderTemplate(template || DEFAULT_PHOTO_CAPTION, {
+    headline: article.title,
+    excerpt: article.excerpt || "",
+    credit: creditLine(article.coverCredit, article.coverImageSource),
+  });
+}

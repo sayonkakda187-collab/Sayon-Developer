@@ -85,7 +85,7 @@ export default async function AdminFacebookPage() {
       <FacebookTabs
         defaultId="share"
         tabs={[
-          { id: "share", label: "Share", node: <FacebookShareFlow pages={view} defaultShareMode={shareSettings.mode} /> },
+          { id: "share", label: "Share", node: <FacebookShareFlow pages={view} defaultShareMode={shareSettings.mode} photoCaptionTemplate={shareSettings.captionTemplate} /> },
           { id: "scheduled", label: "Scheduled", node: <FacebookScheduledPosts posts={scheduledView} /> },
           { id: "results", label: "Results", node: <FacebookShareResults /> },
           { id: "pages", label: "Pages", node: <FacebookPagesManager pages={view} connect={connect} /> },
