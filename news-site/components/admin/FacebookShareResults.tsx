@@ -5,6 +5,7 @@ import { useToast } from "@/components/admin/Toast";
 import {
   listSharedArticles,
   getShareResults,
+  retryShareComment,
   type ShareResultRow,
 } from "@/app/admin/facebook-actions";
 import { formatDate, formatNumber } from "@/lib/site";
@@ -31,13 +32,14 @@ function Stat({ label, value }: { label: string; value: number | null }) {
  * (Refresh re-reads). Self-fetches; renders nothing until something's been shared.
  */
 export function FacebookShareResults() {
-  const { error } = useToast();
+  const { success, error } = useToast();
   const [articles, setArticles] = useState<ArticleOpt[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [articleId, setArticleId] = useState("");
   const [title, setTitle] = useState("");
   const [rows, setRows] = useState<ShareResultRow[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,19 @@ export function FacebookShareResults() {
     if (res.ok) {
       setRows(res.data.results);
       setTitle(res.data.articleTitle);
+    } else {
+      error(res.error);
+    }
+  }
+
+  // Retry the link comment for a photo share whose post landed but comment didn't.
+  async function retryComment(id: string) {
+    setRetrying(id);
+    const res = await retryShareComment({ id });
+    setRetrying(null);
+    if (res.ok) {
+      success("Link comment added.");
+      load(articleId);
     } else {
       error(res.error);
     }
@@ -164,6 +179,25 @@ export function FacebookShareResults() {
                 ) : (
                   <p className="adm-fb-sub" style={{ color: "#b45309", marginTop: 8 }}>{r.error}</p>
                 )}
+                {r.mode === "photo" &&
+                  (r.commentMissing ? (
+                    <div style={{ marginTop: 8, borderTop: "1px dashed var(--adm-bd)", paddingTop: 8 }}>
+                      <p className="adm-fb-sub" style={{ color: "#b45309" }}>
+                        ⚠ The link comment didn’t post{r.commentError ? ` — ${r.commentError}` : "."}
+                      </p>
+                      <button
+                        type="button"
+                        className="adm-btn-ghost"
+                        style={{ marginTop: 6 }}
+                        disabled={retrying === r.scheduledPostId}
+                        onClick={() => retryComment(r.scheduledPostId)}
+                      >
+                        {retrying === r.scheduledPostId ? <span className="adm-spinner" aria-hidden /> : null} Add comment
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="adm-fb-sub" style={{ marginTop: 6, color: "#15803d" }}>✓ Link posted in the comments</p>
+                  ))}
               </div>
             ))}
           </div>

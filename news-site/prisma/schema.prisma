@@ -275,6 +275,11 @@ model ScheduledPost {
   postedAt       DateTime?
   error          String? // failure reason, if status = "failed"
   graphPostId    String? // the returned Facebook post id ("{page}_{post}")
+  // Share mode used ("link" | "photo"). Photo mode also stores the link-comment id
+  // (or commentError when the post landed but the comment didn't — retryable).
+  mode           String? // null = legacy "link"
+  commentId      String?
+  commentError   String?
   createdAt      DateTime  @default(now())
 
   articleId      String

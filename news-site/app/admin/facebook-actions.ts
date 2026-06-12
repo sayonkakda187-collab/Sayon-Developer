@@ -18,7 +18,9 @@ import {
   saveFacebookUserToken,
   getFacebookUserToken,
 } from "@/lib/facebookSettings";
-import { publishArticleToPage, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
+import { publishArticleToPage, addLinkComment, articleUrl, buildMessage, type PublishResult } from "@/lib/facebookPublish";
+import { getFbShareSettings, saveFbShareSettings } from "@/lib/facebookShareSettings";
+import { type ShareMode, type FbShareSettings, isShareMode } from "@/lib/facebookShareTemplates";
 import {
   isRunnerConfigured,
   runnerStatus,
@@ -608,15 +610,22 @@ export async function publishArticleNow(input: {
   sessionId?: string;
   // Optional edited caption for the post message (Graph path). Blank → default.
   caption?: string;
+  // Optional share-mode override; falls back to the global default in settings.
+  mode?: ShareMode;
 }): Promise<ActionResult<PublishResult[]>> {
   await requireAdmin();
 
   const article = await prisma.article.findUnique({
     where: { id: input.articleId },
-    select: { id: true, title: true, slug: true, excerpt: true },
+    select: { id: true, title: true, slug: true, excerpt: true, coverImage: true, coverCredit: true, coverImageSource: true },
   });
   if (!article) return fail("Article not found.");
   if (input.pageDbIds.length === 0) return fail("Select at least one page.");
+
+  // Resolve the share mode + templates (override → global default).
+  const shareSettings = await getFbShareSettings();
+  const mode: ShareMode = input.mode ?? shareSettings.mode;
+  const shareConfig = { mode, caption: input.caption, captionTemplate: shareSettings.captionTemplate, commentTemplate: shareSettings.commentTemplate };
 
   const pages = await prisma.facebookPage.findMany({
     where: { id: { in: input.pageDbIds } },
@@ -651,7 +660,7 @@ export async function publishArticleNow(input: {
     const page = pages[i];
     const result = useRunner
       ? await publishViaRunner(article, page, sessionState)
-      : await publishArticleToPage(article, page, input.caption);
+      : await publishArticleToPage(article, page, shareConfig);
     results.push(result);
     // Record history (best-effort; never let logging break the response).
     await prisma.scheduledPost
@@ -664,6 +673,9 @@ export async function publishArticleNow(input: {
           postedAt: result.ok ? new Date() : null,
           error: result.ok ? null : result.error ?? null,
           graphPostId: result.graphPostId ?? null,
+          mode: result.mode ?? (useRunner ? null : mode),
+          commentId: result.commentId ?? null,
+          commentError: result.commentError ?? null,
         },
       })
       .catch(() => {});
@@ -822,6 +834,7 @@ export type ScheduledShareInput = { pageDbId: string; scheduledAt: string }; // 
 export async function scheduleArticleShares(input: {
   articleId: string;
   caption?: string;
+  mode?: ShareMode;
   schedules: ScheduledShareInput[];
 }): Promise<ActionResult<{ count: number }>> {
   await requireAdmin();
@@ -836,15 +849,18 @@ export async function scheduleArticleShares(input: {
   });
   const known = new Set(pages.map((p) => p.id));
 
+  // Persist the chosen mode (override → global default) so the cron posts the same
+  // way at publish time.
+  const mode: ShareMode = input.mode ?? (await getFbShareSettings()).mode;
   const now = Date.now();
   const caption = input.caption?.trim() ? input.caption.trim() : null;
-  const rows: { articleId: string; facebookPageId: string; scheduledFor: Date; caption: string | null; status: string }[] = [];
+  const rows: { articleId: string; facebookPageId: string; scheduledFor: Date; caption: string | null; status: string; mode: string }[] = [];
   for (const s of input.schedules) {
     if (!known.has(s.pageDbId)) return fail("One of the selected pages no longer exists.");
     const when = new Date(s.scheduledAt);
     if (Number.isNaN(when.getTime())) return fail("Invalid schedule time.");
     if (when.getTime() < now - 60_000) return fail("Pick a time in the future.");
-    rows.push({ articleId: article.id, facebookPageId: s.pageDbId, scheduledFor: when, caption, status: "pending" });
+    rows.push({ articleId: article.id, facebookPageId: s.pageDbId, scheduledFor: when, caption, status: "pending", mode });
   }
 
   await prisma.scheduledPost.createMany({ data: rows });
@@ -888,12 +904,18 @@ export async function listSharedArticles(): Promise<
 }
 
 export type ShareResultRow = {
+  scheduledPostId: string;
   pageDbId: string;
   pageName: string;
   postedAt: string | null;
   permalink: string;
   ok: boolean;
   error?: string;
+  /** "link" | "photo" (legacy null → "link"). */
+  mode: string;
+  /** Photo share whose post landed but whose link comment didn't — retryable. */
+  commentMissing: boolean;
+  commentError: string | null;
   reactions: number | null;
   comments: number | null;
   shares: number | null;
@@ -943,10 +965,14 @@ export async function getShareResults(input: {
   const results = await mapLimit(rows, 6, async (r): Promise<ShareResultRow> => {
     const postId = r.graphPostId as string;
     const base = {
+      scheduledPostId: r.id,
       pageDbId: r.facebookPage.id,
       pageName: r.facebookPage.pageName,
       postedAt: r.postedAt ? r.postedAt.toISOString() : null,
       permalink: permalinkForPost(postId),
+      mode: r.mode ?? "link",
+      commentMissing: Boolean(r.commentError) && !r.commentId,
+      commentError: r.commentError ?? null,
     };
     try {
       const token = decryptSecret(r.facebookPage.accessToken);
@@ -978,6 +1004,47 @@ export async function getShareResults(input: {
   });
 
   return { ok: true, data: { articleTitle: article.title, results } };
+}
+
+/**
+ * Re-attempt the link COMMENT for a photo share whose post landed but whose
+ * comment failed (the "Add comment" button). Updates the share record with the
+ * new comment id, or surfaces a clear error (incl. a missing-permission message).
+ */
+export async function retryShareComment(input: { id: string }): Promise<ActionResult<{ commentId: string }>> {
+  await requireAdmin();
+  const post = await prisma.scheduledPost.findUnique({
+    where: { id: input.id },
+    include: {
+      article: { select: { slug: true, title: true } },
+      facebookPage: { select: { id: true, pageId: true, pageName: true, accessToken: true, status: true } },
+    },
+  });
+  if (!post || !post.graphPostId) return fail("Share not found, or it has no post to comment on.");
+  if (!post.article || !post.facebookPage) return fail("Article or page no longer exists.");
+
+  const settings = await getFbShareSettings();
+  const res = await addLinkComment(post.graphPostId, post.facebookPage, post.article, settings.commentTemplate);
+  if (!res.ok) {
+    await prisma.scheduledPost
+      .update({ where: { id: post.id }, data: { commentError: res.error ?? "Could not add the comment." } })
+      .catch(() => {});
+    return fail(res.error ?? "Could not add the comment.");
+  }
+  await prisma.scheduledPost
+    .update({ where: { id: post.id }, data: { commentId: res.commentId, commentError: null } })
+    .catch(() => {});
+  revalidatePath("/admin/facebook");
+  return { ok: true, data: { commentId: res.commentId as string } };
+}
+
+/** Save the global Facebook share settings (default mode + photo templates). */
+export async function saveFacebookShareSettingsAction(input: FbShareSettings): Promise<ActionResult> {
+  await requireAdmin();
+  if (!isShareMode(input?.mode)) return fail("Invalid share mode.");
+  await saveFbShareSettings(input);
+  revalidatePath("/admin/facebook");
+  return { ok: true, data: undefined };
 }
 
 /** Edit a still-pending scheduled post (time and/or caption). */
