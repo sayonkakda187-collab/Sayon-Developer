@@ -234,6 +234,13 @@ model FacebookPage {
   accessToken   String // ENCRYPTED long-lived Page access token (never plaintext)
   categoryGroup String // niche/group label, e.g. "US News" | "KH News" | "Entertainment"
   status        String   @default("Connected") // "Connected" | "Expired"
+  // Cached Page profile picture: the public Facebook CDN URL (NO token in it),
+  // resolved server-side via /{pageId}/picture with the Page token. Refreshed in
+  // the sync / reconnect / insights flows; FB CDN URLs expire, so it's re-fetched
+  // when older than ~7 days or when the stored URL stops loading. Null = silhouette
+  // / not set → the UI shows a coloured initial instead.
+  avatarUrl       String?
+  avatarFetchedAt DateTime?
   // Optional operational problem flag the admin sets (e.g. "Limited post",
   // "Post failed", "Verify identity") to surface a Page in the manager's
   // "Needs attention" box — independent of the token `status`. Null = healthy.

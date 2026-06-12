@@ -9,6 +9,7 @@ import {
   type PageOverview,
   type PageTimeseries,
 } from "@/lib/facebookInsights";
+import { refreshPageAvatar, avatarIsStale } from "@/lib/facebookAvatars";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
-type OverviewRow = PageOverview & { pageDbId: string; cachedAt: string };
+type OverviewRow = PageOverview & { pageDbId: string; avatarUrl: string | null; cachedAt: string };
 
 function parseCache(data: string): PageOverview | null {
   try {
@@ -79,17 +80,24 @@ export async function POST(req: Request) {
   const batch = ids.slice(0, MAX_BATCH);
   const pages = await prisma.facebookPage.findMany({
     where: { id: { in: batch } },
-    select: { id: true, pageId: true, accessToken: true, insightCache: true },
+    select: { id: true, pageId: true, accessToken: true, avatarUrl: true, avatarFetchedAt: true, insightCache: true },
   });
 
   const now = Date.now();
   const wantFresh = refresh === true;
 
   const rows = await mapLimit(pages, 6, async (p): Promise<OverviewRow> => {
+    // Refresh the cached avatar as part of the insights flow when it's missing or
+    // stale (>7d). Best-effort, gated, so it's a no-op on most loads.
+    let avatarUrl = p.avatarUrl;
+    if (avatarIsStale(p.avatarFetchedAt)) {
+      avatarUrl = await refreshPageAvatar(p);
+    }
+
     const cache = p.insightCache;
     if (!wantFresh && cache && now - cache.fetchedAt.getTime() < FRESH_MS) {
       const parsed = parseCache(cache.data);
-      if (parsed) return { pageDbId: p.id, ...parsed, cachedAt: cache.fetchedAt.toISOString() };
+      if (parsed) return { pageDbId: p.id, ...parsed, avatarUrl, cachedAt: cache.fetchedAt.toISOString() };
     }
 
     let overview: PageOverview;
@@ -110,7 +118,7 @@ export async function POST(req: Request) {
       })
       .catch(() => {});
 
-    return { pageDbId: p.id, ...overview, cachedAt: fetchedAt.toISOString() };
+    return { pageDbId: p.id, ...overview, avatarUrl, cachedAt: fetchedAt.toISOString() };
   });
 
   return NextResponse.json({ ok: true, rows });

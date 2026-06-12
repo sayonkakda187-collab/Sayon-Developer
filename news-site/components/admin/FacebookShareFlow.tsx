@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/components/admin/Toast";
 import { ConnectModal } from "./FacebookConnectModal";
 import { ArticleThumb } from "./ArticleThumb";
+import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import type { FacebookPageView } from "./FacebookPagesManager";
 import { type ShareMode, SHARE_MODE_LABEL, buildPhotoCaption } from "@/lib/facebookShareTemplates";
 import {
@@ -46,13 +47,6 @@ type ShareJob = {
 
 const PER_PAGE = 9;
 const TZ_LABEL = SCHEDULE_TZ.replace("_", " ");
-const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
-
-function avatarColor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
 
 // Presets for the gap between pages when posting to several at once (seconds).
 // 0 = post immediately. A delay lowers spam-flag risk but is a courtesy, not a
@@ -76,41 +70,6 @@ function formatDuration(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return s ? `${m}m ${s}s` : `${m}m`;
-}
-
-/** Page avatar: the real Page picture (resolved server-side with the Page token
- *  via the avatar proxy) over a tidy coloured-initial fallback. */
-function PageAvatar({ dbId, name, size = 40 }: { dbId: string; name: string; size?: number }) {
-  const [imgOk, setImgOk] = useState(true);
-  const initial = (name.trim()[0] ?? "?").toUpperCase();
-  return (
-    <span
-      aria-hidden
-      style={{
-        position: "relative",
-        width: size,
-        height: size,
-        flex: "none",
-        borderRadius: 999,
-        overflow: "hidden",
-        background: avatarColor(dbId || name),
-        display: "inline-block",
-      }}
-    >
-      <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: size * 0.42 }}>
-        {initial}
-      </span>
-      {imgOk && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/admin/facebook/${encodeURIComponent(dbId)}/picture?size=${size * 2}`}
-          alt=""
-          onError={() => setImgOk(false)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      )}
-    </span>
-  );
 }
 
 /** One selectable Page card (avatar, name, status, post count + check state). */
@@ -137,7 +96,7 @@ function PageCard({ page, selected, onToggle }: { page: FacebookPageView; select
         transition: "border-color .12s, box-shadow .12s",
       }}
     >
-      <PageAvatar dbId={p.id} name={p.pageName} />
+      <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={40} />
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {p.pageName}

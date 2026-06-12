@@ -1056,6 +1056,30 @@ request.
 - **Env / migration:** no new env. Additive `PageInsightCache` (auto-applies via
   `prisma migrate deploy`). Read-only feature — it never posts.
 
+## Facebook Page avatars (profile pictures in the admin)
+
+Each connected Page's real profile picture is shown — small and round — everywhere
+Pages are listed: the Insights table rows (~32px) + detail header (~48px), Results
+cards (~44px), the Pages tab cards, and the Share-now picker. One shared component;
+official Graph API only; tokens never reach the browser.
+
+- **Shared component** (`components/admin/FacebookPageAvatar.tsx`): a round avatar
+  with a layered, token-safe source chain — (1) the **cached CDN URL** stored on the
+  Page (fast path, no Graph call); on error (FB CDN URLs expire) → (2) the admin-only
+  **proxy** `/api/admin/facebook/{id}/picture` which re-resolves with the Page token
+  server-side and **persists** the fresh URL; on error → (3) a **deterministic
+  coloured initial** (never a broken image). Images are `loading="lazy"`. Replaces the
+  two duplicate `PageAvatar` copies that used to live in the Pages manager + Share flow.
+- **Fetching** (`lib/facebook.ts` `fetchPagePicture` → `lib/facebookAvatars.ts`):
+  resolves `/{pageId}/picture?redirect=false&type=square` server-side and stores the
+  CDN URL on `FacebookPage.avatarUrl` + `avatarFetchedAt` (additive migration
+  `20260612120000_facebook_page_avatar`). Refreshed **when missing or >7 days old**
+  during the flows that already touch Pages: the **insights** batch (`refreshPageAvatar`,
+  gated + concurrency-limited), per-page **Refresh**, and **sync/reconnect** (new Pages
+  only, capped, so a big reconnect can't blow the time budget). Silhouettes (no real
+  picture) store null → initials. Best-effort throughout — avatar work never breaks
+  token sync or the insights table. **No token is ever put in a client-visible URL.**
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

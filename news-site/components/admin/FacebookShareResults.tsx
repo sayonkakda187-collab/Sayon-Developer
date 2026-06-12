@@ -11,6 +11,7 @@ import {
 import { formatDate, formatNumber } from "@/lib/site";
 import { RefreshIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
+import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 
 type ArticleOpt = { id: string; title: string; posts: number; lastAt: string | null };
 
@@ -153,16 +154,21 @@ export function FacebookShareResults() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, marginTop: 14 }}>
             {pageItems.map((r, i) => (
               <div key={`${r.pageDbId}-${i}`} style={{ border: "1px solid var(--adm-bd)", borderRadius: 14, padding: 12, background: "var(--adm-card)" }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
-                    {r.pageName}
-                  </span>
-                  <a href={r.permalink} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 12.5, flex: "none" }}>
-                    View post →
-                  </a>
-                </div>
-                <div className="adm-fb-sub" style={{ marginTop: 2 }}>
-                  {r.postedAt ? `Posted ${formatDate(r.postedAt)}` : "Posted"}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <FacebookPageAvatar dbId={r.pageDbId} name={r.pageName} avatarUrl={r.avatarUrl} size={44} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                        {r.pageName}
+                      </span>
+                      <a href={r.permalink} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 12.5, flex: "none" }}>
+                        View post →
+                      </a>
+                    </div>
+                    <div className="adm-fb-sub" style={{ marginTop: 2 }}>
+                      {r.postedAt ? `Posted ${formatDate(r.postedAt)}` : "Posted"}
+                    </div>
+                  </div>
                 </div>
                 {r.ok ? (
                   <>

@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
+import { fetchPagePicture } from "@/lib/facebook";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const GRAPH_VERSION = process.env.FACEBOOK_GRAPH_VERSION || "v21.0";
-
-// Admin-only avatar proxy. Resolves a connected Page's REAL profile picture using
-// its (encrypted, server-side) access token, then 302-redirects to the Facebook
-// CDN image. Unauthenticated graph.facebook.com/{id}/picture requests now return
-// a silhouette/placeholder for most Pages — which is exactly why the browser
-// couldn't load them directly. The token never reaches the browser. A 404 here
-// makes the client fall back to a tidy coloured initial.
+// Admin-only avatar proxy / resolver. Resolves a connected Page's REAL profile
+// picture using its (encrypted, server-side) access token, PERSISTS the resolved
+// CDN URL on the record (so the next render uses the stored fast-path with no
+// Graph call), then 302-redirects to the Facebook CDN image. The token never
+// reaches the browser. A 404 here makes the client fall back to a tidy coloured
+// initial. This is the self-healing path the shared avatar uses when there's no
+// stored URL yet or a stored URL has expired.
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   await requireAdmin();
 
@@ -22,7 +22,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const page = await prisma.facebookPage.findUnique({
     where: { id: params.id },
-    select: { pageId: true, accessToken: true },
+    select: { id: true, pageId: true, accessToken: true },
   });
   if (!page) return new NextResponse(null, { status: 404 });
 
@@ -33,16 +33,15 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return new NextResponse(null, { status: 404 });
   }
 
-  const url =
-    `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(page.pageId)}/picture` +
-    `?type=square&width=${size}&height=${size}&redirect=false&access_token=${encodeURIComponent(token)}`;
-
   try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return new NextResponse(null, { status: 404 });
-    const data = (await res.json()) as { data?: { url?: string; is_silhouette?: boolean } };
-    const picUrl = data.data?.url;
-    if (!picUrl || data.data?.is_silhouette) {
+    const pic = await fetchPagePicture(page.pageId, token, size);
+    const picUrl = pic.isSilhouette ? null : pic.url;
+    // Record what we resolved (incl. null for a silhouette) so bulk refresh skips
+    // it for the TTL and future renders use the stored URL.
+    await prisma.facebookPage
+      .update({ where: { id: page.id }, data: { avatarUrl: picUrl, avatarFetchedAt: new Date() } })
+      .catch(() => {});
+    if (!picUrl) {
       // No real picture set on the Page → show initials instead of FB's grey
       // silhouette. Briefly cached so it isn't re-resolved on every render.
       return new NextResponse(null, { status: 404, headers: { "Cache-Control": "private, max-age=600" } });

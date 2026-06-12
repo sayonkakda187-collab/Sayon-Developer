@@ -16,6 +16,7 @@ import { useToast } from "@/components/admin/Toast";
 import { FacebookIcon, PlusIcon, RefreshIcon, SearchIcon, TrashIcon } from "@/components/admin/icons";
 import { formatDate } from "@/lib/site";
 import { ConnectModal } from "./FacebookConnectModal";
+import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 
 export type FacebookPageView = {
   id: string;
@@ -25,6 +26,7 @@ export type FacebookPageView = {
   issue: string | null; // operational problem flag (null = healthy)
   status: string; // "Connected" | "Expired"
   lastSyncedAt: string | null;
+  avatarUrl: string | null; // cached Page profile picture CDN URL (null = initials)
   postedCount: number;
   pendingCount: number;
 };
@@ -44,48 +46,6 @@ function StatusBadge({ status }: { status: string }) {
         }}
       />
       {connected ? "Connected" : "Expired"}
-    </span>
-  );
-}
-
-const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
-function avatarColor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
-
-/** Page avatar: the real Page picture (proxied with the Page token) over a tidy
- *  coloured-initial fallback — matches the share selector's cards. */
-function PageAvatar({ dbId, name, size = 38 }: { dbId: string; name: string; size?: number }) {
-  const [imgOk, setImgOk] = useState(true);
-  const initial = (name.trim()[0] ?? "?").toUpperCase();
-  return (
-    <span
-      aria-hidden
-      style={{
-        position: "relative",
-        width: size,
-        height: size,
-        flex: "none",
-        borderRadius: 999,
-        overflow: "hidden",
-        background: avatarColor(dbId || name),
-        display: "inline-block",
-      }}
-    >
-      <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: size * 0.42 }}>
-        {initial}
-      </span>
-      {imgOk && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/admin/facebook/${encodeURIComponent(dbId)}/picture?size=${size * 2}`}
-          alt=""
-          onError={() => setImgOk(false)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      )}
     </span>
   );
 }
@@ -311,7 +271,7 @@ export function FacebookPagesManager({
             aria-label={`Select ${p.pageName}`}
             style={{ width: 16, height: 16, marginTop: 4, cursor: "pointer", flex: "none" }}
           />
-          <PageAvatar dbId={p.id} name={p.pageName} />
+          <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={38} />
           <span style={{ minWidth: 0, flex: 1 }}>
             <span style={{ display: "block", fontWeight: 700, color: "var(--adm-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {p.pageName}

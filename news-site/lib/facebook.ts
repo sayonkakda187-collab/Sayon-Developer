@@ -288,6 +288,34 @@ export async function getUserPages(
   return pages;
 }
 
+/** A Page's profile picture from the Graph API `/{pageId}/picture` edge. */
+export type PagePicture = { url: string | null; isSilhouette: boolean };
+
+/**
+ * Resolve a Page's profile picture URL server-side (GET /{pageId}/picture with
+ * `redirect=false`, so we get the JSON `{ data: { url, is_silhouette } }` instead
+ * of a 302). `square` + width/height gives a crisp square crop for round avatars.
+ * Returns the public CDN `url` (no token in it) — store it and serve it directly;
+ * the access token never leaves the server. `isSilhouette` means the Page has no
+ * real picture (FB's grey default) → callers store null so the UI shows initials.
+ */
+export async function fetchPagePicture(
+  pageId: string,
+  accessToken: string,
+  size = 96,
+): Promise<PagePicture> {
+  const px = Math.min(320, Math.max(24, Math.round(size)));
+  const url =
+    `${GRAPH_BASE}/${encodeURIComponent(pageId)}/picture` +
+    `?type=square&width=${px}&height=${px}&redirect=false&access_token=${encodeURIComponent(accessToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{ data?: { url?: string; is_silhouette?: boolean } }>(
+    res,
+    "Could not load the page picture",
+  );
+  return { url: data.data?.url ?? null, isSilhouette: Boolean(data.data?.is_silhouette) };
+}
+
 /** Build a facebook.com permalink from a returned post id ("{page}_{post}"). */
 export function permalinkForPost(postId: string): string {
   const [page, post] = postId.split("_");

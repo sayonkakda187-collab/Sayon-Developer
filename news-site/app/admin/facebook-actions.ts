@@ -12,6 +12,7 @@ import {
   getPostStats,
   permalinkForPost,
 } from "@/lib/facebook";
+import { refreshPageAvatar, refreshAvatarsFor } from "@/lib/facebookAvatars";
 import {
   getFacebookAppCreds,
   saveFacebookAppCreds,
@@ -411,9 +412,10 @@ async function syncPagesFromUserToken(userToken: string): Promise<{ refreshed: n
   const known = new Set(existing.map((p) => p.pageId));
   let refreshed = 0;
   let added = 0;
+  const newIds: string[] = [];
   for (const p of pages) {
     const isNew = !known.has(p.id);
-    await prisma.facebookPage.upsert({
+    const rec = await prisma.facebookPage.upsert({
       where: { pageId: p.id },
       update: {
         pageName: p.name,
@@ -430,8 +432,26 @@ async function syncPagesFromUserToken(userToken: string): Promise<{ refreshed: n
         lastSyncedAt: new Date(),
       },
     });
-    if (isNew) added++;
-    else refreshed++;
+    if (isNew) {
+      added++;
+      newIds.push(rec.id);
+    } else {
+      refreshed++;
+    }
+  }
+  // Best-effort: fetch avatars for newly-added Pages (bounded) so they show a real
+  // picture right away. Existing Pages refresh via the insights flow / proxy, so we
+  // don't re-fetch all ~hundreds here (would blow the action's time budget).
+  if (newIds.length > 0) {
+    try {
+      const fresh = await prisma.facebookPage.findMany({
+        where: { id: { in: newIds } },
+        select: { id: true, pageId: true, accessToken: true, avatarFetchedAt: true },
+      });
+      await refreshAvatarsFor(fresh, { cap: 24 });
+    } catch {
+      // never let avatar fetching break the token sync
+    }
   }
   return { refreshed, added };
 }
@@ -513,6 +533,8 @@ export async function refreshFacebookPage(id: string): Promise<ActionResult> {
       where: { id },
       data: { status: "Connected", pageName: name, lastSyncedAt: new Date() },
     });
+    // Refresh the cached avatar while we have a known-good token (best-effort).
+    await refreshPageAvatar({ id: page.id, pageId: page.pageId, accessToken: page.accessToken }).catch(() => {});
     revalidatePath("/admin/facebook");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -951,6 +973,7 @@ export type ShareResultRow = {
   scheduledPostId: string;
   pageDbId: string;
   pageName: string;
+  avatarUrl: string | null;
   postedAt: string | null;
   permalink: string;
   ok: boolean;
@@ -1003,7 +1026,7 @@ export async function getShareResults(input: {
     where: { articleId: article.id, status: "posted", graphPostId: { not: null } },
     orderBy: { postedAt: "desc" },
     take: 60,
-    include: { facebookPage: { select: { id: true, pageName: true, accessToken: true } } },
+    include: { facebookPage: { select: { id: true, pageName: true, accessToken: true, avatarUrl: true } } },
   });
 
   const results = await mapLimit(rows, 6, async (r): Promise<ShareResultRow> => {
@@ -1012,6 +1035,7 @@ export async function getShareResults(input: {
       scheduledPostId: r.id,
       pageDbId: r.facebookPage.id,
       pageName: r.facebookPage.pageName,
+      avatarUrl: r.facebookPage.avatarUrl,
       postedAt: r.postedAt ? r.postedAt.toISOString() : null,
       permalink: permalinkForPost(postId),
       mode: r.mode ?? "link",

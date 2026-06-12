@@ -74,6 +74,7 @@ export default async function AdminFacebookPage() {
     pageName: p.pageName,
     categoryGroup: p.categoryGroup,
     status: p.status,
+    avatarUrl: p.avatarUrl,
     postedCount: postedByPage.get(p.id) ?? 0,
     lastSharedAt: lastSharedByPage.get(p.id) ?? null,
   }));
@@ -86,6 +87,7 @@ export default async function AdminFacebookPage() {
     issue: p.issue,
     status: p.status,
     lastSyncedAt: p.lastSyncedAt ? p.lastSyncedAt.toISOString() : null,
+    avatarUrl: p.avatarUrl,
     postedCount: postedByPage.get(p.id) ?? 0,
     pendingCount: pendingByPage.get(p.id) ?? 0,
   }));
