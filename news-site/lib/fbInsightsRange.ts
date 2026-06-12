@@ -89,6 +89,12 @@ export function rangeKey(from: string, to: string): string {
   return `${from}_${to}`;
 }
 
+/** The previous equal-length period immediately before [from, to]. */
+export function previousPeriod(from: string, to: string): { from: string; to: string } {
+  const span = dayCount(from, to);
+  return { from: addDays(from, -span), to: addDays(from, -1) };
+}
+
 /** "Jun 11" style short label for a YYYY-MM-DD day. */
 export function formatDay(date: string): string {
   const d = new Date(`${date}T12:00:00${PP_OFFSET}`);
