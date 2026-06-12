@@ -1031,11 +1031,23 @@ request.
   progress bar (first load), so the table fills in without a giant request. A Page
   whose token can't read insights shows a **"Needs reconnect"** badge instead of
   breaking the table.
-- **Detail panel** (click a row): **7 / 28 / 90-day** reach / engagement / new-
-  follows trends as **dependency-free SVG sparklines**, plus that Page's **recent
-  posts** from our share records with per-post reactions / comments / shares / reach
-  (reuses the Results-tab `getPostStats`). Friendly empty states for new/sparse
-  Pages — never an error.
+- **Detail panel** (click a row): the same **range control**, that Page's
+  day-by-day reach / engagement / new-follows charts + per-day table, plus its
+  **recent posts** from our share records with per-post reactions / comments /
+  shares / reach (reuses the Results-tab `getPostStats`). Friendly empty states for
+  new/sparse Pages — never an error.
+- **Day-by-day view** (range control on the overview **and** detail): quick
+  buttons **Today · Yesterday · 7d · 28d · 90d · Custom** (custom = from–to or a
+  single day) — all in **Asia/Phnom_Penh** (`lib/fbInsightsRange.ts`, fixed +07:00,
+  shared client+server so day buckets match). For the selected range: **daily
+  charts** (reach + engagement + net follows — network on the overview, per-Page in
+  the detail) and a **per-day table** (date · reach · engagement · follower change ·
+  **posts WE shared** that day, joined from `ScheduledPost`). Uses `period=day` with
+  `since`/`until`; **limited-history / retired metrics degrade to "—"** (only the
+  days Facebook returns are filled). **Today is labelled "partial"** (Facebook is
+  still finalizing it) so it doesn't look broken. The **network** daily series is
+  **summed from cached per-page data** (each POST batch returns its own sum; the
+  client adds batches up) — never one giant request.
 - **Self-healing metrics** (`lib/facebook.ts`): Meta keeps retiring Page metrics
   (`page_impressions*` / `page_fans` removed Nov 2025; more reach/viewer metrics
   retire mid-2026, replaced by "Views"). `fetchPageInsights` requests a list of
@@ -1045,16 +1057,19 @@ request.
   than failing. Followers come from page **fields** (`followers_count` →
   `fan_count`), reach/engagement from the **insights** edge (`days_28`). Pinned to
   **Graph v25.0** (`FACEBOOK_GRAPH_VERSION` override unchanged).
-- **Service + cache** (`lib/facebookInsights.ts`, `PageInsightCache` model +
-  migration `20260612080000_page_insight_cache`): `getPageOverview` /
-  `getPageTimeseries` compute the numbers; the API route
-  `app/api/admin/facebook/page-insights` (`requireAdmin`-equivalent session gate,
-  `maxDuration = 60`) **POST**s batched overviews (serves the **~12h** per-Page
-  cache, or computes + upserts it; concurrency-limited `mapLimit` 6) and **GET**s a
-  Page's detail. A **Refresh** button busts the cache (`refresh: true`). Tokens are
-  decrypted **server-side only**; one Page failing never blocks the batch.
-- **Env / migration:** no new env. Additive `PageInsightCache` (auto-applies via
-  `prisma migrate deploy`). Read-only feature — it never posts.
+- **Service + cache** (`lib/facebookInsights.ts`): `getPageOverview` (12h
+  `PageInsightCache`) + `getPageDaily` (per-(page,range) `PageDailyCache`, keyed
+  `from_to`; short TTL when the range includes today, longer for historical
+  ranges). The API route `app/api/admin/facebook/page-insights` (session-gated,
+  `maxDuration = 60`) **POST**s batched overviews **+ the batch's summed daily
+  series** for a range, and **GET**s either a Page's detail (`?detail=&from=&to=`)
+  or the network posts-per-day (`?networkShares=1`). A **Refresh** busts both
+  caches. Tokens decrypted **server-side only**; one Page failing never blocks the
+  batch (`mapLimit` 6, batch of 20).
+- **Env / migration:** no new env. Additive `PageInsightCache`
+  (`20260612080000_page_insight_cache`) + `PageDailyCache`
+  (`20260612160000_page_daily_cache`), both auto-apply via `prisma migrate
+  deploy`. Read-only feature — it never posts.
 
 ## Facebook Page avatars (profile pictures in the admin)
 

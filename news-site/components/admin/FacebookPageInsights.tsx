@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { formatDate, formatNumber } from "@/lib/site";
 import { RefreshIcon, CloseIcon, ExternalLinkIcon, SearchIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
+import { type RangePreset, presetRange, ppToday, eachDate, formatDay, formatRange, addDays, dayCount } from "@/lib/fbInsightsRange";
 
 export type InsightsPageRow = {
   id: string;
@@ -28,14 +29,10 @@ type Overview = {
 };
 
 type SeriesPoint = { date: string; value: number };
-type DetailSeries = {
-  reach: SeriesPoint[];
-  engagement: SeriesPoint[];
-  follows: SeriesPoint[];
-  reachMetric: string | null;
-  engagementMetric: string | null;
-  followsMetric: string | null;
-};
+type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
+type DayRow = DayPoint & { shares: number; partial: boolean };
+type Range = { preset: RangePreset; from: string; to: string };
+
 type RecentPost = {
   id: string;
   title: string;
@@ -49,9 +46,11 @@ type RecentPost = {
 type DetailData = {
   pageDbId: string;
   pageName: string;
-  days: number;
+  from: string;
+  to: string;
   status: "ok" | "reconnect";
-  series: DetailSeries;
+  days: DayPoint[];
+  shares: Record<string, number>;
   posts: RecentPost[];
 };
 
@@ -85,10 +84,110 @@ function numFor(r: MergedRow, key: SortKey): number | null {
   }
 }
 const PER_PAGE = 20;
-const BATCH = 25; // Pages fetched per server call (fits the Hobby 60s limit).
-const SS_KEY = "fbInsights.view"; // remembered sort + search for the session.
+// Pages per server call. Each page now also fetches a daily series, so keep the
+// batch modest to stay well under the Hobby 60s function limit on a cold load.
+const BATCH = 20;
+const SS_KEY = "fbInsights.view"; // remembered sort + search + range for the session.
 
 const API = "/api/admin/facebook/page-insights";
+
+const PRESETS: { key: RangePreset; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7d", label: "7d" },
+  { key: "28d", label: "28d" },
+  { key: "90d", label: "90d" },
+];
+
+function fmtNum(x: number | null): string {
+  return x == null ? "—" : formatNumber(x);
+}
+function fmtSigned(x: number | null): string {
+  return x == null ? "—" : (x > 0 ? "+" : "") + formatNumber(x);
+}
+
+/** Fill a date range with daily values + our share counts (missing days → null/0). */
+function buildDayRows(from: string, to: string, daily: Map<string, DayPoint>, shares: Record<string, number>): DayRow[] {
+  const today = ppToday();
+  return eachDate(from, to).map((date) => {
+    const d = daily.get(date);
+    return {
+      date,
+      reach: d?.reach ?? null,
+      engagement: d?.engagement ?? null,
+      follows: d?.follows ?? null,
+      shares: shares[date] ?? 0,
+      partial: date === today,
+    };
+  });
+}
+
+/** Null-preserving add of one day into a running per-day sum (client side). */
+function mergeDaily(acc: Map<string, DayPoint>, dp: DayPoint): void {
+  const cur = acc.get(dp.date) ?? { date: dp.date, reach: null, engagement: null, follows: null };
+  if (dp.reach != null) cur.reach = (cur.reach ?? 0) + dp.reach;
+  if (dp.engagement != null) cur.engagement = (cur.engagement ?? 0) + dp.engagement;
+  if (dp.follows != null) cur.follows = (cur.follows ?? 0) + dp.follows;
+  acc.set(dp.date, cur);
+}
+
+/** Quick-range buttons (Today · Yesterday · 7d · 28d · 90d · Custom). */
+function RangeControl({ range, onChange, busy }: { range: Range; onChange: (r: Range) => void; busy?: boolean }) {
+  const today = ppToday();
+  const [open, setOpen] = useState(range.preset === "custom");
+  const [cf, setCf] = useState(range.from);
+  const [ct, setCt] = useState(range.to);
+
+  useEffect(() => {
+    setCf(range.from);
+    setCt(range.to);
+  }, [range.from, range.to]);
+
+  function pickPreset(key: RangePreset) {
+    setOpen(false);
+    onChange({ preset: key, ...presetRange(key, today) });
+  }
+  function applyCustom() {
+    if (!cf || !ct) return;
+    let from = cf <= ct ? cf : ct;
+    const to = cf <= ct ? ct : cf;
+    if (dayCount(from, to) > 92) from = addDays(to, -91); // server caps the window at 92 days
+    onChange({ preset: "custom", from, to });
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="adm-seg" role="tablist" aria-label="Date range" style={{ flexWrap: "wrap" }}>
+          {PRESETS.map((p) => (
+            <button key={p.key} type="button" role="tab" aria-selected={range.preset === p.key} className={`adm-seg-btn ${range.preset === p.key ? "on" : ""}`} disabled={busy} onClick={() => pickPreset(p.key)}>
+              {p.label}
+            </button>
+          ))}
+          <button type="button" role="tab" aria-selected={range.preset === "custom"} className={`adm-seg-btn ${range.preset === "custom" ? "on" : ""}`} disabled={busy} onClick={() => setOpen((o) => !o)}>
+            Custom
+          </button>
+        </div>
+        <span className="adm-fb-sub">{formatRange(range.from, range.to)} · Phnom Penh</span>
+      </div>
+      {open && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
+          <label className="adm-field" style={{ margin: 0 }}>
+            <span>From</span>
+            <input type="date" className="adm-input" value={cf} max={today} onChange={(e) => setCf(e.target.value)} />
+          </label>
+          <label className="adm-field" style={{ margin: 0 }}>
+            <span>To</span>
+            <input type="date" className="adm-input" value={ct} max={today} onChange={(e) => setCt(e.target.value)} />
+          </label>
+          <button type="button" className="adm-btn-primary" disabled={busy || !cf || !ct} onClick={applyCustom}>
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Sortable column header — click to sort, click again to flip direction. */
 function Th({
@@ -174,8 +273,9 @@ function Sparkline({ points, color }: { points: SeriesPoint[]; color: string }) 
   );
 }
 
-/** One trend card: headline total + sparkline (or a friendly empty state). */
-function TrendCard({ title, points, color, emptyHint }: { title: string; points: SeriesPoint[]; color: string; emptyHint: string }) {
+/** One trend card: headline total + sparkline (or a friendly empty state). When
+ *  `signed`, the total is a delta (e.g. net follows) and shows a +/− sign. */
+function TrendCard({ title, points, color, emptyHint, signed }: { title: string; points: SeriesPoint[]; color: string; emptyHint: string; signed?: boolean }) {
   const total = points.reduce((s, p) => s + p.value, 0);
   return (
     <div style={{ border: "1px solid var(--adm-bd)", borderRadius: 14, padding: 12, background: "var(--adm-card)", minWidth: 0 }}>
@@ -185,11 +285,66 @@ function TrendCard({ title, points, color, emptyHint }: { title: string; points:
       ) : (
         <>
           <div style={{ fontWeight: 800, fontSize: 20, color: "var(--adm-ink)", fontVariantNumeric: "tabular-nums", marginTop: 2 }}>
-            {formatNumber(total)}
+            {signed ? fmtSigned(total) : formatNumber(total)}
           </div>
           <Sparkline points={points} color={color} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Reach / engagement / new-follows daily charts for a range (network or page). */
+function DailyCharts({ rows }: { rows: DayRow[] }) {
+  const hasAny = rows.some((r) => r.reach != null || r.engagement != null || r.follows != null);
+  const seriesOf = (k: "reach" | "engagement" | "follows"): SeriesPoint[] => rows.map((r) => ({ date: r.date, value: r[k] ?? 0 }));
+  if (!hasAny) {
+    return <p className="adm-fb-sub" style={{ marginTop: 12 }}>No day-by-day data for this range yet.</p>;
+  }
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
+      <TrendCard title="Reach" points={seriesOf("reach")} color="#2563eb" emptyHint="No reach data" />
+      <TrendCard title="Engagement" points={seriesOf("engagement")} color="#16a34a" emptyHint="No engagement data" />
+      <TrendCard title="New follows" points={seriesOf("follows")} color="#9333ea" emptyHint="No follow data" signed />
+    </div>
+  );
+}
+
+const STICKY_TH: CSSProperties = { position: "sticky", top: 0, background: "var(--adm-card)", zIndex: 1 };
+
+/** Per-day breakdown table: date · reach · engagement · follower change · our posts. */
+function DayTable({ rows }: { rows: DayRow[] }) {
+  if (rows.length === 0) return null;
+  const view = [...rows].reverse(); // newest day first
+  return (
+    <div style={{ overflowX: "auto", marginTop: 12 }}>
+      <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid var(--adm-bd)", borderRadius: 12 }}>
+        <table className="adm-table" style={{ marginTop: 0 }}>
+          <thead>
+            <tr>
+              <th style={STICKY_TH}>Date</th>
+              <th style={{ ...STICKY_TH, textAlign: "right" }}>Reach</th>
+              <th style={{ ...STICKY_TH, textAlign: "right" }}>Engagement</th>
+              <th style={{ ...STICKY_TH, textAlign: "right" }}>Follower Δ</th>
+              <th style={{ ...STICKY_TH, textAlign: "right" }}>Our posts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.map((r) => (
+              <tr key={r.date}>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {formatDay(r.date)}
+                  {r.partial && <span className="adm-pill amber" style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px" }}>partial</span>}
+                </td>
+                <td className="adm-num-td" style={{ textAlign: "right" }}>{fmtNum(r.reach)}</td>
+                <td className="adm-num-td" style={{ textAlign: "right" }}>{fmtNum(r.engagement)}</td>
+                <td className="adm-num-td" style={{ textAlign: "right" }}>{fmtSigned(r.follows)}</td>
+                <td className="adm-num-td" style={{ textAlign: "right" }}>{formatNumber(r.shares)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -205,18 +360,26 @@ function PostStat({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-/** Detail panel for one Page: 7/28/90-day reach/engagement/follows trends +
+function PartialNote() {
+  return (
+    <p className="adm-fb-sub" style={{ marginTop: 8 }}>
+      Today is <strong>partial</strong> — Facebook is still finalizing today’s numbers, so they’ll keep rising.
+    </p>
+  );
+}
+
+/** Detail panel for one Page: range control, day-by-day charts + table, and
  *  recent posts (from our own share records) with per-post stats. */
-function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => void }) {
+function PageDetail({ page, initialRange, onClose }: { page: InsightsPageRow; initialRange: Range; onClose: () => void }) {
   const { error } = useToast();
-  const [days, setDays] = useState<7 | 28 | 90>(28);
+  const [range, setRange] = useState<Range>(initialRange);
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API}?detail=${encodeURIComponent(page.id)}&days=${days}`, { cache: "no-store" })
+    fetch(`${API}?detail=${encodeURIComponent(page.id)}&from=${range.from}&to=${range.to}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
@@ -232,7 +395,14 @@ function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => v
     return () => {
       cancelled = true;
     };
-  }, [page.id, days, error]);
+  }, [page.id, range.from, range.to, error]);
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    return buildDayRows(range.from, range.to, new Map(data.days.map((d) => [d.date, d])), data.shares);
+  }, [data, range.from, range.to]);
+
+  const includesToday = range.to === ppToday();
 
   return (
     <div className="adm-card adm-card-pad" style={{ marginBottom: 16, borderColor: "var(--adm-green, #16a34a)" }}>
@@ -241,26 +411,19 @@ function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => v
           <FacebookPageAvatar key={page.id} dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={48} />
           <div style={{ minWidth: 0 }}>
             <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{page.pageName}</div>
-            <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · trends &amp; recent posts</div>
+            <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · day-by-day &amp; recent posts</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div className="adm-seg" role="tablist" aria-label="Date range">
-            {([7, 28, 90] as const).map((d) => (
-              <button key={d} type="button" role="tab" aria-selected={days === d} className={`adm-seg-btn ${days === d ? "on" : ""}`} onClick={() => setDays(d)}>
-                {d}d
-              </button>
-            ))}
-          </div>
-          <button type="button" className="adm-iconbtn" aria-label="Close detail" onClick={onClose}>
-            <CloseIcon className="h-5 w-5" />
-          </button>
-        </div>
+        <button type="button" className="adm-iconbtn" aria-label="Close detail" onClick={onClose}>
+          <CloseIcon className="h-5 w-5" />
+        </button>
       </div>
+
+      <RangeControl range={range} onChange={setRange} busy={loading} />
 
       {loading ? (
         <p className="adm-card-sub" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="adm-spinner" aria-hidden /> Loading {days}-day trends from Facebook…
+          <span className="adm-spinner" aria-hidden /> Loading {formatRange(range.from, range.to)} from Facebook…
         </p>
       ) : !data ? null : data.status === "reconnect" ? (
         <p className="adm-fb-sub" style={{ color: "#b45309", marginTop: 14 }}>
@@ -268,11 +431,11 @@ function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => v
           granting <strong>read_insights</strong> to see trends. Recent posts below still work.
         </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 14 }}>
-          <TrendCard title={`Reach · ${days}d`} points={data.series.reach} color="#2563eb" emptyHint="No reach data yet" />
-          <TrendCard title={`Engagement · ${days}d`} points={data.series.engagement} color="#16a34a" emptyHint="No engagement data yet" />
-          <TrendCard title={`New follows · ${days}d`} points={data.series.follows} color="#9333ea" emptyHint="No follow data yet" />
-        </div>
+        <>
+          <DailyCharts rows={rows} />
+          {includesToday && <PartialNote />}
+          <DayTable rows={rows} />
+        </>
       )}
 
       <div style={{ marginTop: 18 }}>
@@ -308,93 +471,110 @@ function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => v
 }
 
 /**
- * Insights tab: a sortable, searchable, paginated overview table of every
- * connected Page (followers · 28-day reach · 28-day engagement · posts via us ·
- * last shared), with a network totals row, a Refresh (busts the ~12h cache), and a
- * click-through detail panel. Overviews load progressively in small batches with a
- * progress indicator so ~264 Pages never need one giant request, and a Page whose
- * token can't read insights shows a "needs reconnect" badge instead of failing.
+ * Insights tab: a network day-by-day view (reach/engagement chart + per-day table
+ * over a selectable range — Today · Yesterday · 7d · 28d · 90d · Custom, in Phnom
+ * Penh) on top of a sortable, searchable, paginated per-Page overview table with a
+ * click-through detail panel. Overviews + each Page's daily series load
+ * progressively in small batches (the network daily totals are summed from cached
+ * per-page data, never one giant request); Pages whose token can't read insights
+ * show a "needs reconnect" badge instead of failing.
  */
 export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
   const { error } = useToast();
   const [data, setData] = useState<Map<string, Overview>>(new Map());
+  const [networkDaily, setNetworkDaily] = useState<Map<string, DayPoint>>(new Map());
+  const [networkShares, setNetworkShares] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: pages.length });
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("reach28");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [range, setRange] = useState<Range>(() => ({ preset: "7d", ...presetRange("7d") }));
   const [detailId, setDetailId] = useState<string | null>(null);
-  const ranOnce = useRef(false);
+  const [ready, setReady] = useState(false);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const detailRef = useRef<HTMLDivElement | null>(null);
 
-  // Restore remembered sort + search for the session (client-only; avoids SSR mismatch).
+  // Restore remembered sort + search + range for the session (client-only).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(SS_KEY);
       if (raw) {
-        const v = JSON.parse(raw) as { sortKey?: SortKey; sortDir?: "asc" | "desc"; query?: string };
+        const v = JSON.parse(raw) as { sortKey?: SortKey; sortDir?: "asc" | "desc"; query?: string; range?: Range };
         if (v.sortKey) setSortKey(v.sortKey);
         if (v.sortDir) setSortDir(v.sortDir);
         if (typeof v.query === "string") setQuery(v.query);
+        if (v.range?.from && v.range?.to && v.range?.preset) setRange(v.range);
       }
     } catch {
       /* ignore */
     }
+    setReady(true);
   }, []);
 
-  // Persist sort + search.
+  // Persist sort + search + range.
   useEffect(() => {
     try {
-      sessionStorage.setItem(SS_KEY, JSON.stringify({ sortKey, sortDir, query }));
+      sessionStorage.setItem(SS_KEY, JSON.stringify({ sortKey, sortDir, query, range }));
     } catch {
       /* ignore */
     }
-  }, [sortKey, sortDir, query]);
+  }, [sortKey, sortDir, query, range]);
 
-  const loadOverviews = useCallback(
-    async (opts?: { refresh?: boolean }) => {
+  const loadAll = useCallback(
+    async (rng: Range, opts?: { refresh?: boolean }) => {
       if (pages.length === 0) return;
       setLoading(true);
       setProgress({ done: 0, total: pages.length });
-      const acc = opts?.refresh ? new Map<string, Overview>() : new Map(data);
+      const ovAcc = opts?.refresh ? new Map<string, Overview>() : new Map(dataRef.current);
+      const dailyAcc = new Map<string, DayPoint>();
       let anyError = false;
+
+      // Network "our posts per day" — one cheap DB call, in parallel with batches.
+      const sharesP = fetch(`${API}?networkShares=1&from=${rng.from}&to=${rng.to}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => (j.ok && j.shares ? (j.shares as Record<string, number>) : {}))
+        .catch(() => ({}) as Record<string, number>);
+
       for (let i = 0; i < pages.length; i += BATCH) {
         const slice = pages.slice(i, i + BATCH).map((p) => p.id);
         try {
           const res = await fetch(API, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pageDbIds: slice, refresh: opts?.refresh === true }),
+            body: JSON.stringify({ pageDbIds: slice, refresh: opts?.refresh === true, from: rng.from, to: rng.to }),
           });
           const json = await res.json();
           if (json.ok && Array.isArray(json.rows)) {
             for (const row of json.rows as (Overview & { pageDbId: string })[]) {
-              acc.set(row.pageDbId, { followers: row.followers, reach28: row.reach28, engagement28: row.engagement28, status: row.status, avatarUrl: row.avatarUrl, cachedAt: row.cachedAt });
+              ovAcc.set(row.pageDbId, { followers: row.followers, reach28: row.reach28, engagement28: row.engagement28, status: row.status, avatarUrl: row.avatarUrl, cachedAt: row.cachedAt });
             }
+            if (Array.isArray(json.daily)) for (const dp of json.daily as DayPoint[]) mergeDaily(dailyAcc, dp);
           } else {
             anyError = true;
           }
         } catch {
           anyError = true;
         }
-        setData(new Map(acc));
+        setData(new Map(ovAcc));
+        setNetworkDaily(new Map(dailyAcc));
         setProgress({ done: Math.min(i + BATCH, pages.length), total: pages.length });
       }
+      setNetworkShares(await sharesP);
       setLoading(false);
       if (anyError) error("Some Pages couldn’t be loaded — try Refresh.");
     },
-    // `data` intentionally omitted: we snapshot it at call time and a stale read
-    // only means a refresh re-fetches a Page already in the map (harmless).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pages, error],
   );
 
-  // Load once on mount.
+  // Load on mount (after restoring the saved range) and whenever the range changes.
   useEffect(() => {
-    if (ranOnce.current) return;
-    ranOnce.current = true;
-    void loadOverviews();
-  }, [loadOverviews]);
+    if (!ready) return;
+    void loadAll(range);
+    // loadAll is stable for a given page list; re-running only on range change is intended.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, range]);
 
   function onSort(k: SortKey) {
     if (k === sortKey) {
@@ -407,7 +587,6 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
 
   function openDetail(id: string) {
     setDetailId(id);
-    // Bring the panel into view (it renders above the table).
     requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
@@ -469,6 +648,8 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
     return { followers: haveF ? followers : null, reach: haveR ? reach : null };
   }, [filtered]);
 
+  const networkRows = useMemo(() => buildDayRows(range.from, range.to, networkDaily, networkShares), [range, networkDaily, networkShares]);
+
   const { page, setPage, pageCount, pageItems, start, total } = usePaged(sorted, PER_PAGE);
   const detailPage = detailId ? pages.find((p) => p.id === detailId) ?? null : null;
 
@@ -484,12 +665,13 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
   }
 
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  const includesToday = range.to === ppToday();
 
   return (
     <div>
       {detailPage && (
         <div ref={detailRef}>
-          <PageDetail page={detailPage} onClose={() => setDetailId(null)} />
+          <PageDetail page={detailPage} initialRange={range} onClose={() => setDetailId(null)} />
         </div>
       )}
 
@@ -498,15 +680,15 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
           <div style={{ minWidth: 0 }}>
             <div className="adm-card-title">Page insights</div>
             <div className="adm-card-sub" style={{ marginTop: 2 }}>
-              Per-Page performance from the Facebook Graph API · cached ~12h · {formatNumber(pages.length)} Page{pages.length === 1 ? "" : "s"}
+              Per-Page performance from the Facebook Graph API · {formatNumber(pages.length)} Page{pages.length === 1 ? "" : "s"}
             </div>
           </div>
-          <button type="button" className="adm-btn-ghost" onClick={() => loadOverviews({ refresh: true })} disabled={loading} title="Re-fetch fresh numbers from Facebook (ignores the cache)">
+          <button type="button" className="adm-btn-ghost" onClick={() => loadAll(range, { refresh: true })} disabled={loading} title="Re-fetch fresh numbers from Facebook (ignores the cache)">
             <RefreshIcon className={`h-4 w-4 ${loading ? "adm-spinning" : ""}`} /> Refresh
           </button>
         </div>
 
-        {/* Network totals */}
+        {/* Network totals (range-independent headline KPIs) */}
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 12, padding: "10px 12px", border: "1px solid var(--adm-bd)", borderRadius: 12, background: "var(--adm-card)" }}>
           <div>
             <div className="adm-fb-sub" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Network followers</div>
@@ -518,8 +700,17 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
           </div>
         </div>
 
+        {/* Day-by-day (network) */}
+        <div style={{ marginTop: 18 }}>
+          <div className="adm-card-title" style={{ fontSize: 14 }}>Day-by-day · network</div>
+          <RangeControl range={range} onChange={setRange} busy={loading} />
+          <DailyCharts rows={networkRows} />
+          {includesToday && <PartialNote />}
+          <DayTable rows={networkRows} />
+        </div>
+
         {/* Search */}
-        <div className="adm-search" style={{ marginTop: 12, maxWidth: 360 }}>
+        <div className="adm-search" style={{ marginTop: 18, maxWidth: 360 }}>
           <SearchIcon className="h-4 w-4" aria-hidden />
           <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search Pages or groups…" aria-label="Search Pages" />
           {query && (
@@ -529,7 +720,7 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
           )}
         </div>
 
-        {/* Progress while the first batch load runs */}
+        {/* Progress while a batch load runs */}
         {loading && (
           <div style={{ marginTop: 12 }}>
             <div className="adm-fb-sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -588,7 +779,7 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
         ) : (
           <>
             <div className="adm-fb-sub" style={{ marginTop: 10 }}>
-              Showing {formatNumber(start + 1)}–{formatNumber(Math.min(start + PER_PAGE, total))} of {formatNumber(total)} · tap a row for trends &amp; recent posts
+              Showing {formatNumber(start + 1)}–{formatNumber(Math.min(start + PER_PAGE, total))} of {formatNumber(total)} · tap a row for day-by-day &amp; recent posts
             </div>
             <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
           </>

@@ -6,6 +6,7 @@ import {
   fetchPageInsights,
   type InsightValue,
 } from "@/lib/facebook";
+import { ppDayOfEndTime } from "@/lib/fbInsightsRange";
 
 /**
  * Page-level performance for the admin Insights tab — computed from the OFFICIAL
@@ -95,11 +96,10 @@ export async function getPageOverview(pageId: string, accessToken: string): Prom
   return { followers, reach28, engagement28, status };
 }
 
-export type SeriesPoint = { date: string; value: number };
-export type PageTimeseries = {
-  reach: SeriesPoint[];
-  engagement: SeriesPoint[];
-  follows: SeriesPoint[];
+/** One calendar day's metrics (null = no data for that day → shown as "—"). */
+export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
+export type PageDaily = {
+  days: DayPoint[];
   /** Which metric name actually backed each series (null = none available). */
   reachMetric: string | null;
   engagementMetric: string | null;
@@ -114,27 +114,31 @@ function firstPresent(series: Record<string, InsightValue[]>, candidates: string
   return null;
 }
 
-/** Map a value series → chart points keyed by YYYY-MM-DD (drops undated points). */
-function toPoints(values: InsightValue[] | undefined): SeriesPoint[] {
-  if (!values) return [];
-  return values
-    .filter((v) => v.endTime)
-    .map((v) => ({ date: (v.endTime as string).slice(0, 10), value: typeof v.value === "number" ? v.value : 0 }));
+/** Sum a metric's values into a Phnom-Penh day → total map. */
+function bucketByDay(values: InsightValue[] | undefined): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const v of values ?? []) {
+    if (!v.endTime) continue;
+    const day = ppDayOfEndTime(v.endTime);
+    m.set(day, (m.get(day) ?? 0) + (typeof v.value === "number" ? v.value : 0));
+  }
+  return m;
 }
 
 /**
- * Daily reach / engagement / follows series over the last `days` (7 / 28 / 90),
- * for the Page detail charts. Self-healing: a retired metric is skipped and its
- * series comes back empty (the chart shows an empty state). Token/permission
- * errors propagate so the caller can render the "needs reconnect" state.
+ * Daily reach / engagement / follows for an arbitrary range (`since`..`until`
+ * unix seconds), bucketed by Phnom-Penh day, for the day-by-day chart + table.
+ * Self-healing: a retired/limited metric is skipped and its days come back
+ * absent (the caller fills "—" for missing days, so history gaps degrade
+ * gracefully). Token/permission errors propagate so the caller can show the
+ * "needs reconnect" state. Only the days Facebook returned are included.
  */
-export async function getPageTimeseries(
+export async function getPageDaily(
   pageId: string,
   accessToken: string,
-  days: number,
-): Promise<PageTimeseries> {
-  const until = Math.floor(Date.now() / 1000);
-  const since = until - days * 86400;
+  since: number,
+  until: number,
+): Promise<PageDaily> {
   const series = await fetchPageInsights({
     pageId,
     accessToken,
@@ -146,12 +150,15 @@ export async function getPageTimeseries(
   const reachMetric = firstPresent(series, REACH_METRICS);
   const engagementMetric = firstPresent(series, ENGAGEMENT_METRICS);
   const followsMetric = firstPresent(series, FOLLOW_METRICS);
-  return {
-    reach: toPoints(reachMetric ? series[reachMetric] : undefined),
-    engagement: toPoints(engagementMetric ? series[engagementMetric] : undefined),
-    follows: toPoints(followsMetric ? series[followsMetric] : undefined),
-    reachMetric,
-    engagementMetric,
-    followsMetric,
-  };
+  const reach = bucketByDay(reachMetric ? series[reachMetric] : undefined);
+  const eng = bucketByDay(engagementMetric ? series[engagementMetric] : undefined);
+  const fol = bucketByDay(followsMetric ? series[followsMetric] : undefined);
+  const dates = new Set<string>([...reach.keys(), ...eng.keys(), ...fol.keys()]);
+  const days: DayPoint[] = [...dates].sort().map((date) => ({
+    date,
+    reach: reach.has(date) ? (reach.get(date) as number) : null,
+    engagement: eng.has(date) ? (eng.get(date) as number) : null,
+    follows: fol.has(date) ? (fol.get(date) as number) : null,
+  }));
+  return { days, reachMetric, engagementMetric, followsMetric };
 }
