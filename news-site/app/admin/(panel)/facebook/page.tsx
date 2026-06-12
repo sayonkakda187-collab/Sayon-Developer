@@ -13,6 +13,10 @@ import {
   FacebookScheduledPosts,
   type ScheduledPostView,
 } from "@/components/admin/FacebookScheduledPosts";
+import {
+  FacebookPageInsights,
+  type InsightsPageRow,
+} from "@/components/admin/FacebookPageInsights";
 import { FacebookShareSettings } from "@/components/admin/FacebookShareSettings";
 import { FacebookShareModeCard } from "@/components/admin/FacebookShareModeCard";
 import { getFacebookConnectStatus } from "@/lib/facebookSettings";
@@ -25,7 +29,7 @@ export default async function AdminFacebookPage() {
   // Count posted/pending per page in SQL (groupBy) rather than loading every
   // ScheduledPost row into memory just to count it — keeps this O(pages), not
   // O(all posts ever), as post history grows.
-  const [pages, counts, scheduled, connect, shareSettings] = await Promise.all([
+  const [pages, counts, lastShared, scheduled, connect, shareSettings] = await Promise.all([
     prisma.facebookPage.findMany({
       orderBy: [{ categoryGroup: "asc" }, { pageName: "asc" }],
     }),
@@ -33,6 +37,12 @@ export default async function AdminFacebookPage() {
       by: ["facebookPageId", "status"],
       where: { status: { in: ["posted", "pending"] } },
       _count: { _all: true },
+    }),
+    // Most recent successful share per Page → "Last shared" column on Insights.
+    prisma.scheduledPost.groupBy({
+      by: ["facebookPageId"],
+      where: { status: "posted" },
+      _max: { postedAt: true },
     }),
     prisma.scheduledPost.findMany({
       orderBy: { scheduledFor: "desc" },
@@ -52,6 +62,21 @@ export default async function AdminFacebookPage() {
     const target = c.status === "posted" ? postedByPage : pendingByPage;
     target.set(c.facebookPageId, c._count._all);
   }
+
+  const lastSharedByPage = new Map<string, string>();
+  for (const l of lastShared) {
+    if (l._max.postedAt) lastSharedByPage.set(l.facebookPageId, l._max.postedAt.toISOString());
+  }
+
+  const insightsView: InsightsPageRow[] = pages.map((p) => ({
+    id: p.id,
+    pageId: p.pageId,
+    pageName: p.pageName,
+    categoryGroup: p.categoryGroup,
+    status: p.status,
+    postedCount: postedByPage.get(p.id) ?? 0,
+    lastSharedAt: lastSharedByPage.get(p.id) ?? null,
+  }));
 
   const view: FacebookPageView[] = pages.map((p) => ({
     id: p.id,
@@ -89,6 +114,7 @@ export default async function AdminFacebookPage() {
           { id: "scheduled", label: "Scheduled", node: <FacebookScheduledPosts posts={scheduledView} /> },
           { id: "results", label: "Results", node: <FacebookShareResults /> },
           { id: "pages", label: "Pages", node: <FacebookPagesManager pages={view} connect={connect} /> },
+          { id: "insights", label: "Insights", node: <FacebookPageInsights pages={insightsView} /> },
           { id: "settings", label: "Settings", node: <FacebookShareSettings initial={shareSettings} /> },
         ]}
       />

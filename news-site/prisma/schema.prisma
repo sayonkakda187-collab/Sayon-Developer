@@ -243,9 +243,20 @@ model FacebookPage {
   updatedAt     DateTime @updatedAt
 
   scheduledPosts ScheduledPost[]
+  insightCache   PageInsightCache?
 
   @@index([categoryGroup])
   @@index([status])
+}
+
+// ~12h cache of a Page's computed Insights overview (followers / 28-day reach /
+// 28-day engagement + status), so the Insights tab doesn't re-hit the Graph API
+// for ~264 Pages on every load. One row per Page; data is a small JSON snapshot.
+model PageInsightCache {
+  facebookPageId String       @id
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  data           String // JSON: { followers, reach28, engagement28, status }
+  fetchedAt      DateTime     @default(now())
 }
 
 // A backed-up logged-in browser session for the self-hosted fb-runner. The

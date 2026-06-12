@@ -11,7 +11,7 @@
 
 // Pin a Graph API version (override via env if you upgrade). Facebook versions
 // are stable for ~2 years; pinning avoids surprise breaking changes.
-const GRAPH_VERSION = process.env.FACEBOOK_GRAPH_VERSION || "v21.0";
+const GRAPH_VERSION = process.env.FACEBOOK_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 /** Shape of a Graph API error envelope (the bits we care about). */
@@ -358,4 +358,148 @@ export async function getPostStats(postId: string, accessToken: string): Promise
   }
 
   return stats;
+}
+
+// ── Page Insights (Pages performance overview + trends) ──────────────────────
+//
+// Meta has retired many Page metrics (e.g. page_impressions* / page_fans were
+// removed Nov 15 2025; more reach/viewer metrics retire mid-2026, replaced by
+// "Views"/"Media Views"). Rather than hard-code a metric that may vanish, the
+// caller passes a list of CANDIDATE metrics and we SELF-HEAL: if the API rejects
+// one (#100) we drop it and retry, remembering the dead metric for the process so
+// we never ask for it again. A page returns whatever is still supported, and a
+// missing metric degrades to "—" instead of crashing the whole table.
+
+/** Metrics the Graph API has rejected this process — never request them again. */
+const BAD_PAGE_METRICS = new Set<string>();
+
+/** One data point from a Page-insights series (`end_time` present for day series). */
+export type InsightValue = { value: number; endTime?: string };
+
+/**
+ * Read scalar Page fields (e.g. followers_count, fan_count) in one call:
+ * GET /{pageId}?fields=a,b. Returns each field as a number (or undefined when the
+ * field is absent / non-numeric). Token/permission errors throw FacebookApiError
+ * so the caller can flag the Page as "needs reconnect".
+ */
+export async function fetchPageFields(
+  pageId: string,
+  accessToken: string,
+  fields: string[],
+): Promise<Record<string, number | undefined>> {
+  const url =
+    `${GRAPH_BASE}/${encodeURIComponent(pageId)}?fields=${encodeURIComponent(fields.join(","))}` +
+    `&access_token=${encodeURIComponent(accessToken)}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<Record<string, unknown>>(res, "Could not load page details");
+  const out: Record<string, number | undefined> = {};
+  for (const f of fields) {
+    const v = data[f];
+    out[f] = typeof v === "number" ? v : undefined;
+  }
+  return out;
+}
+
+/** Low-level GET /{pageId}/insights?metric=…&period=… (one raw request). */
+async function graphInsights(
+  pageId: string,
+  accessToken: string,
+  metrics: string[],
+  period: string,
+  since?: number,
+  until?: number,
+): Promise<{ name: string; values: InsightValue[] }[]> {
+  const params = new URLSearchParams();
+  params.set("metric", metrics.join(","));
+  params.set("period", period);
+  if (since != null) params.set("since", String(since));
+  if (until != null) params.set("until", String(until));
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}/insights?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{
+    data?: { name?: string; values?: { value?: unknown; end_time?: string }[] }[];
+  }>(res, "Could not load insights");
+  return (data.data ?? []).map((m) => ({
+    name: m.name || "",
+    values: (m.values ?? []).map((v) => ({
+      // Only single-value metrics are requested here, so `value` is a number;
+      // a breakdown object (rare, unrequested) degrades to 0.
+      value: typeof v.value === "number" ? v.value : 0,
+      endTime: v.end_time,
+    })),
+  }));
+}
+
+/** Find which requested metric a #100 error message names (so we can drop it). */
+function badMetricFrom(message: string, metrics: string[]): string | null {
+  const lc = message.toLowerCase();
+  for (const m of metrics) {
+    if (lc.includes(m.toLowerCase())) return m;
+  }
+  return null;
+}
+
+type InsightArgs = {
+  pageId: string;
+  accessToken: string;
+  metrics: string[];
+  period: string;
+  since?: number;
+  until?: number;
+};
+
+/** Last resort when a #100 doesn't name the culprit: probe each metric alone so a
+ *  single bad one can't take down the metrics that still work. */
+async function probeInsightsIndividually(args: InsightArgs, metrics: string[]): Promise<Record<string, InsightValue[]>> {
+  const out: Record<string, InsightValue[]> = {};
+  for (const m of metrics) {
+    try {
+      const series = await graphInsights(args.pageId, args.accessToken, [m], args.period, args.since, args.until);
+      for (const s of series) out[s.name] = s.values;
+    } catch (e) {
+      if (e instanceof FacebookApiError && (e.expired || e.permission)) throw e;
+      if (e instanceof FacebookApiError && e.code === 100) {
+        BAD_PAGE_METRICS.add(m);
+        continue;
+      }
+      throw e;
+    }
+  }
+  return out;
+}
+
+/**
+ * Fetch Page insights with SELF-HEALING metric handling. Filters out metrics
+ * already known-bad, requests the rest in one call, and on a #100 "unsupported
+ * metric" error drops the named metric and retries (or probes individually when
+ * the culprit isn't named). Token-invalid / permission errors are re-thrown so the
+ * caller can show a "needs reconnect" badge; everything else degrades to whatever
+ * metrics did resolve. Returns a map of metric name → its value series.
+ */
+export async function fetchPageInsights(args: InsightArgs): Promise<Record<string, InsightValue[]>> {
+  let metrics = args.metrics.filter((m) => !BAD_PAGE_METRICS.has(m));
+  const out: Record<string, InsightValue[]> = {};
+
+  while (metrics.length > 0) {
+    try {
+      const series = await graphInsights(args.pageId, args.accessToken, metrics, args.period, args.since, args.until);
+      for (const s of series) out[s.name] = s.values;
+      return out;
+    } catch (e) {
+      if (e instanceof FacebookApiError && !e.expired && !e.permission && e.code === 100) {
+        const bad = badMetricFrom(e.message, metrics);
+        if (bad) {
+          BAD_PAGE_METRICS.add(bad);
+          metrics = metrics.filter((m) => m !== bad);
+          continue; // retry without the rejected metric
+        }
+        // Couldn't tell which metric — probe each on its own and merge.
+        const probed = await probeInsightsIndividually(args, metrics);
+        return { ...out, ...probed };
+      }
+      throw e;
+    }
+  }
+  return out;
 }
