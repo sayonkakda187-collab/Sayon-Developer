@@ -2320,3 +2320,44 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-agset-switch:checked::after { transform: translateX(17px); }
 .adm-agset-switch:disabled { opacity: .55; cursor: default; }
 @media (max-width: 640px) { .adm-agent-card-acts .adm-btn-primary, .adm-agent-card-acts .adm-btn-ghost { flex: 1; justify-content: center; } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE UI PASS (iPhone 375–430px · Safari + installed PWA). Responsive-only:
+   everything is scoped to the admin shell + a ≤1023px media query, so the desktop
+   layout (min-width:1024px) is untouched. Complements the MOBILE HARDENING block
+   above; adds the gaps found in the audit — iOS input zoom, ≥44px tap targets on
+   segmented/pager controls, horizontally-scrollable chip/tab rows with an
+   edge-fade hint, and long-string wrapping so nothing overflows its card.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+  /* iOS auto-zoom guard: any control the user can focus must render ≥16px so
+     Safari doesn't zoom the page on focus. !important beats the few inline
+     12.5px fonts (token / caption textareas). Admin shell only. */
+  .admin-shell :is(input, textarea, select, .adm-input) { font-size: 16px !important; }
+  .admin-shell :is(input[type="date"], input[type="time"], input[type="number"], input[type="datetime-local"]) { min-height: 44px; }
+
+  /* Chip / filter / segmented rows scroll horizontally with momentum (no clipped
+     items) instead of overflowing the page. The Facebook tab row keeps its own
+     dedicated scroller (.adm-fb-tabbar .adm-seg stays overflow:visible). */
+  .adm-seg { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .adm-seg::-webkit-scrollbar { display: none; }
+
+  /* Edge-fade hint on the horizontally-scrollable Facebook tab row — the mask
+     only visibly bites when the row actually overflows + scrolls. */
+  .adm-fb-tabbar {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
+
+  /* ≥44px tap targets on the controls the base hardening didn't cover. */
+  .adm-seg-btn { min-height: 44px; white-space: nowrap; }
+  .adm-pager-btn { min-width: 44px; height: 44px; }
+  .adm-pager { gap: 8px; }
+
+  /* Long strings (URLs, tokens, error text, titles) wrap inside their card rather
+     than overflow it; tables stay inside their own horizontal scroller, never the
+     page. (The Results-card error <p> also gets white-space:normal inline, since
+     .adm-fb-sub is nowrap by default.) */
+  .adm-screen :is(.adm-card, .adm-card-sub, .adm-card-title, td, th) { overflow-wrap: anywhere; }
+  .adm-screen table { max-width: 100%; }
+}

@@ -183,12 +183,12 @@ export function FacebookShareResults() {
                     )}
                   </>
                 ) : (
-                  <p className="adm-fb-sub" style={{ color: "#b45309", marginTop: 8 }}>{r.error}</p>
+                  <p className="adm-fb-sub" style={{ color: "#b45309", marginTop: 8, whiteSpace: "normal", overflowWrap: "anywhere" }}>{r.error}</p>
                 )}
                 {r.mode === "photo" &&
                   (r.commentMissing ? (
                     <div style={{ marginTop: 8, borderTop: "1px dashed var(--adm-bd)", paddingTop: 8 }}>
-                      <p className="adm-fb-sub" style={{ color: "#b45309" }}>
+                      <p className="adm-fb-sub" style={{ color: "#b45309", whiteSpace: "normal", overflowWrap: "anywhere" }}>
                         ⚠ The link comment didn’t post{r.commentError ? ` — ${r.commentError}` : "."}
                       </p>
                       <button
