@@ -1014,6 +1014,48 @@ agent shares, manual "Share now", Re-share, and the cron. Additive migration
   `pages_read_engagement` + `pages_manage_posts`). The default mode stays **Link
   post**, so nothing changes until you switch it.
 
+## Facebook Page Insights (per-Page performance)
+
+An **Insights** tab on `/admin/facebook` (tab row: Share · Scheduled · Results ·
+Pages · **Insights** · Settings) showing per-Page performance pulled from the
+**official Graph API** (no scraping). Designed for **many Pages** (~hundreds) on
+Vercel Hobby's 60s limit: batched fetching + a server-side cache, never one giant
+request.
+
+- **Overview table** (`FacebookPageInsights.tsx`): one sortable row per connected
+  Page — **followers**, **28-day reach**, **28-day engagement**, **posts via our
+  system**, **last shared** — with a **network totals** card (followers + 28-day
+  reach), a **search** box, **20/page** pagination, and click-through to a detail
+  panel. Default sort **reach desc**; sort + search are remembered in
+  `sessionStorage`. Overviews load **progressively in batches of 25** with a
+  progress bar (first load), so the table fills in without a giant request. A Page
+  whose token can't read insights shows a **"Needs reconnect"** badge instead of
+  breaking the table.
+- **Detail panel** (click a row): **7 / 28 / 90-day** reach / engagement / new-
+  follows trends as **dependency-free SVG sparklines**, plus that Page's **recent
+  posts** from our share records with per-post reactions / comments / shares / reach
+  (reuses the Results-tab `getPostStats`). Friendly empty states for new/sparse
+  Pages — never an error.
+- **Self-healing metrics** (`lib/facebook.ts`): Meta keeps retiring Page metrics
+  (`page_impressions*` / `page_fans` removed Nov 2025; more reach/viewer metrics
+  retire mid-2026, replaced by "Views"). `fetchPageInsights` requests a list of
+  **candidate** metrics and, on a `#100` "unsupported metric" error, **drops the
+  named metric and retries** (or probes each individually), caching dead metrics in
+  a process-level `BAD_PAGE_METRICS` set. A missing metric degrades to "—" rather
+  than failing. Followers come from page **fields** (`followers_count` →
+  `fan_count`), reach/engagement from the **insights** edge (`days_28`). Pinned to
+  **Graph v25.0** (`FACEBOOK_GRAPH_VERSION` override unchanged).
+- **Service + cache** (`lib/facebookInsights.ts`, `PageInsightCache` model +
+  migration `20260612080000_page_insight_cache`): `getPageOverview` /
+  `getPageTimeseries` compute the numbers; the API route
+  `app/api/admin/facebook/page-insights` (`requireAdmin`-equivalent session gate,
+  `maxDuration = 60`) **POST**s batched overviews (serves the **~12h** per-Page
+  cache, or computes + upserts it; concurrency-limited `mapLimit` 6) and **GET**s a
+  Page's detail. A **Refresh** button busts the cache (`refresh: true`). Tokens are
+  decrypted **server-side only**; one Page failing never blocks the batch.
+- **Env / migration:** no new env. Additive `PageInsightCache` (auto-applies via
+  `prisma migrate deploy`). Read-only feature — it never posts.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.
