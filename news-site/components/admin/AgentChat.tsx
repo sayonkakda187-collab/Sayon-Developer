@@ -80,6 +80,9 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const atBottomRef = useRef(true);
+  const kbOpenRef = useRef(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const vvUpdateRef = useRef<() => void>(() => {});
 
   const autosize = useCallback(() => {
     const ta = taRef.current;
@@ -91,42 +94,65 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
     autosize();
   }, [input, autosize]);
 
-  // iOS keyboard handling (the layout viewport doesn't shrink for the keyboard in
-  // Safari / standalone PWA, so a CSS-only bottom bar can't ride above it). The
-  // composer is position:fixed; here we drive its bottom offset from the
-  // visualViewport: open → right on top of the keyboard
-  // (innerHeight − vv.height − vv.offsetTop); closed → just above the bottom nav
-  // (its measured height). --ac-extra keeps the latest message clear of the bar.
+  // iOS keyboard handling. The composer is position:fixed. The keyboard is detected
+  // by INPUT FOCUS, not a visualViewport-overlap threshold — in the standalone PWA
+  // the layout viewport shrinks with the keyboard, so the overlap reads ~0 and a
+  // threshold would think it's closed (leaving the composer above the nav with a
+  // gap). On focus we add `.ac-kb` (CSS hides the bottom nav + pins the composer via
+  // --ac-kbh); on blur we restore. --ac-kbh = innerHeight − (vv.height + vv.offsetTop)
+  // places the bar flush on the keyboard (≈0 in the PWA where the view already
+  // shrank, = keyboard height in Safari); --ac-navh-px is the closed offset.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const root = document.documentElement;
-    const measureNav = () => {
-      const el = document.querySelector(".adm-tabbar");
-      return el ? Math.round(el.getBoundingClientRect().height) : 0;
-    };
     const update = () => {
-      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      const open = overlap > 60; // keyboard up
-      const navH = measureNav();
-      const cb = open ? overlap : navH;
-      root.style.setProperty("--ac-cb", `${Math.round(cb)}px`);
-      root.style.setProperty("--ac-extra", `${Math.max(0, Math.round(cb - navH))}px`);
-      if (open && atBottomRef.current) {
-        const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight; // keep the newest message visible
+      const overlap = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+      if (kbOpenRef.current) {
+        root.style.setProperty("--ac-kbh", `${overlap}px`);
+        root.style.setProperty("--ac-extra", `${overlap}px`);
+        if (atBottomRef.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      } else {
+        root.style.setProperty("--ac-kbh", "0px");
+        root.style.setProperty("--ac-extra", "0px");
+        const nav = document.querySelector(".adm-tabbar");
+        root.style.setProperty("--ac-navh-px", nav ? `${Math.round(nav.getBoundingClientRect().height)}px` : "0px");
       }
     };
+    vvUpdateRef.current = update;
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
     update();
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
-      root.style.removeProperty("--ac-cb");
+      vvUpdateRef.current = () => {};
+      if (blurTimer.current) clearTimeout(blurTimer.current);
+      root.classList.remove("ac-kb");
+      root.style.removeProperty("--ac-kbh");
       root.style.removeProperty("--ac-extra");
+      root.style.removeProperty("--ac-navh-px");
     };
   }, []);
+
+  // Drive the keyboard-open state off the composer's focus. A short debounce on blur
+  // means tapping Send (which briefly blurs) doesn't flash the nav back in.
+  function setKeyboardOpen(open: boolean) {
+    kbOpenRef.current = open;
+    document.documentElement.classList.toggle("ac-kb", open);
+    vvUpdateRef.current();
+  }
+  function onComposerFocus() {
+    if (blurTimer.current) { clearTimeout(blurTimer.current); blurTimer.current = undefined; }
+    setKeyboardOpen(true);
+    atBottomRef.current = true;
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, 350);
+  }
+  function onComposerBlur() {
+    blurTimer.current = setTimeout(() => setKeyboardOpen(false), 200);
+  }
 
   const fetchSlots = useCallback(async () => {
     try {
@@ -529,20 +555,19 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                onFocus={() => {
-                  // After the keyboard animates in, jump to the newest message so the
-                  // user sees the conversation + what they're typing.
-                  atBottomRef.current = true;
-                  setTimeout(() => {
-                    const el = scrollRef.current;
-                    if (el) el.scrollTop = el.scrollHeight;
-                  }, 350);
-                }}
+                onFocus={onComposerFocus}
+                onBlur={onComposerBlur}
                 placeholder="Message the assistant…"
                 aria-label="Message the assistant"
                 disabled={busy}
               />
-              <button type="submit" className="adm-ac-send" disabled={busy || !input.trim()} aria-label="Send">
+              <button
+                type="submit"
+                className="adm-ac-send"
+                disabled={busy || !input.trim()}
+                aria-label="Send"
+                onMouseDown={(e) => e.preventDefault()} /* keep the textarea focused → keyboard stays up */
+              >
                 {busy ? <span className="adm-spinner" aria-hidden /> : SendIcon}
               </button>
             </div>
