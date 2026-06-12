@@ -14,10 +14,17 @@ export type FacebookTab = { id: string; label: string; node: ReactNode };
 export function FacebookTabs({ tabs, defaultId }: { tabs: FacebookTab[]; defaultId?: string }) {
   const [active, setActive] = useState(defaultId ?? tabs[0]?.id ?? "");
 
-  // Adopt a valid section from the URL hash (deep-link / refresh / back-forward).
+  // Adopt a valid section from the URL hash — on mount AND on hashchange, so an
+  // in-page anchor (e.g. the Share-mode card's "Edit templates →" #fb-settings)
+  // switches the tab even when the page is already open.
   useEffect(() => {
-    const fromHash = window.location.hash.replace(/^#fb-/, "");
-    if (fromHash && tabs.some((t) => t.id === fromHash)) setActive(fromHash);
+    const apply = () => {
+      const fromHash = window.location.hash.replace(/^#fb-/, "");
+      if (fromHash && tabs.some((t) => t.id === fromHash)) setActive(fromHash);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
   }, [tabs]);
 
   function go(id: string) {
