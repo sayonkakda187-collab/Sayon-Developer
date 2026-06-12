@@ -5,6 +5,7 @@ import { useToast } from "@/components/admin/Toast";
 import { formatDate, formatNumber } from "@/lib/site";
 import { RefreshIcon, CloseIcon, ExternalLinkIcon, SearchIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
+import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 
 export type InsightsPageRow = {
   id: string;
@@ -12,6 +13,7 @@ export type InsightsPageRow = {
   pageName: string;
   categoryGroup: string;
   status: string; // "Connected" | "Expired"
+  avatarUrl: string | null; // cached Page profile picture CDN URL (null = initials)
   postedCount: number;
   lastSharedAt: string | null;
 };
@@ -21,6 +23,7 @@ type Overview = {
   reach28: number | null;
   engagement28: number | null;
   status: "ok" | "partial" | "reconnect";
+  avatarUrl?: string | null; // refreshed during the insights fetch (may update the row)
   cachedAt: string;
 };
 
@@ -61,6 +64,7 @@ type MergedRow = InsightsPageRow & {
   engagement28: number | null;
   ovStatus: Overview["status"] | null;
   needsReconnect: boolean;
+  effectiveAvatar: string | null; // freshly-refreshed url (if any) else the server prop
 };
 
 /** Numeric value backing a sortable column (null → sorts last). */
@@ -233,9 +237,12 @@ function PageDetail({ page, onClose }: { page: InsightsPageRow; onClose: () => v
   return (
     <div className="adm-card adm-card-pad" style={{ marginBottom: 16, borderColor: "var(--adm-green, #16a34a)" }}>
       <div className="adm-list-head" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ minWidth: 0 }}>
-          <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{page.pageName}</div>
-          <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · trends &amp; recent posts</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <FacebookPageAvatar key={page.id} dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={48} />
+          <div style={{ minWidth: 0 }}>
+            <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{page.pageName}</div>
+            <div className="adm-card-sub" style={{ marginTop: 2 }}>{page.categoryGroup} · trends &amp; recent posts</div>
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div className="adm-seg" role="tablist" aria-label="Date range">
@@ -362,7 +369,7 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
           const json = await res.json();
           if (json.ok && Array.isArray(json.rows)) {
             for (const row of json.rows as (Overview & { pageDbId: string })[]) {
-              acc.set(row.pageDbId, { followers: row.followers, reach28: row.reach28, engagement28: row.engagement28, status: row.status, cachedAt: row.cachedAt });
+              acc.set(row.pageDbId, { followers: row.followers, reach28: row.reach28, engagement28: row.engagement28, status: row.status, avatarUrl: row.avatarUrl, cachedAt: row.cachedAt });
             }
           } else {
             anyError = true;
@@ -415,6 +422,7 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
           engagement28: o?.engagement28 ?? null,
           ovStatus: o?.status ?? null,
           needsReconnect: o?.status === "reconnect" || p.status === "Expired",
+          effectiveAvatar: o?.avatarUrl !== undefined ? o.avatarUrl : p.avatarUrl,
         };
       }),
     [pages, data],
@@ -552,11 +560,16 @@ export function FacebookPageInsights({ pages }: { pages: InsightsPageRow[] }) {
                 return (
                   <tr key={r.id} onClick={() => openDetail(r.id)} style={{ cursor: "pointer" }} title="Open detail">
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <span style={{ fontWeight: 600, color: "var(--adm-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 230 }}>{r.pageName}</span>
-                        {r.needsReconnect && <ReconnectBadge />}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <FacebookPageAvatar dbId={r.id} name={r.pageName} avatarUrl={r.effectiveAvatar} size={32} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, color: "var(--adm-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 210 }}>{r.pageName}</span>
+                            {r.needsReconnect && <ReconnectBadge />}
+                          </div>
+                          <div className="adm-fb-sub" style={{ fontSize: 11 }}>{r.categoryGroup}</div>
+                        </div>
                       </div>
-                      <div className="adm-fb-sub" style={{ fontSize: 11 }}>{r.categoryGroup}</div>
                     </td>
                     <td className="adm-num-td" style={{ textAlign: "right" }}>{r.followers == null ? (pending ? "…" : "—") : formatNumber(r.followers)}</td>
                     <td className="adm-num-td" style={{ textAlign: "right" }}>{r.reach28 == null ? (pending ? "…" : "—") : formatNumber(r.reach28)}</td>
