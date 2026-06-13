@@ -10,7 +10,7 @@ import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
-import { AnimatedSparkline } from "@/components/admin/PageControlCharts";
+import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
 import type { InsightsPageRow } from "@/components/admin/FacebookPageInsights";
 
 const PER_PAGE = 24;
@@ -31,6 +31,8 @@ type RowStatsData = {
   followsPrev: number | null;
   sparkReach: number[];
   sparkEngagement: number[];
+  totalPosts: number | null;
+  totalPostsCapped: boolean;
   status: "ok" | "reconnect";
 };
 type StatEntry = RowStatsData | "loading" | "error";
@@ -63,6 +65,19 @@ function StatPill({ label, value, prev }: { label: string; value: number | null;
   );
 }
 
+/** All-time total-posts pill (emerald-accented), with a tiny count-up on appear.
+ *  "—" when unavailable; "{n}+" when the count is a capped floor. */
+function PostsPill({ count, capped }: { count: number | null; capped: boolean }) {
+  return (
+    <span className="adm-pc-stat adm-pc-stat-posts">
+      <span className="adm-pc-stat-k">Posts</span>
+      <span className="adm-pc-stat-v">
+        {count == null ? "—" : <CountUp value={count} durationMs={500} format={(n) => `${compact(n)}${capped ? "+" : ""}`} />}
+      </span>
+    </span>
+  );
+}
+
 /** The 28-day quick-stat pills under a row: shimmer while loading, "—" when a page
  *  has no insights / token can't read them, else Reach · Engaged · Follows + Δ%. */
 function RowStats({ entry }: { entry: StatEntry | undefined }) {
@@ -86,7 +101,8 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
   const spark = entry.reach != null && entry.sparkReach.length > 1 ? entry.sparkReach : entry.sparkEngagement;
   return (
     <div className="adm-pc-statsrow">
-      <div className="adm-pc-stats" title="Last 28 days vs the previous 28 days">
+      <div className="adm-pc-stats" title="Total posts (all-time) · last 28 days vs the previous 28 days">
+        <PostsPill count={entry.totalPosts} capped={entry.totalPostsCapped} />
         <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
         <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
         <StatPill label="Follows" value={entry.follows} prev={entry.followsPrev} />
