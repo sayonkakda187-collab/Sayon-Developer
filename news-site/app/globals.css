@@ -2603,7 +2603,7 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-twobox { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 1024px) { .adm-pc-twobox { grid-template-columns: 45fr 55fr; align-items: start; } }
 .adm-pc-box { min-width: 0; border: 1px solid var(--adm-bd); border-radius: 16px; padding: 12px; }
-.adm-pc-dash-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+.adm-pc-dash-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
 
 /* Top-pages leaderboard */
 .adm-pc-lead { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
@@ -2915,3 +2915,31 @@ a.dl-breaking-text:hover { text-decoration:none; }
 }
 .adm-pc-netfilter > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-pc-netfilter button { flex: none; border: none; background: none; cursor: pointer; color: var(--section-link); font-size: 17px; line-height: 1; padding: 0 2px; min-width: 24px; min-height: 24px; }
+
+/* ── Network dashboard MANAGER CHIPS (inline with the title, right-aligned) ── */
+.adm-pc-dash-titlerow { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.adm-pc-dash-titlerow > .adm-card-title { flex: none; }
+.adm-pc-mgrchips {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  flex-wrap: nowrap; overflow-x: auto; min-width: 0; max-width: 100%;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.adm-pc-mgrchips::-webkit-scrollbar { display: none; }
+.adm-pc-mgrchip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 6px; border-radius: 999px; min-height: 38px;
+  border: 1px solid var(--adm-bd); background: var(--adm-card); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--adm-ink); white-space: nowrap;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.adm-pc-mgrchip-all { padding-left: 12px; }
+.adm-pc-mgrchip:hover { border-color: var(--section-accent); }
+.adm-pc-mgrchip.on { border-color: var(--section-accent); background: var(--section-tint); color: var(--section-link); }
+.adm-pc-mgrchip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+@media (max-width: 700px) {
+  .adm-pc-mgrchips { margin-left: 0; width: 100%; }
+  .adm-pc-mgrchip { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-pc-mgrchip { transition: none; }
+}
