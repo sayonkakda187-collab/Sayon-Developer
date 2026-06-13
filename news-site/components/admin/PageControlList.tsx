@@ -9,6 +9,7 @@ import { SearchIcon, PlusIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
+import { AnimatedSparkline } from "@/components/admin/PageControlCharts";
 import type { InsightsPageRow } from "@/components/admin/FacebookPageInsights";
 
 const PER_PAGE = 24;
@@ -27,6 +28,8 @@ type RowStatsData = {
   reachPrev: number | null;
   engagementPrev: number | null;
   followsPrev: number | null;
+  sparkReach: number[];
+  sparkEngagement: number[];
   status: "ok" | "reconnect";
 };
 type StatEntry = RowStatsData | "loading" | "error";
@@ -78,11 +81,18 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
       </div>
     );
   }
+  // Sparkline: default Reach; fall back to Engagement when reach has no data.
+  const spark = entry.reach != null && entry.sparkReach.length > 1 ? entry.sparkReach : entry.sparkEngagement;
   return (
-    <div className="adm-pc-stats" title="Last 28 days vs the previous 28 days">
-      <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
-      <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
-      <StatPill label="Follows" value={entry.follows} prev={entry.followsPrev} />
+    <div className="adm-pc-statsrow">
+      <div className="adm-pc-stats" title="Last 28 days vs the previous 28 days">
+        <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
+        <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
+        <StatPill label="Follows" value={entry.follows} prev={entry.followsPrev} />
+      </div>
+      <span className="adm-pc-sparkwrap">
+        <AnimatedSparkline values={spark} color="var(--section-accent)" width={92} height={28} />
+      </span>
     </div>
   );
 }
