@@ -123,7 +123,7 @@ async function clearLinkPending(chatId: number): Promise<void> {
 /** Show all manager names as tap-to-link buttons (paginated). Tapping only selects a
  *  name — the code is required next to actually link. */
 async function showNameList(chatId: number, page = 0): Promise<void> {
-  const managers = await prisma.pageManager.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const managers = await prisma.pageManager.findMany({ select: { id: true, name: true, linkCode: true }, orderBy: { name: "asc" } });
   if (managers.length === 0) {
     await send(chatId, "No managers exist yet. Ask your admin to add you in the Managers tab, then tap your name here.");
     return;
@@ -137,7 +137,9 @@ async function showNameList(chatId: number, page = 0): Promise<void> {
   if (p < pageCount - 1) nav.push({ text: "Next ▶", callback_data: `ln:${p + 1}` });
   if (nav.length) rows.push(nav);
   const header = pageCount > 1 ? `Tap your name to link (page ${p + 1}/${pageCount}):` : "Tap your name to link:";
-  await send(chatId, header, { reply_markup: { inline_keyboard: rows } });
+  // Each manager's current code shown next to their name (tap-to-copy on mobile via <code>).
+  const codeList = slice.map((m) => `${esc(m.name)} — <code>${esc(m.linkCode)}</code>`).join("\n");
+  await send(chatId, `${header}\n\n${codeList}`, { reply_markup: { inline_keyboard: rows } });
 }
 
 /** A name was tapped — remember the choice and ask for that manager's code (the code is
