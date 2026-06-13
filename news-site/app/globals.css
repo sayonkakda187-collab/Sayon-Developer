@@ -2697,6 +2697,33 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-toptabs { margin-bottom: 16px; }
 .adm-pc-toptabs .adm-pc-subtab { font-size: 14.5px; padding: 12px 18px; }
 
+/* ── App/mobile only (<1024px): render "Pages | Managers" as a SEGMENTED PILL (reusing
+   the Facebook .adm-seg look) and pull it above the description so the tabs are
+   reachable without scrolling. Desktop (≥1024px) keeps the underline tabs + in-header
+   description exactly as before. ── */
+.adm-pc-desc-m { display: none; } /* mobile-only description copy (shown below the tabs) */
+@media (max-width: 1023px) {
+  .adm-pc-desc-d { display: none; } /* hide the in-header description on mobile */
+  .adm-pc-desc-m { display: block; font-size: 13px; line-height: 1.5; color: var(--adm-muted); margin: 0 0 14px; }
+
+  .adm-pc-toptabs {
+    display: flex; gap: 4px; padding: 4px; margin-bottom: 14px;
+    border-bottom: none; border-radius: 12px; overflow: visible;
+    background: var(--adm-soft, rgba(0, 0, 0, 0.05));
+  }
+  [data-adm-theme="dark"] .admin-shell .adm-pc-toptabs { background: rgba(255, 255, 255, 0.06); }
+  .adm-pc-toptabs .adm-pc-subtab {
+    flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-bottom: none; margin-bottom: 0; border-radius: 9px;
+    min-height: 44px; padding: 10px 12px; font-size: 14px; font-weight: 600;
+    color: var(--adm-muted); opacity: 1;
+  }
+  .adm-pc-toptabs .adm-pc-subtab.on {
+    background: var(--adm-card); color: var(--section-link);
+    box-shadow: var(--adm-shadow); border-bottom-color: transparent;
+  }
+}
+
 /* Read-only manager badge in the top-right of a page row (opposite the page name).
    Nothing renders when unassigned. Assignment happens ONLY in the Managers tab — rows
    carry no assign control. The page name flexes + ellipsizes beside it (row unchanged). */
