@@ -9,6 +9,7 @@ import { AdskeeperBalancePill } from "./AdskeeperBalancePill";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { AdminAvatar } from "./AdminAvatar";
 import { GlobalSearch } from "./GlobalSearch";
+import { PageControlHeaderSearch } from "./PageControlHeaderSearch";
 import {
   BookIcon,
   BellIcon,
@@ -131,6 +132,9 @@ export function AdminShell({
   const initials = userEmail.replace(/@.*/, "").slice(0, 2).toUpperCase() || "AD";
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+  // Page Control LIST screen only: the header search filters monitored Pages instead
+  // of articles. Every other admin route (incl. a Page's dashboard) keeps GlobalSearch.
+  const isPageControlList = pathname === "/admin/page-control";
 
   const brand = (
     <Link href="/admin" className="adm-brand">
@@ -152,7 +156,11 @@ export function AdminShell({
       <header className="adm-topbar adm-only-desktop">
         {brand}
         <div className="adm-search-wrap">
-          <GlobalSearch inputRef={deskSearchRef} showKbd />
+          {isPageControlList ? (
+            <PageControlHeaderSearch inputRef={deskSearchRef} showKbd />
+          ) : (
+            <GlobalSearch inputRef={deskSearchRef} showKbd />
+          )}
         </div>
         <div className="adm-top-actions">
           <AdskeeperBalancePill />
@@ -289,7 +297,11 @@ export function AdminShell({
               </button>
             </div>
 
-            <GlobalSearch inputRef={searchRef} onNavigate={() => setOpen(false)} />
+            {isPageControlList ? (
+              <PageControlHeaderSearch inputRef={searchRef} />
+            ) : (
+              <GlobalSearch inputRef={searchRef} onNavigate={() => setOpen(false)} />
+            )}
           </header>
 
           {/* ── Scroll content (the active screen) ── */}

@@ -1204,7 +1204,12 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   small **Δ% vs the previous 28d** ("—" when absent) — fetched **lazily in small batches**
   (`POST /api/admin/page-control/stats`) with a **per-row shimmer**, cached ~6h; never a
   bulk hammer. **Empty state** = a "Connect your first page" CTA. Live data loads **only
-  on open** (lazy; the set is small/hand-picked).
+  on open** (lazy; the set is small/hand-picked). **Search** is the admin **header** bar:
+  on the `/admin/page-control` list route ONLY, `AdminShell` swaps the global "Search
+  articles…" `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") which feeds a
+  shared module store (`pageControlSearchStore` `usePageControlSearch`) the list filters by
+  (debounced, case-insensitive, by name); there's exactly ONE page-search input, in the
+  header. Every other admin route (incl. a Page's dashboard) keeps the normal article search.
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three
