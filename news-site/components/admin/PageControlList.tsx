@@ -39,7 +39,10 @@ function initialRange(): Range {
 /** A monitored page row for the landing list (InsightsPageRow + its follower count). */
 export type MonitoredRow = InsightsPageRow & { followers: number | null };
 
-// Client-safe shape of one row's 28-day quick stats (matches the stats API).
+// Posts published WITHIN the selected range, split video vs image/other (capped = floor).
+type RangePosts = { total: number; video: number; image: number; capped: boolean };
+
+// Client-safe shape of one row's range stats (matches the stats API).
 type RowStatsData = {
   id: string;
   reach: number | null;
@@ -50,8 +53,7 @@ type RowStatsData = {
   followsPrev: number | null;
   sparkReach: number[];
   sparkEngagement: number[];
-  totalPosts: number | null;
-  totalPostsCapped: boolean;
+  rangePosts: RangePosts;
   status: "ok" | "reconnect";
 };
 type StatEntry = RowStatsData | "loading" | "error";
@@ -84,16 +86,31 @@ function StatPill({ label, value, prev }: { label: string; value: number | null;
   );
 }
 
-/** All-time total-posts pill (emerald-accented), with a tiny count-up on appear.
- *  "—" when unavailable; "{n}+" when the count is a capped floor. */
-function PostsPill({ count, capped }: { count: number | null; capped: boolean }) {
+/** Range-aware Posts pills: count of posts published IN the selected range (tiny
+ *  count-up), split into 🎥 video (blue) + 🖼 image/other (coral). "Posts 0" when
+ *  none (no broken split pills). "{n}+" when the range count hit the fetch cap. */
+function PostsPill({ rp }: { rp: RangePosts }) {
   return (
-    <span className="adm-pc-stat adm-pc-stat-posts">
-      <span className="adm-pc-stat-k">Posts</span>
-      <span className="adm-pc-stat-v">
-        {count == null ? "—" : <CountUp value={count} durationMs={500} format={(n) => `${compact(n)}${capped ? "+" : ""}`} />}
+    <>
+      <span className="adm-pc-stat adm-pc-stat-posts">
+        <span className="adm-pc-stat-k">Posts</span>
+        <span className="adm-pc-stat-v">
+          <CountUp value={rp.total} durationMs={500} format={(n) => `${Math.round(n)}${rp.capped ? "+" : ""}`} />
+        </span>
       </span>
-    </span>
+      {rp.total > 0 && rp.video > 0 && (
+        <span className="adm-pc-stat adm-pc-stat-video">
+          <span className="adm-pc-stat-v">🎥 {rp.video}</span>
+          <span className="adm-pc-stat-k" style={{ textTransform: "none" }}>video</span>
+        </span>
+      )}
+      {rp.total > 0 && rp.image > 0 && (
+        <span className="adm-pc-stat adm-pc-stat-image">
+          <span className="adm-pc-stat-v">🖼 {rp.image}</span>
+          <span className="adm-pc-stat-k" style={{ textTransform: "none" }}>image</span>
+        </span>
+      )}
+    </>
   );
 }
 
@@ -120,8 +137,8 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
   const spark = entry.reach != null && entry.sparkReach.length > 1 ? entry.sparkReach : entry.sparkEngagement;
   return (
     <div className="adm-pc-statsrow">
-      <div className="adm-pc-stats" title="Total posts (all-time) · selected range vs the previous equal-length period">
-        <PostsPill count={entry.totalPosts} capped={entry.totalPostsCapped} />
+      <div className="adm-pc-stats" title="Posts published in the range (🎥 video / 🖼 image) · selected range vs the previous equal-length period">
+        <PostsPill rp={entry.rangePosts} />
         <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
         <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
         <StatPill label="Follows" value={entry.follows} prev={entry.followsPrev} />

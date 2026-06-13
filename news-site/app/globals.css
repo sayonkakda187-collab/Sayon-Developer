@@ -2561,8 +2561,17 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-stat-d.down { color: #dc2626; }
 [data-adm-theme="dark"] .adm-pc-stat-d.down { color: #f87171; }
 .adm-pc-stat-skel { width: 64px; height: 22px; padding: 0; background: var(--adm-bd); animation: adm-pc-pulse 1.2s ease-in-out infinite; }
-/* All-time "Posts" pill — emerald-accented value to set it apart from the metric pills. */
+/* Range "Posts" pill — emerald-accented value to set it apart from the metric pills. */
 .adm-pc-stat-posts .adm-pc-stat-v { color: var(--section-link); }
+/* Video (blue tint) / image (coral tint) split pills — wrap with the other row pills. */
+.adm-pc-stat-video { background: rgba(37, 99, 235, 0.12); }
+.adm-pc-stat-video .adm-pc-stat-v { color: #1d4ed8; }
+.adm-pc-stat-image { background: rgba(234, 88, 12, 0.12); }
+.adm-pc-stat-image .adm-pc-stat-v { color: #c2410c; }
+[data-adm-theme="dark"] .adm-pc-stat-video { background: rgba(96, 165, 250, 0.20); }
+[data-adm-theme="dark"] .adm-pc-stat-video .adm-pc-stat-v { color: #93c5fd; }
+[data-adm-theme="dark"] .adm-pc-stat-image { background: rgba(251, 146, 60, 0.20); }
+[data-adm-theme="dark"] .adm-pc-stat-image .adm-pc-stat-v { color: #fdba74; }
 
 /* Row sparkline (next to the stat pills; hidden on very narrow screens) */
 .adm-pc-statsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 7px; }

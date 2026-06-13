@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getMonitoredRowStats } from "@/lib/pageControlInsights";
-import { getMonitoredTotalPosts } from "@/lib/pageControlTotals";
+import { getMonitoredRangePosts } from "@/lib/pageControlRangePosts";
 import { ppToday, addDays } from "@/lib/fbInsightsRange";
 
 export const runtime = "nodejs";
@@ -44,11 +44,10 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
  * POST `{ ids: string[], from?, to?, refresh?: boolean }` — for a BATCH of monitored
  * pages, the landing-list row data over the SELECTED range (default last 28d): quick
  * stats (reach / engagement / net follows + the equal-length previous period for %
- * change + the range's sparkline series) AND the all-time `totalPosts` count. The
- * client sends small batches (per-row shimmer). Stats are cached per (page, range)
- * ~6h; the post count has its own ~24h cache (summary=total_count when available, else
- * a capped count) — so a row is at most one cached call each per page, never a bulk
- * hammer. One page failing never blocks the rest.
+ * change + the range's sparkline series) AND the range-aware `rangePosts` count
+ * (posts published within the range, split video vs image). The client sends small
+ * batches (per-row shimmer). Both are cached per (page, range) so a row is at most one
+ * cached call each per page, never a bulk hammer. One page failing never blocks the rest.
  */
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -67,16 +66,17 @@ export async function POST(req: Request) {
 
   const pages = await prisma.monitoredPage.findMany({
     where: { id: { in: list } },
-    select: { id: true, pageId: true, accessToken: true, totalPosts: true, totalPostsCapped: true, totalPostsAt: true },
+    select: { id: true, pageId: true, accessToken: true },
   });
 
   const rows = await mapLimit(pages, 6, async (p) => {
-    // Quick stats over the range (cached ~6h) + all-time post count (cached ~24h) in parallel.
-    const [stats, totals] = await Promise.all([
+    // Quick stats over the range + the range's post count (video/image split), both
+    // cached per (page, range), in parallel.
+    const [stats, posts] = await Promise.all([
       getMonitoredRowStats(p, range, refresh === true),
-      getMonitoredTotalPosts(p, refresh === true),
+      getMonitoredRangePosts(p, range, refresh === true),
     ]);
-    return { id: p.id, ...stats, totalPosts: totals.count, totalPostsCapped: totals.capped };
+    return { id: p.id, ...stats, rangePosts: { total: posts.total, video: posts.video, image: posts.image, capped: posts.capped } };
   });
 
   return NextResponse.json({ ok: true, rows });

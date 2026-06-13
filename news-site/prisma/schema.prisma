@@ -359,8 +359,24 @@ model MonitoredPage {
 
   postsCache MonitoredPagePostsCache?
   dailyCache MonitoredPageDailyCache[]
+  rangePostsCache MonitoredPageRangePostsCache[]
 
   @@index([status])
+}
+
+// Per-(monitored page, date-range) cache of the page's REAL published-post counts
+// WITHIN the range (total + video/image split + a `capped` floor flag), for the
+// landing-list range-aware "Posts" pill. Independent of the farm. `rangeKey` is
+// "from_to" (PP dates); short TTL when the range includes today (today's count
+// grows), longer for historical. One row per (page, range).
+model MonitoredPageRangePostsCache {
+  monitoredPageId String
+  rangeKey        String
+  monitoredPage   MonitoredPage @relation(fields: [monitoredPageId], references: [id], onDelete: Cascade)
+  data            String // JSON: { total, video, image, capped }
+  fetchedAt       DateTime      @default(now())
+
+  @@id([monitoredPageId, rangeKey])
 }
 
 // ~6h cache of a MonitoredPage's REAL published posts (first page of ~15) for the
