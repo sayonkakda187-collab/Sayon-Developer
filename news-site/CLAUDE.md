@@ -1157,61 +1157,60 @@ official Graph API only; tokens never reach the browser.
   picture) store null → initials. Best-effort throughout — avatar work never breaks
   token sync or the insights table. **No token is ever put in a client-visible URL.**
 
-## Page Control (per-Page dashboard — Summary · Content · Analytics)
+## Page Control (INDEPENDENT watch-only monitoring — Summary · Content · Analytics)
 
-A top-level admin section (`/admin/page-control`, **deep-emerald** accent
-`#047857` — chosen distinct from the success-green status color, AA in light+dark;
-nav **footer
-group** — sidebar + mobile drawer, deliberately NOT the crowded phone bottom bar)
-that gives each connected Page a Facebook-app-style Page view. It's almost entirely
-a **new presentation layer** over the EXISTING Facebook plumbing — same token
-storage + reconnect flow, same Insights services/caches, same Graph v25.0 client,
-same `FacebookPageAvatar`. **One** new data type (real published posts) + **one**
-new cache table is all that was added.
+A top-level admin section (`/admin/page-control`, **deep-emerald** accent `#047857`
+— distinct from the success-green status color, AA light+dark; nav **footer group**
+— sidebar + mobile drawer, NOT the crowded phone bottom bar) — an **INDEPENDENT,
+watch-only** Facebook-app-style Page view. It has its **OWN page connection +
+storage**, fully separate from the posting **farm** (`FacebookPage`): a page here
+has **no effect** on the farm and vice-versa, and it can monitor a **different
+Facebook account**. It **reuses the dashboard UI + the low-level Graph client**, but
+**not** the farm's page list. Never posts.
 
-- **Landing** (`PageControlList`): a searchable, avatar'd, paginated (24/page) list
-  of every connected `FacebookPage` (reuses `InsightsPageRow`); an `Expired` token
-  shows a **Reconnect** pill. Tap → that Page's dashboard. The list is light (counts
-  only); a Page's live data is fetched **only when its dashboard opens** (lazy).
-- **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a
-  persistent identity header (avatar · name · followers · "Open Page" link), a
-  **shared range control** (Today/Yesterday/7d/28d/90d/Custom — the exact
-  `RangeControl` exported from the Insights tab, default 28d, remembered in
-  `sessionStorage`), and three **swipeable** sub-tabs. Only the active sub-tab
-  mounts (lazy fetch); touch-swipe + the tab row both switch.
-  - **Summary** (`PageControlSummary`): the KPI cards + mini trend for the range —
-    the **exported `InsightsDashboard`** fed by the same `?detail=` data (no
-    duplication) — plus the 3 most recent real posts (from Content) with a "See
-    all →".
-  - **Content** (`PageControlContent`): the Page's **REAL published posts** pulled
-    live from the Graph API — thumbnail, caption excerpt, date,
-    reactions/comments/shares/reach, "View on Facebook". Cursor "Load more"
-    (~15/page), a sort toggle (Most recent / Most engagement over loaded posts), a
-    Refresh, skeletons + empty/reconnect states.
-  - **Analytics** (reuses the Insights tab's per-Page dashboard **verbatim**):
-    `PageDetail` was exported + made embeddable (`embedded` drops its duplicate
-    header/close/inner range; a controlled `range` lets the shared chips drive it)
-    — KPI cards + trend + our-shared-post stats + day-by-day table.
-- **Real posts** (`lib/facebook.ts` `getPagePosts` → `GET /{pageId}/published_posts`
-  + best-effort `getPostReach`): caption (`message`), `created_time`,
-  `permalink_url`, `full_picture` thumbnail, and inline `reactions/comments/shares`
-  summary counts, with cursor paging. **Graph v25.0 fields VERIFIED + omitted on
-  purpose:** deep `attachments{media}` (can error a whole post — `full_picture` is
-  the reliable thumbnail) and **inline per-post `insights`** (a single retired
-  metric would fail the list) — reach is fetched **separately + best-effort** via
-  `post_impressions_unique` and degrades to `null` (needs `read_insights`).
-  `pages_read_engagement` is required; a missing scope / invalid token → the same
-  **"Needs reconnect"** state as Insights.
-- **Service + cache** (`lib/facebookPosts.ts` `getPagePostsForView`): the first
-  page (~15 posts, with reach) is cached **~6h** in the new **`PagePostsCache`**
-  (one row per Page) so opening a Page is cheap at ~264 Pages on Vercel Hobby;
-  "Load more" + Refresh go live (Refresh rewrites the cache). Reach enrichment is
-  concurrency-limited (`mapLimit` 5). API: `app/api/admin/facebook/page-posts`
-  (session-gated, `maxDuration = 60`) — `?page=&after=&refresh=1`. **Never
-  bulk-fetches all Pages** — only the opened Page.
-- **Migration:** additive `PagePostsCache` (`20260612210000_page_posts_cache`,
-  auto-applies via `prisma migrate deploy`). **No new env.** Read-only — Page
-  Control never posts.
+- **Separate storage:** a `MonitoredPage` table (own encrypted Page token —
+  read scopes only) + a `MonitoredPagePostsCache` (own ~6h posts cache). The connect
+  credentials (App ID/Secret + long-lived user token) live under their own `pc_*`
+  `AppSetting` keys (`lib/pageControlSettings.ts`) — App ID/Secret fall back to the
+  shared env, but the **user token is Page-Control-specific** (identifies the
+  account). Tokens are AES-256-GCM encrypted, decrypted server-side only.
+- **Own Connect flow** (`PageControlConnectModal` + `app/admin/page-control-actions.ts`):
+  the SAME proven mechanism as Facebook → Connect → Auto, scoped to this tab. A
+  **"Connect Page"** button → paste **App ID + App Secret + a Graph-Explorer user
+  token** → `pageControlFetchPages` exchanges it for a long-lived token, stores it,
+  and lists the account's Pages → the admin **checkbox-picks** which to add (NOT
+  auto-add-all; already-added shown disabled) → `pageControlConnectPages` validates +
+  stores each selected Page token (best-effort avatar + follower count). **Watch-only
+  scopes:** `pages_show_list`, `pages_read_engagement`, `read_insights` (no posting
+  scopes). Per page: **Reconnect/refresh-token** (`pageControlReconnectPage`, re-derives
+  from the stored user token) and **Remove** (`removeMonitoredPage`, cascade-drops its
+  cache); an `Expired` token shows a **"Needs reconnect"** badge.
+- **Landing** (`PageControlList`): shows **ONLY** `MonitoredPage`s (searchable, avatar'd,
+  paginated). **Empty state** = a "Connect your first page" CTA. Tap a page → its
+  dashboard; live data is fetched **only on open** (lazy; the set is small/hand-picked).
+- **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
+  header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
+  **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three
+  **swipeable** sub-tabs (only the active one mounts):
+  - **Summary** — KPI cards + mini trend (the exported **`InsightsDashboard`**) + 3
+    most recent real posts. Since Page Control never posts, the "Our posts" KPI is 0.
+  - **Content** — the page's **REAL published posts** (`getPagePosts` →
+    `GET /{pageId}/published_posts` + best-effort `getPostReach`): thumbnail, caption,
+    date, reactions/comments/shares/reach, "View on Facebook", cursor Load-more, sort,
+    Refresh. **v25.0 fields verified/omitted:** deep `attachments{media}` (can error a
+    post → use `full_picture`) + inline per-post `insights` (a retired metric would
+    fail the list → reach fetched separately, degrades to `null` without `read_insights`).
+  - **Analytics** — the Insights per-Page dashboard reused **verbatim** (`PageDetail`
+    with a `detailApi` prop pointing at the monitored endpoint; `embedded` + controlled
+    `range`). `shares`/our-posts are always empty (watch-only).
+- **Own endpoints** (keyed by monitored-page id, session-gated, `maxDuration = 60`):
+  `app/api/admin/page-control/posts` (`?page=&after=&refresh=1`, via
+  `lib/pageControlPosts.ts`) + `app/api/admin/page-control/insights`
+  (`?detail=&from=&to=` → the day series in the same `DetailData` shape, with empty
+  shares/posts). Both reuse the shared low-level Graph helpers + `getPageDaily`.
+- **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
+  (`20260613030000_monitored_page`, auto-applies). **No new env** (App creds can reuse
+  `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab). Read-only.
 
 ## Roadmap
 

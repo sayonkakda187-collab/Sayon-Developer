@@ -2555,7 +2555,15 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
 .adm-pc-id { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 60%; }
+.adm-pc-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .adm-pc-open { flex: none; }
+
+/* Connect modal — multi-select Page picklist */
+.adm-pc-picklist { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; border: 1px solid var(--adm-bd); border-radius: 12px; padding: 6px; }
+.adm-pc-pick { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 8px; cursor: pointer; min-height: 44px; }
+.adm-pc-pick:hover { background: var(--section-tint); }
+.adm-pc-pick.is-added { opacity: .6; cursor: default; }
+.adm-pc-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--adm-ink); }
 
 /* Swipeable sub-tab row (Summary · Content · Analytics) */
 .adm-pc-subtabs {

@@ -6,7 +6,8 @@ import { RefreshIcon, ExternalLinkIcon } from "@/components/admin/icons";
 import { formatDate, formatNumber } from "@/lib/site";
 import type { PagePost } from "@/lib/facebook";
 
-const API = "/api/admin/facebook/page-posts";
+// Page Control's OWN posts endpoint (MonitoredPage store), independent from the farm.
+const API = "/api/admin/page-control/posts";
 
 type Sort = "recent" | "engagement";
 

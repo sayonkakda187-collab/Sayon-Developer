@@ -13,8 +13,9 @@ import {
 import { PagePostCard } from "@/components/admin/PageControlContent";
 import type { PagePost } from "@/lib/facebook";
 
-const DETAIL_API = "/api/admin/facebook/page-insights";
-const POSTS_API = "/api/admin/facebook/page-posts";
+// Page Control's OWN endpoints (MonitoredPage store), independent from the farm.
+const DETAIL_API = "/api/admin/page-control/insights";
+const POSTS_API = "/api/admin/page-control/posts";
 
 /**
  * Page Control → Summary (a Page's "home"): the KPI cards + mini trend for the
