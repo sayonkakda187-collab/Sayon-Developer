@@ -6,10 +6,10 @@ import { getPagePosts, getPostReach, type PagePost } from "@/lib/facebook";
 
 /**
  * Page Control → Content data source for a MONITORED page: its REAL published
- * posts from the official Graph API, cached ~6h in `MonitoredPagePostsCache` (its
- * OWN cache, independent from the farm's `PagePostsCache`). Reuses the shared
- * low-level Graph helpers (`getPagePosts` / `getPostReach`); only the cache table
- * differs. Lazy — only the opened page is fetched.
+ * posts from the official Graph API, cached ~6h in its OWN
+ * `MonitoredPagePostsCache` table. Reuses the shared low-level Graph helpers
+ * (`getPagePosts` / `getPostReach`); only the cache table differs. Lazy — only the
+ * opened page is fetched.
  */
 
 const PER_PAGE = 15;
