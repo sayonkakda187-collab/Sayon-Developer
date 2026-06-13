@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ToastProvider } from "@/components/admin/Toast";
 import { PageControlList, type MonitoredRow } from "@/components/admin/PageControlList";
+import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { getPageControlConnectStatus } from "@/lib/pageControlSettings";
 
 // Live monitored-page/token state; never statically cache.
@@ -31,7 +32,16 @@ export default async function PageControlPage() {
         <p>An independent, watch-only dashboard. Connect Pages here (separate from the Facebook posting tab) to track each one’s Summary, Content, and Analytics.</p>
       </div>
       <ToastProvider>
-        <PageControlList pages={rows} appConfigured={connect.appConfigured} />
+        <div className="adm-pc-twobox">
+          {/* LEFT box — the existing monitored-pages list, UNCHANGED. */}
+          <div className="adm-pc-box">
+            <PageControlList pages={rows} appConfigured={connect.appConfigured} />
+          </div>
+          {/* RIGHT box — the network dashboard (its own range chips). */}
+          <div className="adm-pc-box">
+            <PageControlNetwork />
+          </div>
+        </div>
       </ToastProvider>
     </div>
   );
