@@ -69,6 +69,15 @@ export async function POST(req: Request) {
     select: { id: true, pageId: true, accessToken: true },
   });
 
+  // Earnings entered (by managers, via the bot) for these pages within the range —
+  // LOCAL data, one cheap grouped query for the whole batch. null → "—" on the row.
+  const earnAgg = await prisma.pageEarning.groupBy({
+    by: ["monitoredPageId"],
+    where: { monitoredPageId: { in: list }, date: { gte: range.from, lte: range.to } },
+    _sum: { amount: true },
+  });
+  const earnByPage = new Map(earnAgg.map((e) => [e.monitoredPageId, Number(e._sum.amount ?? 0)]));
+
   const rows = await mapLimit(pages, 6, async (p) => {
     // Quick stats over the range + the range's post count (video/image split), both
     // cached per (page, range), in parallel.
@@ -76,7 +85,7 @@ export async function POST(req: Request) {
       getMonitoredRowStats(p, range, refresh === true),
       getMonitoredRangePosts(p, range, refresh === true),
     ]);
-    return { id: p.id, ...stats, rangePosts: { total: posts.total, video: posts.video, image: posts.image, capped: posts.capped } };
+    return { id: p.id, ...stats, rangePosts: { total: posts.total, video: posts.video, image: posts.image, capped: posts.capped }, earnings: earnByPage.get(p.id) ?? null };
   });
 
   return NextResponse.json({ ok: true, rows });

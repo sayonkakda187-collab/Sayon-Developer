@@ -1322,8 +1322,13 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   ONLY that manager's pages for the day as tap buttons (current value / "not set", today⇄yesterday
   nav) → tap a page → reply a number → validated upsert + running daily total. Access is always
   scoped `telegramChatId → managerId → pages`; the pending "which page" state lives in `AppSetting`
-  (~30-min TTL). `POST /api/admin/earnings-bot` (admin) registers this deployment's webhook. Display
-  of earnings in Page Control (list pill / detail chart / network KPI) is Phase 3.
+  (~30-min TTL). `POST /api/admin/earnings-bot` (admin) registers this deployment's webhook (the
+  Managers tab has a one-click "Set up bot" banner). **Display:** a range-summed **Earnings $X** pill
+  on each list row (via the `stats` route), a **daily-earnings** area chart on the expanded row + the
+  page-detail Summary (via `row-charts` → `earningsDaily`), and a **Total earnings** KPI (%-change +
+  sparkline) on the network dashboard — `getNetworkRollup` sums `PageEarning` for the (manager-)
+  filtered pages into `totals.earnings`/`earningsPrev` + `earningsDays`, so it respects the dashboard's
+  manager chip filter and the date-range chips (Phnom-Penh days; rollup cache key bumped to `…_v2_`).
 - **Expandable row charts.** Each list row (Box 1) stays compact but is now a tap-toggle (`role=
   button`, ⌄ caret) that reveals an inline charts panel below it (accordion, one open at a time);
   the full-dashboard action moves to an **"Open page →"** link inside the panel. The panel lazily

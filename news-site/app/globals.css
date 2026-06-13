@@ -2975,6 +2975,10 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-mgr-linkbtn { min-height: 40px; }
 }
 
+/* Earnings pill on monitored-page list rows — emerald tint. */
+.adm-pc-stat-earn { background: var(--section-tint); }
+.adm-pc-stat-earn .adm-pc-stat-v { color: var(--section-link); font-variant-numeric: tabular-nums; }
+
 /* ── Managers tab: one-click earnings-bot setup banner ── */
 .adm-botsetup { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0 0 12px; }
 .adm-botsetup-icon { flex: none; font-size: 22px; line-height: 1; }

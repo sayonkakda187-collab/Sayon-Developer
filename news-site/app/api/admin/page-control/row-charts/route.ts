@@ -45,5 +45,15 @@ export async function GET(req: Request) {
   if (!page) return NextResponse.json({ ok: false, error: "Page not found" }, { status: 404 });
 
   const charts = await getMonitoredRowCharts(page, range, wantFresh);
-  return NextResponse.json({ ok: true, ...charts });
+
+  // Daily earnings (manager-entered, LOCAL) over the range — for the expanded row's
+  // small earnings chart. Cheap direct query; no Graph.
+  const earnRows = await prisma.pageEarning.findMany({
+    where: { monitoredPageId: id, date: { gte: range.from, lte: range.to } },
+    select: { date: true, amount: true },
+    orderBy: { date: "asc" },
+  });
+  const earningsDaily = earnRows.map((e) => ({ date: e.date, amount: Number(e.amount) }));
+
+  return NextResponse.json({ ok: true, ...charts, earningsDaily });
 }
