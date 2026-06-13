@@ -22,10 +22,12 @@ export function PageControlTabs({
   pages,
   appConfigured,
   managers: initialManagers,
+  description,
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
   managers: Manager[];
+  description?: string;
 }) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -127,6 +129,8 @@ export function PageControlTabs({
           Managers
         </button>
       </div>
+
+      {description && <p className="adm-pc-desc-m">{description}</p>}
 
       {tab === "pages" ? (
         <div className="adm-pc-twobox">

@@ -8,6 +8,9 @@ import { getPageControlConnectStatus } from "@/lib/pageControlSettings";
 // Live monitored-page/token state; never statically cache.
 export const dynamic = "force-dynamic";
 
+const PC_DESC =
+  "An independent, watch-only dashboard. Connect Pages here (separate from the Facebook posting tab) to track each one’s Summary, Content, and Analytics.";
+
 export default async function PageControlPage() {
   const [pages, managerRecords, connect] = await Promise.all([
     prisma.monitoredPage.findMany({ orderBy: { pageName: "asc" } }),
@@ -34,10 +37,10 @@ export default async function PageControlPage() {
     <div>
       <div className="adm-page-h">
         <h1>Page Control</h1>
-        <p>An independent, watch-only dashboard. Connect Pages here (separate from the Facebook posting tab) to track each one’s Summary, Content, and Analytics.</p>
+        <p className="adm-pc-desc-d">{PC_DESC}</p>
       </div>
       <ToastProvider>
-        <PageControlTabs pages={rows} appConfigured={connect.appConfigured} managers={managers} />
+        <PageControlTabs pages={rows} appConfigured={connect.appConfigured} managers={managers} description={PC_DESC} />
       </ToastProvider>
     </div>
   );
