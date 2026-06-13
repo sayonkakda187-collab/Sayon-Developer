@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { SearchIcon, PlusIcon } from "@/components/admin/icons";
+import { PlusIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
+import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline } from "@/components/admin/PageControlCharts";
 import type { InsightsPageRow } from "@/components/admin/FacebookPageInsights";
@@ -107,7 +108,9 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
 export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[]; appConfigured: boolean }) {
   const { success, error } = useToast();
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  // Filter query comes from the header "Search Pages…" bar (shared store), so there
+  // is exactly ONE page-search input — in the top header — not a second box here.
+  const query = usePageControlSearch();
   const [showConnect, setShowConnect] = useState(false);
   const [statsMap, setStatsMap] = useState<Record<string, StatEntry>>({});
   const requestedRef = useRef<Set<string>>(new Set());
@@ -199,17 +202,10 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
       ) : (
         <>
           <div className="adm-list-head" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <div className="adm-search" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
-              <SearchIcon className="h-4 w-4" />
-              <input
-                className="adm-input"
-                type="search"
-                placeholder="Search monitored Pages…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search monitored Pages"
-              />
-            </div>
+            <span className="adm-fb-sub">
+              {total} monitored {total === 1 ? "Page" : "Pages"}
+              {query.trim() ? ` matching “${query.trim()}”` : ""}
+            </span>
             {connectBtn}
           </div>
 
@@ -233,7 +229,7 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
           {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
 
           <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span className="adm-fb-sub">{total} monitored {total === 1 ? "Page" : "Pages"} · stats = last 28 days</span>
+            <span className="adm-fb-sub">Stats = last 28 days</span>
             <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
           </div>
         </>
