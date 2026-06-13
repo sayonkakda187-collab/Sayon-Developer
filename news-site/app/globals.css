@@ -2802,3 +2802,51 @@ a.dl-breaking-text:hover { text-decoration:none; }
 @media (prefers-reduced-motion: reduce) {
   .adm-mgr-caret, .adm-mgr-ptoggle { transition: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE CONTROL — EXPANDABLE LIST ROWS (compact row → inline charts on tap).
+   The compact row is unchanged; tapping toggles a charts panel attached below it.
+   Emerald accent, mobile-first (charts stack + scale to width, tooltips on tap).
+   ════════════════════════════════════════════════════════════════════════════ */
+.adm-pc-rowwrap { display: flex; flex-direction: column; }
+.adm-pc-row { cursor: pointer; }
+.adm-pc-caret { flex: none; color: var(--section-accent); font-size: 17px; line-height: 1; opacity: .8; transition: transform .2s ease; }
+.adm-pc-caret.on { transform: rotate(180deg); }
+/* When open, the row + panel read as one outlined card. */
+.adm-pc-rowwrap.on > .adm-pc-row { border-color: var(--section-accent); border-bottom-color: transparent; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.adm-pc-rowwrap.on > .adm-pc-row:hover { transform: none; box-shadow: none; }
+
+.adm-pc-expand {
+  border: 1px solid var(--section-accent); border-top: none;
+  border-radius: 0 0 14px 14px; padding: 12px; background: var(--adm-card);
+  animation: adm-pc-expand-in .18s ease-out;
+}
+@keyframes adm-pc-expand-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.adm-pc-expand-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.adm-pc-openlink { flex: none; font-size: 13px; font-weight: 600; color: var(--section-link); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; padding: 0 2px; }
+.adm-pc-openlink:hover { text-decoration: underline; }
+.adm-pc-expand-body { display: flex; flex-direction: column; gap: 16px; }
+.adm-pc-expand-sec { min-width: 0; }
+.adm-pc-expand-h { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--adm-ink); opacity: .65; margin-bottom: 6px; }
+.adm-pc-expand-skel { height: 84px; border-radius: 12px; }
+
+/* posts-per-day legend (shared swatch style) */
+.adm-pc-barlegend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 7px; align-items: center; }
+.adm-pc-barlegend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--adm-ink); }
+.adm-pc-sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.adm-pc-sw.v { background: #2563eb; }
+.adm-pc-sw.i { background: #ea580c; }
+[data-adm-theme="dark"] .adm-pc-sw.v { background: #60a5fa; }
+[data-adm-theme="dark"] .adm-pc-sw.i { background: #fb923c; }
+
+/* type-mix horizontal stacked bar + % legend */
+.adm-pc-mixbar { display: flex; height: 22px; border-radius: 999px; overflow: hidden; background: var(--adm-bd); }
+.adm-pc-mixseg { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 700; min-width: 0; overflow: hidden; white-space: nowrap; }
+.adm-pc-mixlegend { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-top: 8px; }
+.adm-pc-mixlegend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--adm-ink); }
+.adm-pc-mixlegend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-pc-caret { transition: none; }
+  .adm-pc-expand { animation: none; }
+}

@@ -1293,6 +1293,18 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   "Search Pages" stays the page-search. `PageControlTabs` is the single state owner (optimistic
   + `router.refresh()`) so the row badges, counts and both tabs stay in sync. Touches only Page
   Control + the manager store.
+- **Expandable row charts.** Each list row (Box 1) stays compact but is now a tap-toggle (`role=
+  button`, ⌄ caret) that reveals an inline charts panel below it (accordion, one open at a time);
+  the full-dashboard action moves to an **"Open page →"** link inside the panel. The panel lazily
+  GETs `app/api/admin/page-control/row-charts` (`?id&from&to`) ONLY when expanded and memoises per
+  (page, range) client-side. Three charts for the selected range, all from EXISTING caches (no bulk
+  Graph): **reach trend** (`AnimatedAreaChart`, tap/hover tooltips — reuses the SAME
+  `MonitoredPageDailyCache` entry the row stats populate, sliced to range), **posts/day** (new
+  `AnimatedStackedBars`, video·image) and **type mix** (new `TypeMixBar`, %). Server: `lib/
+  pageControlRowCharts.ts` (`getMonitoredRowCharts`) + a new `getPagePostsDailyInRange` (created_time
+  + media_type, one capped range call) bucketed per Phnom-Penh day and cached in
+  `MonitoredPageRangePostsCache` under a namespaced `<rangeKey>#daily` key (**no migration**). All
+  reduced-motion safe. Touches only the list row + its expand/chart logic.
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
   (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`

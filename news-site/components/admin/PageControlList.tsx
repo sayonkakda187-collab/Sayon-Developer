@@ -10,7 +10,7 @@ import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
-import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
+import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
@@ -188,6 +188,11 @@ export function PageControlList({
   const [mq, setMq] = useState("");
   const [mqDebounced, setMqDebounced] = useState("");
 
+  // Expandable rows: one open at a time (accordion) + a client cache of fetched chart
+  // data per (page, range) so collapse/re-expand within a session never refetches.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const chartCacheRef = useRef<Map<string, RowChartsResp>>(new Map());
+
   useEffect(() => {
     const t = setTimeout(() => setMqDebounced(mq), 200);
     return () => clearTimeout(t);
@@ -306,32 +311,49 @@ export function PageControlList({
   );
 
   // One monitored-page row (reused in the flat list + the grouped manager view). The
-  // row stays EXACTLY as before — we only ADD a small read-only manager badge in the
-  // top-right (opposite the page name); nothing shows there when unassigned. There is
-  // no assign control on the row — all linking happens in the Managers tab.
+  // compact row is UNCHANGED (avatar, name, manager badge, followers, pills, sparkline)
+  // — tapping it toggles an inline charts panel below (expand in place, not navigate).
+  // "Open page →" inside the panel keeps the full-dashboard action.
   function renderRow(p: MonitoredRow) {
     const m = assignments[p.id] ? managerById.get(assignments[p.id]!) ?? null : null;
+    const isOpen = expanded === p.id;
     return (
-      <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
-        <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
-        <div className="adm-pc-rowbody" style={{ minWidth: 0, flex: 1 }}>
-          <div className="adm-pc-row-top">
-            <div className="adm-pc-row-name">{p.pageName}</div>
-            {m && (
-              <span className="adm-pc-rowmgr" title={`Manager: ${m.name}`}>
-                <ManagerAvatar name={m.name} photo={m.photo} size={22} />
-                <span className="adm-pc-rowmgr-name">{m.name}</span>
-              </span>
-            )}
+      <div key={p.id} className={`adm-pc-rowwrap ${isOpen ? "on" : ""}`}>
+        <div
+          className="adm-card adm-pc-row"
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          aria-label={`${p.pageName} — ${isOpen ? "collapse" : "expand"} charts`}
+          onClick={() => setExpanded(isOpen ? null : p.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setExpanded(isOpen ? null : p.id);
+            }
+          }}
+        >
+          <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
+          <div className="adm-pc-rowbody" style={{ minWidth: 0, flex: 1 }}>
+            <div className="adm-pc-row-top">
+              <div className="adm-pc-row-name">{p.pageName}</div>
+              {m && (
+                <span className="adm-pc-rowmgr" title={`Manager: ${m.name}`}>
+                  <ManagerAvatar name={m.name} photo={m.photo} size={22} />
+                  <span className="adm-pc-rowmgr-name">{m.name}</span>
+                </span>
+              )}
+            </div>
+            <div className="adm-card-sub" style={{ marginTop: 1 }}>
+              Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
+            </div>
+            <RowStats entry={statsMap[`${rk}|${p.id}`]} />
           </div>
-          <div className="adm-card-sub" style={{ marginTop: 1 }}>
-            Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
-          </div>
-          <RowStats entry={statsMap[`${rk}|${p.id}`]} />
+          {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
+          <span className={`adm-pc-caret ${isOpen ? "on" : ""}`} aria-hidden>⌄</span>
         </div>
-        {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
-        <span className="adm-pc-chev" aria-hidden>›</span>
-      </Link>
+        {isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} />}
+      </div>
     );
   }
 
@@ -417,6 +439,108 @@ export function PageControlList({
           onConnected={onConnected}
           onError={error}
         />
+      )}
+    </div>
+  );
+}
+
+// Lazy chart payload for one expanded row (matches /api/admin/page-control/row-charts).
+type RowChartsResp = {
+  ok: boolean;
+  reach: { date: string; value: number }[];
+  posts: { date: string; video: number; image: number }[];
+  typeMix: { video: number; image: number };
+  capped: boolean;
+  status: "ok" | "reconnect";
+};
+
+/**
+ * The inline panel under an expanded row: three charts (reach trend, posts/day
+ * video·image, type mix) for the SELECTED range. Fetched LAZILY only when the row is
+ * expanded, from the existing per-page caches, and memoised per (page, range) in the
+ * list's `cache` ref so collapse/re-expand (or returning to a range) never refetches.
+ */
+function ExpandedRowCharts({
+  pageId,
+  from,
+  to,
+  rk,
+  cache,
+}: {
+  pageId: string;
+  from: string;
+  to: string;
+  rk: string;
+  cache: React.MutableRefObject<Map<string, RowChartsResp>>;
+}) {
+  const [state, setState] = useState<RowChartsResp | "loading" | "error">(() => cache.current.get(`${pageId}|${rk}`) ?? "loading");
+
+  useEffect(() => {
+    const key = `${pageId}|${rk}`;
+    const hit = cache.current.get(key);
+    if (hit) {
+      setState(hit);
+      return;
+    }
+    let cancelled = false;
+    setState("loading");
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/page-control/row-charts?id=${encodeURIComponent(pageId)}&from=${from}&to=${to}`);
+        const json = (await res.json()) as RowChartsResp;
+        if (cancelled) return;
+        if (json.ok) {
+          cache.current.set(key, json);
+          setState(json);
+        } else {
+          setState("error");
+        }
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId, rk, from, to, cache]);
+
+  return (
+    <div className="adm-pc-expand">
+      <div className="adm-pc-expand-head">
+        <span className="adm-fb-sub">Charts · {formatRange(from, to)}</span>
+        <Link href={`/admin/page-control/${pageId}`} className="adm-pc-openlink">Open page →</Link>
+      </div>
+
+      {state === "loading" ? (
+        <div className="adm-pc-expand-body">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="adm-pc-expand-skel adm-pc-skel" />
+          ))}
+        </div>
+      ) : state === "error" ? (
+        <p className="adm-card-sub" style={{ margin: "8px 2px" }}>Couldn’t load charts — collapse and try again.</p>
+      ) : state.status === "reconnect" ? (
+        <p className="adm-card-sub" style={{ margin: "8px 2px" }}>Reconnect this Page to see its charts.</p>
+      ) : (
+        <div className="adm-pc-expand-body">
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Reach trend</div>
+            <AnimatedAreaChart current={state.reach} color="var(--section-accent)" formatValue={(v) => compact(Math.round(v))} />
+          </section>
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Posts per day</div>
+            <AnimatedStackedBars data={state.posts} />
+            <div className="adm-pc-barlegend">
+              <span><i className="adm-pc-sw v" />🎥 Video</span>
+              <span><i className="adm-pc-sw i" />🖼 Image</span>
+              {state.capped && <span className="adm-fb-sub">· first 100 posts</span>}
+            </div>
+          </section>
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Type mix</div>
+            <TypeMixBar video={state.typeMix.video} image={state.typeMix.image} />
+          </section>
+        </div>
       )}
     </div>
   );
