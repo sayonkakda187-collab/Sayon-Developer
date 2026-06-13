@@ -95,11 +95,15 @@ function parseRollup(data: string): NetworkRollup | null {
   return null;
 }
 
-/** Aggregate the network rollup for a range from existing caches (no Graph calls). */
-export async function getNetworkRollup(range: { from: string; to: string }, wantFresh = false): Promise<NetworkRollup> {
+/**
+ * Aggregate the network rollup for a range from existing caches (no Graph calls).
+ * `managerId` (optional) restricts the rollup to ONE manager's pages — cached
+ * separately (`…_m_<managerId>`) so the all-pages and per-manager views don't collide.
+ */
+export async function getNetworkRollup(range: { from: string; to: string }, managerId: string | null = null, wantFresh = false): Promise<NetworkRollup> {
   const prev = previousPeriod(range.from, range.to);
   const dailyKey = rangeKey(prev.from, range.to); // the window key the row-stats fetch uses
-  const cacheKey = ROLLUP_PREFIX + rangeKey(range.from, range.to);
+  const cacheKey = ROLLUP_PREFIX + rangeKey(range.from, range.to) + (managerId ? `_m_${managerId}` : "");
 
   if (!wantFresh) {
     const cached = await prisma.appSetting.findUnique({ where: { key: cacheKey } }).catch(() => null);
@@ -110,7 +114,7 @@ export async function getNetworkRollup(range: { from: string; to: string }, want
   }
 
   const [pages, daily, postsCaches] = await Promise.all([
-    prisma.monitoredPage.findMany({ select: { id: true, pageId: true, pageName: true, avatarUrl: true, followers: true, totalPosts: true } }),
+    prisma.monitoredPage.findMany({ where: managerId ? { managerId } : undefined, select: { id: true, pageId: true, pageName: true, avatarUrl: true, followers: true, totalPosts: true } }),
     prisma.monitoredPageDailyCache.findMany({ where: { rangeKey: dailyKey }, select: { monitoredPageId: true, data: true } }),
     prisma.monitoredPagePostsCache.findMany({ select: { monitoredPageId: true, data: true } }),
   ]);

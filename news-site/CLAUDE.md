@@ -1222,7 +1222,22 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   "Search articles…" `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") feeding a
   shared store (`pageControlSearchStore`) the list filters by (debounced, case-insensitive,
   by name) — exactly ONE page-search input, in the header; every other admin route keeps the
-  article search.
+  article search. Right of it (same route only) `AdminShell` also renders
+  `PageControlHeaderControls`: a **"Search by manager" AUTOCOMPLETE** + the **"Connect Page"**
+  button (bumps `pageControlConnectStore`; the list opens its existing connect modal on the
+  signal). The autocomplete opens on focus (all managers — avatar + name + page count, from
+  `GET /api/admin/page-control/managers`, local DB), narrows by substring as you type (match
+  highlighted), is keyboard-driven (↑/↓·Enter·Esc, click-outside closes), and on select sets the
+  SHARED **`pageControlManagerFilterStore`** (one selected manager, or null) shown as a removable
+  chip. BOTH the list AND the **network dashboard** read that store: the list shows only that
+  manager's pages (with a `{name} · N pages` header); the dashboard refetches
+  `…/network?manager=<id>` — `getNetworkRollup(range, managerId)` restricts the rollup to that
+  manager's pages and caches it separately (`pc_network_rollup_<rangeKey>_m_<id>`, no Graph) — and
+  shows a "filtered to {name}" pill. Clearing returns to all pages + All Managers. Header order:
+  Search Pages · Search by manager · Connect Page · toggle · bell · profile. Desktop = one row
+  (`.adm-topbar-pc`, the two searches ~equal width via `display:contents`); mobile = manager-search
+  + Connect wrap to their own row in the app bar (`.adm-appbar-pc`). The list box starts at the
+  date-range chips (no in-box Connect/manager-search bars).
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three

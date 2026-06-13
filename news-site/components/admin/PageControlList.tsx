@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { PlusIcon, SearchIcon } from "@/components/admin/icons";
+import { PlusIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
+import { usePageControlManagerFilter } from "@/components/admin/pageControlManagerFilterStore";
+import { usePageControlConnectSignal } from "@/components/admin/pageControlConnectStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
@@ -184,9 +186,12 @@ export function PageControlList({
   const [range, setRange] = useState<Range>(initialRange);
   const rk = rangeKey(range.from, range.to);
 
-  // Manager filter (debounced).
-  const [mq, setMq] = useState("");
-  const [mqDebounced, setMqDebounced] = useState("");
+  // Manager filter + "Connect Page" live in the admin HEADER (Page Control route only).
+  // Read the SELECTED manager (header autocomplete) from the shared filter store, and
+  // open the connect modal when the header's "Connect Page" button bumps its signal.
+  const selectedManager = usePageControlManagerFilter();
+  const connectSignal = usePageControlConnectSignal();
+  const connectSeen = useRef(connectSignal);
 
   // Expandable rows: one open at a time (accordion) + a client cache of fetched chart
   // data per (page, range) so collapse/re-expand within a session never refetches.
@@ -194,9 +199,11 @@ export function PageControlList({
   const chartCacheRef = useRef<Map<string, RowChartsResp>>(new Map());
 
   useEffect(() => {
-    const t = setTimeout(() => setMqDebounced(mq), 200);
-    return () => clearTimeout(t);
-  }, [mq]);
+    if (connectSignal !== connectSeen.current) {
+      connectSeen.current = connectSignal;
+      setShowConnect(true);
+    }
+  }, [connectSignal]);
 
   useEffect(() => {
     try {
@@ -215,34 +222,15 @@ export function PageControlList({
     return pages.filter((p) => p.pageName.toLowerCase().includes(q));
   }, [pages, query]);
 
-  // 2) Manager filter — when active, narrow to Pages whose assigned manager's name
-  // matches, and prepare per-manager groups for a grouped render.
-  const mqv = mqDebounced.trim().toLowerCase();
-  const managerActive = mqv !== "";
-  const matchingManagerIds = useMemo(
-    () => (managerActive ? new Set(managers.filter((m) => m.name.toLowerCase().includes(mqv)).map((m) => m.id)) : null),
-    [managerActive, managers, mqv],
+  // 2) Manager filter — the header autocomplete selects ONE manager → only that
+  // manager's pages (null → all). Page-name + manager filters compose.
+  const managerFiltered = useMemo(
+    () => (selectedManager ? filtered.filter((p) => assignments[p.id] === selectedManager.id) : filtered),
+    [filtered, selectedManager, assignments],
   );
-  const managerFiltered = useMemo(() => {
-    if (!managerActive || !matchingManagerIds) return filtered;
-    return filtered.filter((p) => {
-      const id = assignments[p.id];
-      return id != null && matchingManagerIds.has(id);
-    });
-  }, [filtered, managerActive, matchingManagerIds, assignments]);
 
-  const { page, setPage, pageCount, pageItems, total } = usePaged(managerFiltered, PER_PAGE);
-
-  // In manager-search mode we render every match grouped (no pagination); otherwise the
-  // normal paginated slice. Quick stats load for whichever rows are actually visible.
-  const visibleRows = managerActive ? managerFiltered : pageItems;
-  const groups = useMemo(() => {
-    if (!managerActive || !matchingManagerIds) return [];
-    return managers
-      .filter((m) => matchingManagerIds.has(m.id))
-      .map((m) => ({ manager: m, items: managerFiltered.filter((p) => assignments[p.id] === m.id) }))
-      .filter((g) => g.items.length > 0);
-  }, [managerActive, matchingManagerIds, managers, managerFiltered, assignments]);
+  const { page, setPage, pageCount, pageItems } = usePaged(managerFiltered, PER_PAGE);
+  const visibleRows = pageItems;
 
   // Stats + the "requested" set are keyed by `${rangeKey}|${id}`, so each range has
   // its own cached view — switching ranges refetches only the not-yet-seen combos.
@@ -371,64 +359,34 @@ export function PageControlList({
         </div>
       ) : (
         <>
-          <div className="adm-list-head" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span className="adm-fb-sub">
-              {total} monitored {total === 1 ? "Page" : "Pages"}
-              {query.trim() ? ` matching “${query.trim()}”` : ""}
-            </span>
-            {connectBtn}
-          </div>
-
-          {/* Manager-search — filters the list to the Pages a matching person manages. */}
-          <label className="adm-mgr-search adm-pc-mgrsearch">
-            <SearchIcon className="h-4 w-4" />
-            <input
-              className="adm-input"
-              value={mq}
-              onChange={(e) => setMq(e.target.value)}
-              placeholder="Search by manager…"
-              aria-label="Search Pages by manager"
-            />
-            {mq && (
-              <button type="button" className="adm-mgr-search-clear" aria-label="Clear manager search" onClick={() => setMq("")}>
-                ×
-              </button>
-            )}
-          </label>
-
+          {/* Date-range chips sit at the TOP of the list box; "Search by manager" and
+              "Connect Page" now live in the admin header (Page Control route only). */}
           <div className="adm-pc-listrange">
             <RangeControl range={range} onChange={setRange} />
           </div>
 
-          {managerActive ? (
-            groups.length === 0 ? (
-              <p className="adm-card-sub" style={{ marginTop: 8 }}>No Pages are managed by someone matching “{mqDebounced.trim()}”.</p>
-            ) : (
-              <div className="adm-pc-list">
-                {groups.map((g) => (
-                  <div key={g.manager.id} className="adm-pc-group">
-                    <div className="adm-pc-group-head">
-                      <ManagerAvatar name={g.manager.name} photo={g.manager.photo} size={22} />
-                      <span className="adm-pc-group-name">{g.manager.name}</span>
-                      <span className="adm-pc-group-count">· {g.items.length} {g.items.length === 1 ? "page" : "pages"}</span>
-                    </div>
-                    {g.items.map(renderRow)}
-                  </div>
-                ))}
-              </div>
-            )
-          ) : (
-            <>
-              <div className="adm-pc-list">{pageItems.map(renderRow)}</div>
-
-              {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
-
-              <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
-                <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
-              </div>
-            </>
+          {selectedManager && (
+            <div className="adm-pc-group-head adm-pc-selhead">
+              <ManagerAvatar name={selectedManager.name} photo={selectedManager.photo} size={22} />
+              <span className="adm-pc-group-name">{selectedManager.name}</span>
+              <span className="adm-pc-group-count">· {managerFiltered.length} {managerFiltered.length === 1 ? "page" : "pages"}</span>
+            </div>
           )}
+
+          <div className="adm-pc-list">{pageItems.map(renderRow)}</div>
+
+          {managerFiltered.length === 0 && (
+            <p className="adm-card-sub" style={{ marginTop: 12 }}>
+              {selectedManager
+                ? `No monitored pages are managed by ${selectedManager.name}${query.trim() ? ` matching “${query.trim()}”` : ""}.`
+                : `No Pages match “${query}”.`}
+            </p>
+          )}
+
+          <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
+            <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
+          </div>
         </>
       )}
 
