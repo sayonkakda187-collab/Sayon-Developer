@@ -2974,3 +2974,18 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-mgr-linkcode + .adm-mgr-linkbtn { margin-left: 0; }
   .adm-mgr-linkbtn { min-height: 40px; }
 }
+
+/* ── Managers tab: one-click earnings-bot setup banner ── */
+.adm-botsetup { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0 0 12px; }
+.adm-botsetup-icon { flex: none; font-size: 22px; line-height: 1; }
+.adm-botsetup-meta { flex: 1; min-width: 0; }
+.adm-botsetup-title { font-weight: 700; font-size: 14px; color: var(--adm-ink); }
+.adm-botsetup-sub { font-size: 12.5px; color: var(--adm-ink); opacity: .65; margin-top: 1px; }
+.adm-botsetup-err { font-size: 12px; color: #d14343; margin-top: 3px; }
+.adm-botsetup-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.adm-botsetup-ok { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 12.5px; color: var(--section-link); background: var(--section-tint); padding: 5px 11px; border-radius: 999px; }
+@media (max-width: 560px) {
+  .adm-botsetup { flex-wrap: wrap; }
+  .adm-botsetup-meta { order: 3; flex: 1 1 100%; }
+  .adm-botsetup-actions { margin-left: auto; }
+}

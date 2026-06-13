@@ -53,6 +53,8 @@ export function ManagersScreen({
         </button>
       </div>
 
+      <EarningsBotSetup />
+
       {managers.length === 0 ? (
         <div className="adm-card adm-card-pad" style={{ textAlign: "center", padding: "28px 18px", marginTop: 10 }}>
           <div className="adm-card-title" style={{ fontSize: 17 }}>No managers yet</div>
@@ -125,6 +127,101 @@ export function ManagersScreen({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** One-click earnings-bot status/setup banner atop the Managers tab. Reads
+ *  GET /api/admin/earnings-bot (token configured? current Telegram webhook) and POSTs
+ *  to register THIS deployment's webhook — the bot token never touches the client. */
+function EarningsBotSetup() {
+  const [loading, setLoading] = useState(true);
+  const [configured, setConfigured] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const here = typeof window !== "undefined" ? `${window.location.origin}/api/earnings-bot` : "";
+
+  async function load() {
+    try {
+      const res = await fetch("/api/admin/earnings-bot", { cache: "no-store" });
+      const j = await res.json();
+      if (!j.ok) {
+        setConfigured(false);
+        setMsg(j.error || "Couldn’t check the bot.");
+        return;
+      }
+      setConfigured(!!j.configured);
+      const info = (j.info ?? null) as { url?: string; last_error_message?: string } | null;
+      setUrl(info?.url || null);
+      setLastError(info?.last_error_message || null);
+      setMsg(null);
+    } catch {
+      setConfigured(false);
+      setMsg("Couldn’t reach the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function setup() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/earnings-bot", { method: "POST" });
+      const j = await res.json();
+      if (j.ok) {
+        await load();
+        setMsg("Webhook connected to this site. Managers can DM the bot now.");
+      } else {
+        setMsg(j.error || j.description || "Couldn’t set the webhook.");
+      }
+    } catch {
+      setMsg("Couldn’t set the webhook.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const connectedHere = !!url && url === here;
+
+  return (
+    <div className="adm-card adm-botsetup">
+      <span className="adm-botsetup-icon" aria-hidden>🤖</span>
+      <div className="adm-botsetup-meta">
+        <div className="adm-botsetup-title">Earnings Telegram bot</div>
+        <div className="adm-botsetup-sub">
+          {loading
+            ? "Checking…"
+            : !configured
+              ? "Add EARNINGS_TELEGRAM_BOT_TOKEN in Vercel and redeploy to enable the bot."
+              : connectedHere
+                ? "Connected — managers can DM the bot to enter their earnings."
+                : url
+                  ? "The bot is linked to a different URL. Re-link it to this site to use it here."
+                  : "Not connected yet — tap Set up to register the webhook for this site."}
+        </div>
+        {lastError && <div className="adm-botsetup-err">Telegram: {lastError}</div>}
+        {msg && <div className="adm-botsetup-sub">{msg}</div>}
+      </div>
+      <div className="adm-botsetup-actions">
+        {connectedHere && (
+          <span className="adm-botsetup-ok">
+            <CheckIcon className="h-3.5 w-3.5" /> Connected
+          </span>
+        )}
+        {configured && (
+          <button type="button" className={connectedHere ? "adm-btn-ghost" : "adm-btn-primary"} onClick={setup} disabled={busy}>
+            {busy && <span className="adm-spinner" aria-hidden />}
+            {connectedHere ? "Re-link" : "Set up bot"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
