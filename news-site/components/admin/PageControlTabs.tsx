@@ -31,7 +31,7 @@ export function PageControlTabs({
 }) {
   const router = useRouter();
   const { success, error } = useToast();
-  const [tab, setTab] = useState<"pages" | "managers">("pages");
+  const [tab, setTab] = useState<"pages" | "network" | "managers">("pages");
   const [managers, setManagers] = useState<Manager[]>(initialManagers);
   const [assignments, setAssignments] = useState<Record<string, string | null>>(() =>
     Object.fromEntries(pages.map((p) => [p.id, p.managerId ?? null])),
@@ -125,6 +125,9 @@ export function PageControlTabs({
         <button type="button" role="tab" aria-selected={tab === "pages"} className={`adm-pc-subtab ${tab === "pages" ? "on" : ""}`} onClick={() => setTab("pages")}>
           Pages
         </button>
+        <button type="button" role="tab" aria-selected={tab === "network"} className={`adm-pc-subtab adm-pc-subtab-net ${tab === "network" ? "on" : ""}`} onClick={() => setTab("network")}>
+          Network
+        </button>
         <button type="button" role="tab" aria-selected={tab === "managers"} className={`adm-pc-subtab ${tab === "managers" ? "on" : ""}`} onClick={() => setTab("managers")}>
           Managers
         </button>
@@ -132,18 +135,7 @@ export function PageControlTabs({
 
       {description && <p className="adm-pc-desc-m">{description}</p>}
 
-      {tab === "pages" ? (
-        <div className="adm-pc-twobox">
-          {/* LEFT box — the existing monitored-pages list (+ a read-only top-right manager badge). */}
-          <div className="adm-pc-box">
-            <PageControlList pages={pages} appConfigured={appConfigured} managers={managers} assignments={assignments} />
-          </div>
-          {/* RIGHT box — the network dashboard (unchanged). */}
-          <div className="adm-pc-box">
-            <PageControlNetwork />
-          </div>
-        </div>
-      ) : (
+      {tab === "managers" ? (
         <ManagersScreen
           managers={managers}
           pages={managedPages}
@@ -155,6 +147,19 @@ export function PageControlTabs({
           onRegenerateCode={onRegenerateCode}
           onError={error}
         />
+      ) : (
+        // Pages + Network share the two-box: desktop shows both side by side (unchanged);
+        // on mobile `data-mtab` reveals just the one the active pill selects.
+        <div className="adm-pc-twobox" data-mtab={tab}>
+          {/* LEFT box — the existing monitored-pages list (+ a read-only top-right manager badge). */}
+          <div className="adm-pc-box adm-pc-box-list">
+            <PageControlList pages={pages} appConfigured={appConfigured} managers={managers} assignments={assignments} />
+          </div>
+          {/* RIGHT box — the network dashboard. */}
+          <div className="adm-pc-box adm-pc-box-net">
+            <PageControlNetwork />
+          </div>
+        </div>
       )}
     </div>
   );

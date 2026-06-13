@@ -2724,6 +2724,16 @@ a.dl-breaking-text:hover { text-decoration:none; }
   }
 }
 
+/* ── Page Control THIRD mobile tab: a "Network" segment between Pages and Managers,
+   hidden on desktop (where Network lives in the side-by-side two-box). On mobile the
+   active pill reveals just one box of the two-box; desktop shows both, unchanged. ── */
+.adm-pc-subtab-net { display: none; } /* desktop: no separate Network tab */
+@media (max-width: 1023px) {
+  .adm-pc-subtab-net { display: inline-flex; } /* mobile: three even segments */
+  .adm-pc-twobox[data-mtab="pages"] .adm-pc-box-net { display: none; }
+  .adm-pc-twobox[data-mtab="network"] .adm-pc-box-list { display: none; }
+}
+
 /* Read-only manager badge in the top-right of a page row (opposite the page name).
    Nothing renders when unassigned. Assignment happens ONLY in the Managers tab — rows
    carry no assign control. The page name flexes + ellipsizes beside it (row unchanged). */
