@@ -249,16 +249,18 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
         </div>
       ) : (
         <>
-          <div className="adm-list-head" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="adm-pc-headtop">
             <span className="adm-fb-sub">
               {total} monitored {total === 1 ? "Page" : "Pages"}
               {query.trim() ? ` matching “${query.trim()}”` : ""}
             </span>
-            {connectBtn}
           </div>
 
-          <div className="adm-pc-listrange">
-            <RangeControl range={range} onChange={setRange} />
+          <div className="adm-pc-headrow">
+            <div className="adm-pc-listrange">
+              <RangeControl range={range} onChange={setRange} />
+            </div>
+            {connectBtn}
           </div>
 
           <div className="adm-pc-list">
