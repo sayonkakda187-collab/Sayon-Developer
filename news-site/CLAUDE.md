@@ -1310,6 +1310,20 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   "Search Pages" stays the page-search. `PageControlTabs` is the single state owner (optimistic
   + `router.refresh()`) so the row badges, counts and both tabs stay in sync. Touches only Page
   Control + the manager store.
+- **Page earnings (manager-entered via a Telegram bot).** Earnings have no Facebook API, so each
+  manager DMs them to a **dedicated earnings bot**. **`PageEarning`** stores one value per
+  (`monitoredPageId`, `date` = PP `YYYY-MM-DD`) — `amount` `Decimal(12,2)`, `currency` (USD),
+  `enteredByManagerId`; **unique (page, day)** so re-entry upserts. `PageManager` gains a human
+  **`linkCode`** (e.g. `DARA-4827`, `lib/earningsLinkCode`) + unique **`telegramChatId`** (null
+  until linked). The **Managers tab** shows each manager's code + Linked/Not-linked + Copy +
+  regenerate (`regenerateManagerLinkCode`). The **bot** (`lib/earningsBot`, token
+  `EARNINGS_TELEGRAM_BOT_TOKEN`; webhook `POST /api/earnings-bot`, optionally verified by
+  `EARNINGS_TELEGRAM_WEBHOOK_SECRET`): `/start <CODE>` links the chat → manager; `/earnings` lists
+  ONLY that manager's pages for the day as tap buttons (current value / "not set", today⇄yesterday
+  nav) → tap a page → reply a number → validated upsert + running daily total. Access is always
+  scoped `telegramChatId → managerId → pages`; the pending "which page" state lives in `AppSetting`
+  (~30-min TTL). `POST /api/admin/earnings-bot` (admin) registers this deployment's webhook. Display
+  of earnings in Page Control (list pill / detail chart / network KPI) is Phase 3.
 - **Expandable row charts.** Each list row (Box 1) stays compact but is now a tap-toggle (`role=
   button`, ⌄ caret) that reveals an inline charts panel below it (accordion, one open at a time);
   the full-dashboard action moves to an **"Open page →"** link inside the panel. The panel lazily
