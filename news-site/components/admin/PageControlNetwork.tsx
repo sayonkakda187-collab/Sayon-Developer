@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
+import { ManagerAvatar } from "@/components/admin/ManagerAvatar";
+import { setPageControlManagerFilter, usePageControlManagerFilter } from "@/components/admin/pageControlManagerFilterStore";
 import { ExternalLinkIcon } from "@/components/admin/icons";
 import { formatNumber, formatDate } from "@/lib/site";
 import { presetRange, ppToday, formatRange } from "@/lib/fbInsightsRange";
@@ -234,6 +236,9 @@ function NetTrend({ days, daysPrev }: { days: DayPoint[]; daysPrev: DayPoint[] }
  */
 export function PageControlNetwork() {
   const { error } = useToast();
+  // Selected manager (header autocomplete) → the dashboard filters to that manager's
+  // pages, in sync with the list. null = whole network.
+  const selectedManager = usePageControlManagerFilter();
   const [range, setRange] = useState<Range>(dashRange);
   const [data, setData] = useState<NetworkRollup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -249,7 +254,8 @@ export function PageControlNetwork() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${NET_API}?from=${range.from}&to=${range.to}`, { cache: "no-store" })
+    const url = `${NET_API}?from=${range.from}&to=${range.to}${selectedManager ? `&manager=${encodeURIComponent(selectedManager.id)}` : ""}`;
+    fetch(url, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
@@ -259,7 +265,7 @@ export function PageControlNetwork() {
       .catch(() => !cancelled && error("Couldn’t load the network dashboard."))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [range.from, range.to, error]);
+  }, [range.from, range.to, selectedManager, error]);
 
   const t = data?.totals;
   return (
@@ -269,6 +275,13 @@ export function PageControlNetwork() {
           <div className="adm-card-title" style={{ fontSize: 16 }}>Network dashboard</div>
           {data && <div className="adm-fb-sub" style={{ marginTop: 1 }}>Based on {data.coverage.withData} of {data.coverage.total} {data.coverage.total === 1 ? "page" : "pages"} · {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</div>}
         </div>
+        {selectedManager && (
+          <div className="adm-pc-netfilter">
+            <ManagerAvatar name={selectedManager.name} photo={selectedManager.photo} size={20} />
+            <span>{selectedManager.name}</span>
+            <button type="button" onClick={() => setPageControlManagerFilter(null)} aria-label={`Clear manager filter (${selectedManager.name})`}>×</button>
+          </div>
+        )}
       </div>
 
       <RangeControl range={range} onChange={setRange} busy={loading} />
