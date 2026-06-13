@@ -91,7 +91,7 @@ export function PageControlSummary({
           <p className="adm-card-sub" style={{ marginTop: 8 }}>This Page’s token can’t read insights right now. Recent posts below still work.</p>
         </div>
       ) : (
-        <InsightsDashboard curRows={curRows} prevRows={prevRows} prevPostsTotal={data.prevPostsTotal} includesToday={includesToday} />
+        <InsightsDashboard curRows={curRows} prevRows={prevRows} prevPostsTotal={data.prevPostsTotal} includesToday={includesToday} showPosts={false} />
       )}
 
       {/* 3 most recent real posts */}

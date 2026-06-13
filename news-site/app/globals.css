@@ -2551,6 +2551,17 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-row-name { font-weight: 600; color: var(--adm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-pc-chev { flex: none; color: var(--section-accent); font-size: 22px; line-height: 1; opacity: .8; }
 
+/* Landing-row 28-day quick stats (wrap on mobile, never break the row) */
+.adm-pc-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.adm-pc-stat { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 8px; border-radius: 999px; background: var(--section-tint); font-size: 12px; line-height: 1.4; white-space: nowrap; }
+.adm-pc-stat-k { color: var(--adm-ink); opacity: .62; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .02em; }
+.adm-pc-stat-v { color: var(--adm-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.adm-pc-stat-d { font-weight: 700; font-size: 10.5px; }
+.adm-pc-stat-d.up { color: var(--adm-green); }
+.adm-pc-stat-d.down { color: #dc2626; }
+[data-adm-theme="dark"] .adm-pc-stat-d.down { color: #f87171; }
+.adm-pc-stat-skel { width: 64px; height: 22px; padding: 0; background: var(--adm-bd); animation: adm-pc-pulse 1.2s ease-in-out infinite; }
+
 /* Dashboard header (back · identity · open) */
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
@@ -2595,6 +2606,6 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-skel { background: var(--adm-bd); animation: adm-pc-pulse 1.2s ease-in-out infinite; }
 @keyframes adm-pc-pulse { 0%, 100% { opacity: .5; } 50% { opacity: .9; } }
 @media (prefers-reduced-motion: reduce) {
-  .adm-pc-skel { animation: none; }
+  .adm-pc-skel, .adm-pc-stat-skel { animation: none; }
   .adm-pc-row { transition: none; }
 }

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { decryptSecret } from "@/lib/crypto";
-import { FacebookApiError } from "@/lib/facebook";
-import { getPageDaily, type DayPoint } from "@/lib/facebookInsights";
-import { rangeToUnix, previousPeriod, ppToday, addDays } from "@/lib/fbInsightsRange";
+import { type DayPoint } from "@/lib/facebookInsights";
+import { getMonitoredDaily } from "@/lib/pageControlInsights";
+import { previousPeriod, ppToday, addDays } from "@/lib/fbInsightsRange";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,11 +23,12 @@ function parseRange(from: string | null, to: string | null): { from: string; to:
 }
 
 /**
- * GET `?detail={monitoredPageId}&from=&to=` — one MONITORED page's day-by-day
- * insights for the range + previous period, in the same `DetailData` shape the
- * Page Control Summary/Analytics components consume. Page Control is watch-only,
- * so `shares` / `prevPostsTotal` / `posts` (our-system shares) are always empty —
- * the real content lives in the Content tab. Independent token + no farm data.
+ * GET `?detail={monitoredPageId}&from=&to=&refresh=1` — one MONITORED page's
+ * day-by-day insights for the range + previous period, in the same `DetailData`
+ * shape the Page Control Summary/Analytics components consume. Cached via
+ * `getMonitoredDaily` (one combined fetch over prev-start..to → split). Page
+ * Control is watch-only, so `shares` / `prevPostsTotal` / `posts` are always empty
+ * — the real content lives in the Content tab.
  */
 export async function GET(req: Request) {
   const user = await getSessionUser();
@@ -40,6 +40,7 @@ export async function GET(req: Request) {
 
   const range = parseRange(searchParams.get("from"), searchParams.get("to"));
   const prev = previousPeriod(range.from, range.to);
+  const wantFresh = searchParams.get("refresh") === "1";
 
   const page = await prisma.monitoredPage.findUnique({
     where: { id: pageDbId },
@@ -47,36 +48,28 @@ export async function GET(req: Request) {
   });
   if (!page) return NextResponse.json({ ok: false, error: "Page not found" }, { status: 404 });
 
-  const empty = { shares: {} as Record<string, number>, prevPostsTotal: 0, posts: [] as never[] };
-
-  let token: string;
-  try {
-    token = decryptSecret(page.accessToken);
-  } catch {
-    return NextResponse.json({
-      ok: true,
-      detail: { pageDbId: page.id, pageName: page.pageName, from: range.from, to: range.to, status: "reconnect", days: [], daysPrev: [], ...empty },
-    });
+  // One combined daily fetch (prev-start..to), split into current vs previous.
+  const { days: all, status } = await getMonitoredDaily(page, prev.from, range.to, wantFresh);
+  const days: DayPoint[] = [];
+  const daysPrev: DayPoint[] = [];
+  for (const dp of all) {
+    if (dp.date >= range.from && dp.date <= range.to) days.push(dp);
+    else if (dp.date >= prev.from && dp.date <= prev.to) daysPrev.push(dp);
   }
 
-  const { since, until } = rangeToUnix(prev.from, range.to);
-  try {
-    const res = await getPageDaily(page.pageId, token, since, until);
-    const days: DayPoint[] = [];
-    const daysPrev: DayPoint[] = [];
-    for (const dp of res.days) {
-      if (dp.date >= range.from && dp.date <= range.to) days.push(dp);
-      else if (dp.date >= prev.from && dp.date <= prev.to) daysPrev.push(dp);
-    }
-    return NextResponse.json({
-      ok: true,
-      detail: { pageDbId: page.id, pageName: page.pageName, from: range.from, to: range.to, status: "ok", days, daysPrev, ...empty },
-    });
-  } catch (e) {
-    const reconnect = e instanceof FacebookApiError && (e.expired || e.permission);
-    return NextResponse.json({
-      ok: true,
-      detail: { pageDbId: page.id, pageName: page.pageName, from: range.from, to: range.to, status: reconnect ? "reconnect" : "ok", days: [], daysPrev: [], ...empty },
-    });
-  }
+  return NextResponse.json({
+    ok: true,
+    detail: {
+      pageDbId: page.id,
+      pageName: page.pageName,
+      from: range.from,
+      to: range.to,
+      status,
+      days,
+      daysPrev,
+      shares: {} as Record<string, number>,
+      prevPostsTotal: 0,
+      posts: [] as never[],
+    },
+  });
 }

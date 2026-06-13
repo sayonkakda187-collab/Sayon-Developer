@@ -1185,32 +1185,54 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   scopes). Per page: **Reconnect/refresh-token** (`pageControlReconnectPage`, re-derives
   from the stored user token) and **Remove** (`removeMonitoredPage`, cascade-drops its
   cache); an `Expired` token shows a **"Needs reconnect"** badge.
+- **Available metric set (v25.0, watch-only `pages_read_engagement` + `read_insights`).**
+  The UI is built ONLY around metrics the API still returns; retired ones are never
+  shown (the self-healing `fetchPageInsights` requests CANDIDATES and drops any the
+  API rejects, so a dead metric degrades to `null`/"—"). **Used:** page **reach**
+  (`page_impressions_unique` → `page_views_total`/`_unique`), **engagement**
+  (`page_post_engagements` → `page_engaged_users`), **net new follows**
+  (`page_daily_follows_unique` → `_daily_follows`/`_fan_adds_unique`/`_fan_adds`),
+  **followers total** (`followers_count` → `fan_count`, a field not an insight), and
+  per-post **reactions/comments/shares** (summary edges) + **reach**
+  (`post_impressions_unique`, best-effort). **Omitted (retired/limited on v25):** the
+  paid/viral/organic impression breakdowns, **`page_fans_*` demographics**
+  (country/city/locale/gender-age) → so **NO "Audience" subsection** (no reliable
+  watch-only replacement); `post_clicks`; and an exact **range post-count** KPI (no
+  cheap metric — the Content tab shows the actual posts instead).
 - **Landing** (`PageControlList`): shows **ONLY** `MonitoredPage`s (searchable, avatar'd,
-  paginated). **Empty state** = a "Connect your first page" CTA. Tap a page → its
-  dashboard; live data is fetched **only on open** (lazy; the set is small/hand-picked).
+  paginated). Each row carries **28-day quick stats** — Reach · Engaged · Follows with a
+  small **Δ% vs the previous 28d** ("—" when absent) — fetched **lazily in small batches**
+  (`POST /api/admin/page-control/stats`) with a **per-row shimmer**, cached ~6h; never a
+  bulk hammer. **Empty state** = a "Connect your first page" CTA. Live data loads **only
+  on open** (lazy; the set is small/hand-picked).
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three
   **swipeable** sub-tabs (only the active one mounts):
-  - **Summary** — KPI cards + mini trend (the exported **`InsightsDashboard`**) + 3
-    most recent real posts. Since Page Control never posts, the "Our posts" KPI is 0.
+  - **Summary** — KPI cards (**Reach · Engagement · Net follows**, each %-change +
+    sparkline) + a metric-switchable trend (reach/engagement/followers) via the exported
+    **`InsightsDashboard`** (`showPosts={false}` drops the farm-only "Our posts" KPI) +
+    the 3 most recent real posts.
   - **Content** — the page's **REAL published posts** (`getPagePosts` →
     `GET /{pageId}/published_posts` + best-effort `getPostReach`): thumbnail, caption,
-    date, reactions/comments/shares/reach, "View on Facebook", cursor Load-more, sort,
-    Refresh. **v25.0 fields verified/omitted:** deep `attachments{media}` (can error a
-    post → use `full_picture`) + inline per-post `insights` (a retired metric would
-    fail the list → reach fetched separately, degrades to `null` without `read_insights`).
-  - **Analytics** — the Insights per-Page dashboard reused **verbatim** (`PageDetail`
-    with a `detailApi` prop pointing at the monitored endpoint; `embedded` + controlled
-    `range`). `shares`/our-posts are always empty (watch-only).
-- **Own endpoints** (keyed by monitored-page id, session-gated, `maxDuration = 60`):
-  `app/api/admin/page-control/posts` (`?page=&after=&refresh=1`, via
-  `lib/pageControlPosts.ts`) + `app/api/admin/page-control/insights`
-  (`?detail=&from=&to=` → the day series in the same `DetailData` shape, with empty
-  shares/posts). Both reuse the shared low-level Graph helpers + `getPageDaily`.
+    date, reactions/comments/shares/reach, "View on Facebook", cursor Load-more, **sort
+    by recent / engagement**, Refresh.
+  - **Analytics** — the Insights per-Page dashboard reused **verbatim** (`PageDetail`,
+    `detailApi` → the monitored endpoint, `embedded` + controlled `range`,
+    `hideSystemPosts` drops the farm-only "Top posts via our system") → KPIs + trend +
+    **day-by-day table**.
+- **Data layer + caches** (keyed by monitored-page id, session-gated, `maxDuration = 60`):
+  `lib/pageControlInsights.ts` `getMonitoredDaily` caches the day-by-day series in
+  **`MonitoredPageDailyCache`** (~6h today-inclusive / 24h historical) and powers both the
+  dashboard trends AND `getMonitoredRowStats` (one cached 56-day window → last-28d vs
+  prev-28d). Endpoints: `/posts` (`lib/pageControlPosts.ts`), `/insights`
+  (`?detail=&from=&to=&refresh=1`), `/stats` (`POST {ids}`, batched, `mapLimit` 6). All
+  reuse the shared self-healing Graph client.
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
-  (`20260613030000_monitored_page`, auto-applies). **No new env** (App creds can reuse
-  `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab). Read-only.
+  (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
+  (`20260613050000_monitored_page_daily_cache`), all auto-apply. **No new env** (App
+  creds can reuse `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab).
+  Read-only.
 
 ## Roadmap
 

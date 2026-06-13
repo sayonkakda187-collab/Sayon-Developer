@@ -352,6 +352,7 @@ model MonitoredPage {
   updatedAt       DateTime  @updatedAt
 
   postsCache MonitoredPagePostsCache?
+  dailyCache MonitoredPageDailyCache[]
 
   @@index([status])
 }
@@ -364,4 +365,19 @@ model MonitoredPagePostsCache {
   monitoredPage   MonitoredPage @relation(fields: [monitoredPageId], references: [id], onDelete: Cascade)
   data            String
   fetchedAt       DateTime      @default(now())
+}
+
+// Per-(monitored page, date-range) cache of the day-by-day insights series (reach /
+// engagement / follows per day) — its own cache, independent from the farm's
+// PageDailyCache. Powers both the dashboard trends AND the landing-list quick stats
+// (a 56-day window split into the last 28d vs the previous 28d). `rangeKey` is
+// "from_to" (PP dates); short TTL for ranges including today, longer for historical.
+model MonitoredPageDailyCache {
+  monitoredPageId String
+  rangeKey        String
+  monitoredPage   MonitoredPage @relation(fields: [monitoredPageId], references: [id], onDelete: Cascade)
+  data            String
+  fetchedAt       DateTime      @default(now())
+
+  @@id([monitoredPageId, rangeKey])
 }
