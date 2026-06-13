@@ -2590,6 +2590,18 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-listrange .adm-seg::-webkit-scrollbar { display: none; }
 .adm-pc-listrange .adm-seg-btn { flex: none; }
 
+/* List header: slim count line + one row with the range chips (left, scrollable) and
+   a COMPACT Connect button (right). On phones the button drops to its own row below. */
+.adm-pc-headtop { margin-bottom: 6px; }
+.adm-pc-headrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.adm-pc-headrow .adm-pc-listrange { flex: 1 1 240px; min-width: 0; margin-bottom: 0; }
+.adm-pc-headrow .adm-pc-listrange > div { margin-top: 0 !important; } /* neutralize RangeControl's intro top margin so chips align with the button */
+.adm-pc-headrow .adm-btn-primary { flex: none; } /* compact — just fits "+ Connect Page", not full width */
+@media (max-width: 480px) {
+  /* Too narrow for one row → the range fills the row and the button wraps below it. */
+  .adm-pc-headrow .adm-pc-listrange { flex-basis: 100%; }
+}
+
 /* Dashboard header (back · identity · open) */
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
