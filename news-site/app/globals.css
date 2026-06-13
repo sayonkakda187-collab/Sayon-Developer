@@ -2850,3 +2850,29 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-pc-caret { transition: none; }
   .adm-pc-expand { animation: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE CONTROL — HEADER CONTROLS ("Search by manager" + "Connect Page" in the top
+   bar, ONLY on the Page Control list route — see AdminShell). Desktop: right of
+   "Search Pages", ~equal width, before the toggle/bell/profile. Mobile: their own
+   full-width row under the search so nothing overflows. ≥44px targets.
+   ════════════════════════════════════════════════════════════════════════════ */
+.adm-pc-headctl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.adm-pc-headsearch { margin-top: 0; }
+.adm-topbar-pc .adm-pc-headconnect,
+.adm-appbar-pc .adm-pc-headconnect { flex: none; white-space: nowrap; }
+
+/* Mobile app bar: the controls form their own full-width row under "Search Pages". */
+.adm-appbar-pc .adm-pc-headctl { width: 100%; margin-top: 10px; }
+.adm-appbar-pc .adm-pc-headctl .adm-search { flex: 1; min-width: 0; margin-top: 0; }
+
+/* Desktop top bar: page-search + manager-search side by side (~equal), Connect to
+   their right — all before the toggle/bell/profile actions. */
+@media (min-width: 1024px) {
+  .adm-topbar-pc { gap: 14px; }
+  .adm-topbar-pc .adm-search-wrap { flex: 1 1 0; justify-content: stretch; }
+  .adm-topbar-pc .adm-search-wrap .adm-search { max-width: none; }
+  /* The wrapper dissolves so its two children join the top-bar flex row directly. */
+  .adm-topbar-pc .adm-pc-headctl { display: contents; }
+  .adm-topbar-pc .adm-pc-headsearch { flex: 1 1 0; max-width: none; min-width: 0; }
+}

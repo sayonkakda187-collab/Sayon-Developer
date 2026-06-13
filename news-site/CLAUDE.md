@@ -1222,7 +1222,14 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   "Search articles…" `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") feeding a
   shared store (`pageControlSearchStore`) the list filters by (debounced, case-insensitive,
   by name) — exactly ONE page-search input, in the header; every other admin route keeps the
-  article search.
+  article search. Right of it (same route only) `AdminShell` also renders
+  `PageControlHeaderControls`: a **"Search by manager…"** input (debounced →
+  `pageControlManagerSearchStore`, the list's manager filter) + the **"Connect Page"** button
+  (bumps `pageControlConnectStore`; the list opens its existing connect modal on the signal).
+  Header order: Search Pages · Search by manager · Connect Page · toggle · bell · profile.
+  Desktop = one row (`.adm-topbar-pc`, the two searches ~equal width via `display:contents`);
+  mobile = manager-search + Connect wrap to their own row in the app bar (`.adm-appbar-pc`). So
+  the list box now starts at the date-range chips (no in-box Connect/manager-search bars).
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three

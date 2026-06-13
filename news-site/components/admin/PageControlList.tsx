@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { PlusIcon, SearchIcon } from "@/components/admin/icons";
+import { PlusIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
+import { usePageControlManagerSearch } from "@/components/admin/pageControlManagerSearchStore";
+import { usePageControlConnectSignal } from "@/components/admin/pageControlConnectStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
@@ -184,9 +186,12 @@ export function PageControlList({
   const [range, setRange] = useState<Range>(initialRange);
   const rk = rangeKey(range.from, range.to);
 
-  // Manager filter (debounced).
-  const [mq, setMq] = useState("");
-  const [mqDebounced, setMqDebounced] = useState("");
+  // Manager filter + "Connect Page" now live in the admin HEADER (Page Control route
+  // only). Read the debounced manager query from its shared store, and open the connect
+  // modal when the header's "Connect Page" button bumps its signal.
+  const mqDebounced = usePageControlManagerSearch();
+  const connectSignal = usePageControlConnectSignal();
+  const connectSeen = useRef(connectSignal);
 
   // Expandable rows: one open at a time (accordion) + a client cache of fetched chart
   // data per (page, range) so collapse/re-expand within a session never refetches.
@@ -194,9 +199,11 @@ export function PageControlList({
   const chartCacheRef = useRef<Map<string, RowChartsResp>>(new Map());
 
   useEffect(() => {
-    const t = setTimeout(() => setMqDebounced(mq), 200);
-    return () => clearTimeout(t);
-  }, [mq]);
+    if (connectSignal !== connectSeen.current) {
+      connectSeen.current = connectSignal;
+      setShowConnect(true);
+    }
+  }, [connectSignal]);
 
   useEffect(() => {
     try {
@@ -231,7 +238,7 @@ export function PageControlList({
     });
   }, [filtered, managerActive, matchingManagerIds, assignments]);
 
-  const { page, setPage, pageCount, pageItems, total } = usePaged(managerFiltered, PER_PAGE);
+  const { page, setPage, pageCount, pageItems } = usePaged(managerFiltered, PER_PAGE);
 
   // In manager-search mode we render every match grouped (no pagination); otherwise the
   // normal paginated slice. Quick stats load for whichever rows are actually visible.
@@ -371,31 +378,8 @@ export function PageControlList({
         </div>
       ) : (
         <>
-          <div className="adm-list-head" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span className="adm-fb-sub">
-              {total} monitored {total === 1 ? "Page" : "Pages"}
-              {query.trim() ? ` matching “${query.trim()}”` : ""}
-            </span>
-            {connectBtn}
-          </div>
-
-          {/* Manager-search — filters the list to the Pages a matching person manages. */}
-          <label className="adm-mgr-search adm-pc-mgrsearch">
-            <SearchIcon className="h-4 w-4" />
-            <input
-              className="adm-input"
-              value={mq}
-              onChange={(e) => setMq(e.target.value)}
-              placeholder="Search by manager…"
-              aria-label="Search Pages by manager"
-            />
-            {mq && (
-              <button type="button" className="adm-mgr-search-clear" aria-label="Clear manager search" onClick={() => setMq("")}>
-                ×
-              </button>
-            )}
-          </label>
-
+          {/* Date-range chips sit at the TOP of the list box; "Search by manager" and
+              "Connect Page" now live in the admin header (Page Control route only). */}
           <div className="adm-pc-listrange">
             <RangeControl range={range} onChange={setRange} />
           </div>

@@ -10,6 +10,7 @@ import { SiteSwitcher } from "./SiteSwitcher";
 import { AdminAvatar } from "./AdminAvatar";
 import { GlobalSearch } from "./GlobalSearch";
 import { PageControlHeaderSearch } from "./PageControlHeaderSearch";
+import { PageControlHeaderControls } from "./PageControlHeaderControls";
 import {
   BookIcon,
   BellIcon,
@@ -153,7 +154,7 @@ export function AdminShell({
   return (
     <div className="admin-shell adm-stage" data-section={sectionFor(pathname)} style={{ flex: 1 }}>
       {/* ── Desktop top bar (≥1024px) ── */}
-      <header className="adm-topbar adm-only-desktop">
+      <header className={`adm-topbar adm-only-desktop ${isPageControlList ? "adm-topbar-pc" : ""}`}>
         {brand}
         <div className="adm-search-wrap">
           {isPageControlList ? (
@@ -162,6 +163,8 @@ export function AdminShell({
             <GlobalSearch inputRef={deskSearchRef} showKbd />
           )}
         </div>
+        {/* Page Control only: "Search by manager" + "Connect Page", right of Search Pages. */}
+        {isPageControlList && <PageControlHeaderControls />}
         <div className="adm-top-actions">
           <AdskeeperBalancePill />
           {/* Mount point for page-specific top-bar actions (e.g. Facebook tab). */}
@@ -266,7 +269,7 @@ export function AdminShell({
 
         <div className="adm-canvas">
           {/* ── Phone header (frosted glass, <1024px) ── */}
-          <header className="adm-appbar">
+          <header className={`adm-appbar ${isPageControlList ? "adm-appbar-pc" : ""}`}>
             <div className="adm-appbar-row">
               {drawerMode && (
                 <button
@@ -302,6 +305,8 @@ export function AdminShell({
             ) : (
               <GlobalSearch inputRef={searchRef} onNavigate={() => setOpen(false)} />
             )}
+            {/* Page Control only: manager search + Connect Page on their own row. */}
+            {isPageControlList && <PageControlHeaderControls />}
           </header>
 
           {/* ── Scroll content (the active screen) ── */}
