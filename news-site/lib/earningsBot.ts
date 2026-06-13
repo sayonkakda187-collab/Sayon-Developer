@@ -98,11 +98,96 @@ function managerByChat(chatId: number) {
   return prisma.pageManager.findUnique({ where: { telegramChatId: String(chatId) }, select: { id: true, name: true } });
 }
 
+// ── Tap-to-link flow: an unlinked chat picks a name from a list, then confirms with
+// that manager's code. The "which manager am I linking as?" choice is held in the same
+// AppSetting store (keyed separately from the page-entry pending), ~30-min TTL. Tapping
+// a name NEVER links on its own — the matching code is always required. ──
+const LINK_PREFIX = "earnings_link_";
+const NAMES_PER_PAGE = 8;
+
+async function setLinkPending(chatId: number, managerId: string): Promise<void> {
+  const key = LINK_PREFIX + chatId;
+  await prisma.appSetting
+    .upsert({ where: { key }, create: { key, value: managerId, encrypted: false }, update: { value: managerId } })
+    .catch(() => {});
+}
+async function getLinkPending(chatId: number): Promise<string | null> {
+  const row = await prisma.appSetting.findUnique({ where: { key: LINK_PREFIX + chatId } }).catch(() => null);
+  if (!row || Date.now() - row.updatedAt.getTime() > PENDING_TTL_MS) return null;
+  return row.value || null;
+}
+async function clearLinkPending(chatId: number): Promise<void> {
+  await prisma.appSetting.delete({ where: { key: LINK_PREFIX + chatId } }).catch(() => {});
+}
+
+/** Show all manager names as tap-to-link buttons (paginated). Tapping only selects a
+ *  name — the code is required next to actually link. */
+async function showNameList(chatId: number, page = 0): Promise<void> {
+  const managers = await prisma.pageManager.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  if (managers.length === 0) {
+    await send(chatId, "No managers exist yet. Ask your admin to add you in the Managers tab, then tap your name here.");
+    return;
+  }
+  const pageCount = Math.ceil(managers.length / NAMES_PER_PAGE);
+  const p = Math.min(Math.max(page, 0), pageCount - 1);
+  const slice = managers.slice(p * NAMES_PER_PAGE, p * NAMES_PER_PAGE + NAMES_PER_PAGE);
+  const rows: InlineButton[][] = slice.map((m) => [{ text: m.name, callback_data: `lm:${m.id}` }]);
+  const nav: InlineButton[] = [];
+  if (p > 0) nav.push({ text: "◀ Prev", callback_data: `ln:${p - 1}` });
+  if (p < pageCount - 1) nav.push({ text: "Next ▶", callback_data: `ln:${p + 1}` });
+  if (nav.length) rows.push(nav);
+  const header = pageCount > 1 ? `Tap your name to link (page ${p + 1}/${pageCount}):` : "Tap your name to link:";
+  await send(chatId, header, { reply_markup: { inline_keyboard: rows } });
+}
+
+/** A name was tapped — remember the choice and ask for that manager's code (the code is
+ *  the secret that actually links). */
+async function handleNamePick(chatId: number, managerId: string): Promise<void> {
+  if (await managerByChat(chatId)) {
+    await handleEarnings(chatId); // already linked — never relink, go straight to earnings
+    return;
+  }
+  const mgr = await prisma.pageManager.findUnique({ where: { id: managerId }, select: { id: true, name: true } });
+  if (!mgr) {
+    await send(chatId, "That manager no longer exists — tap a name from the list.");
+    await showNameList(chatId);
+    return;
+  }
+  await setLinkPending(chatId, mgr.id);
+  await send(chatId, `To link as <b>${esc(mgr.name)}</b>, send their code (from the admin Managers tab).`);
+}
+
+/** Validate a typed code against the SELECTED manager (tap-to-link). Match → link;
+ *  mismatch → keep the selection so they can retry or tap a different name. */
+async function tryLinkWithCode(chatId: number, managerId: string, text: string): Promise<void> {
+  const mgr = await prisma.pageManager.findUnique({ where: { id: managerId }, select: { id: true, name: true, linkCode: true, telegramChatId: true } });
+  if (!mgr) {
+    await clearLinkPending(chatId);
+    await send(chatId, "That manager no longer exists.");
+    await showNameList(chatId);
+    return;
+  }
+  if (text.trim().toUpperCase() !== mgr.linkCode.toUpperCase()) {
+    await send(chatId, `❌ That code doesn't match <b>${esc(mgr.name)}</b>. Try again, or tap a different name.`);
+    return; // keep the pending pick so the next message retries
+  }
+  if (mgr.telegramChatId && mgr.telegramChatId !== String(chatId)) {
+    await clearLinkPending(chatId);
+    await send(chatId, `<b>${esc(mgr.name)}</b> is already linked to another Telegram account. Ask your admin to regenerate the code ("New code").`);
+    return;
+  }
+  await prisma.pageManager.updateMany({ where: { telegramChatId: String(chatId) }, data: { telegramChatId: null } });
+  await prisma.pageManager.update({ where: { id: mgr.id }, data: { telegramChatId: String(chatId) } });
+  await clearLinkPending(chatId);
+  await send(chatId, `✅ Linked as <b>${esc(mgr.name)}</b>.\nSend /earnings to enter today's earnings for your pages.`);
+}
+
 function helpText(): string {
   return [
     "💰 <b>Earnings bot</b>",
     "",
-    "<b>/start CODE</b> — link your account (the code your admin gave you, e.g. <code>DARA-4827</code>)",
+    "<b>/start</b> — link your account (tap your name, then send your code)",
+    "<b>/start CODE</b> — link directly with your code (e.g. <code>DARA-4827</code>)",
     "<b>/earnings</b> — enter today's earnings for your pages",
     "",
     "After /earnings, tap a page then reply with the amount (e.g. <code>12.50</code>).",
@@ -113,8 +198,13 @@ async function handleStart(chatId: number, arg: string): Promise<void> {
   const code = arg.trim().toUpperCase();
   if (!code) {
     const existing = await managerByChat(chatId);
-    if (existing) await send(chatId, `You're linked as <b>${esc(existing.name)}</b>. Send /earnings to enter today's earnings.`);
-    else await send(chatId, "👋 Welcome! Send <code>/start YOUR-CODE</code> with the link code your admin gave you (e.g. <code>DARA-4827</code>).");
+    if (existing) {
+      await send(chatId, `You're linked as <b>${esc(existing.name)}</b>. Send /earnings to enter today's earnings.`);
+      return;
+    }
+    await clearLinkPending(chatId); // fresh pick
+    await send(chatId, "👋 Welcome! Link your account to enter earnings.");
+    await showNameList(chatId);
     return;
   }
   const mgr = await prisma.pageManager.findUnique({ where: { linkCode: code }, select: { id: true, name: true, telegramChatId: true } });
@@ -133,13 +223,15 @@ async function handleStart(chatId: number, arg: string): Promise<void> {
   // Attach this chat — first detach it from any other manager (telegramChatId is unique).
   await prisma.pageManager.updateMany({ where: { telegramChatId: String(chatId) }, data: { telegramChatId: null } });
   await prisma.pageManager.update({ where: { id: mgr.id }, data: { telegramChatId: String(chatId) } });
+  await clearLinkPending(chatId);
   await send(chatId, `✅ Linked as <b>${esc(mgr.name)}</b>.\nSend /earnings to enter today's earnings for your pages.`);
 }
 
 async function handleEarnings(chatId: number, date?: string): Promise<void> {
   const mgr = await managerByChat(chatId);
   if (!mgr) {
-    await send(chatId, "You're not linked yet. Send <code>/start YOUR-CODE</code> with the code your admin gave you.");
+    await send(chatId, "First, link your account:");
+    await showNameList(chatId);
     return;
   }
   await clearPending(chatId); // showing the list resets any half-finished entry
@@ -171,12 +263,25 @@ async function handleCallback(cb: TgCallbackQuery): Promise<void> {
   await tg("answerCallbackQuery", { callback_query_id: cb.id });
   const chatId = cb.message?.chat?.id;
   if (chatId == null) return;
-  const mgr = await managerByChat(chatId);
-  if (!mgr) {
-    await send(chatId, "You're not linked. Send <code>/start YOUR-CODE</code>.");
+  const data = cb.data || "";
+
+  // Linking taps come from UNLINKED chats — handle before the "must be linked" guard.
+  const lnav = /^ln:(\d+)$/.exec(data);
+  if (lnav) {
+    await showNameList(chatId, parseInt(lnav[1], 10));
     return;
   }
-  const data = cb.data || "";
+  const lpick = /^lm:(.+)$/.exec(data);
+  if (lpick) {
+    await handleNamePick(chatId, lpick[1]);
+    return;
+  }
+
+  const mgr = await managerByChat(chatId);
+  if (!mgr) {
+    await send(chatId, "You're not linked. Send /start to pick your name.");
+    return;
+  }
   const nav = /^g:(\d{4}-\d{2}-\d{2})$/.exec(data);
   if (nav) {
     await handleEarnings(chatId, nav[1]);
@@ -197,7 +302,10 @@ async function handleCallback(cb: TgCallbackQuery): Promise<void> {
 async function handleAmount(chatId: number, text: string): Promise<void> {
   const mgr = await managerByChat(chatId);
   if (!mgr) {
-    await send(chatId, "You're not linked yet. Send <code>/start YOUR-CODE</code>.");
+    // Unlinked: if they tapped a name, this text is the code; otherwise show the names.
+    const pendingManagerId = await getLinkPending(chatId);
+    if (pendingManagerId) await tryLinkWithCode(chatId, pendingManagerId, text);
+    else await showNameList(chatId);
     return;
   }
   const pending = await getPending(chatId);
@@ -260,7 +368,8 @@ export async function handleEarningsUpdate(raw: unknown): Promise<void> {
       }
       if (cmd === "/cancel") {
         await clearPending(chatId);
-        await send(chatId, "Cancelled. Send /earnings to start again.");
+        await clearLinkPending(chatId);
+        await send(chatId, "Cancelled. Send /start to pick your name, or /earnings.");
         return;
       }
       await send(chatId, helpText());
