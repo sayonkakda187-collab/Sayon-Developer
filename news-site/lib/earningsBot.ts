@@ -189,6 +189,7 @@ function helpText(): string {
     "<b>/start</b> — link your account (tap your name, then send your code)",
     "<b>/start CODE</b> — link directly with your code (e.g. <code>DARA-4827</code>)",
     "<b>/earnings</b> — enter today's earnings for your pages",
+    "<b>/unlink</b> — disconnect this Telegram from your account",
     "",
     "After /earnings, tap a page then reply with the amount (e.g. <code>12.50</code>).",
   ].join("\n");
@@ -199,7 +200,7 @@ async function handleStart(chatId: number, arg: string): Promise<void> {
   if (!code) {
     const existing = await managerByChat(chatId);
     if (existing) {
-      await send(chatId, `You're linked as <b>${esc(existing.name)}</b>. Send /earnings to enter today's earnings.`);
+      await send(chatId, `You're linked as <b>${esc(existing.name)}</b>. Send /earnings to enter today's earnings.\n<i>(send /unlink to switch accounts)</i>`);
       return;
     }
     await clearLinkPending(chatId); // fresh pick
@@ -225,6 +226,21 @@ async function handleStart(chatId: number, arg: string): Promise<void> {
   await prisma.pageManager.update({ where: { id: mgr.id }, data: { telegramChatId: String(chatId) } });
   await clearLinkPending(chatId);
   await send(chatId, `✅ Linked as <b>${esc(mgr.name)}</b>.\nSend /earnings to enter today's earnings for your pages.`);
+}
+
+/** /unlink — disconnect ONLY the current chat from its manager. Scoped by
+ *  telegramChatId, so it can never unlink anyone else; earnings already entered are
+ *  kept (only the Telegram link is removed). Afterwards the chat is fresh again. */
+async function handleUnlink(chatId: number): Promise<void> {
+  const mgr = await managerByChat(chatId);
+  if (!mgr) {
+    await send(chatId, "You're not linked. Send /start to link.");
+    return;
+  }
+  await prisma.pageManager.updateMany({ where: { telegramChatId: String(chatId) }, data: { telegramChatId: null } });
+  await clearPending(chatId);
+  await clearLinkPending(chatId);
+  await send(chatId, `Unlinked from <b>${esc(mgr.name)}</b>. You can /start again to re-link.`);
 }
 
 async function handleEarnings(chatId: number, date?: string): Promise<void> {
@@ -360,6 +376,10 @@ export async function handleEarningsUpdate(raw: unknown): Promise<void> {
       }
       if (cmd === "/earnings") {
         await handleEarnings(chatId);
+        return;
+      }
+      if (cmd === "/unlink") {
+        await handleUnlink(chatId);
         return;
       }
       if (cmd === "/yesterday") {
