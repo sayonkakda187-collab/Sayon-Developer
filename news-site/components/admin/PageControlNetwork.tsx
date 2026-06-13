@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ManagerAvatar } from "@/components/admin/ManagerAvatar";
-import { setPageControlManagerFilter, usePageControlManagerFilter } from "@/components/admin/pageControlManagerFilterStore";
 import { ExternalLinkIcon } from "@/components/admin/icons";
 import { formatNumber, formatDate } from "@/lib/site";
 import { presetRange, ppToday, formatRange } from "@/lib/fbInsightsRange";
@@ -16,6 +15,19 @@ import type { NetworkRollup, LeaderRow, NetPost, MoverRow } from "@/lib/pageCont
 
 const NET_API = "/api/admin/page-control/network";
 const SS_DASH = "pageControl.dashRange";
+const SS_DASH_MGR = "pageControl.dashManager";
+
+type ChipManager = { id: string; name: string; photo: string | null };
+
+/** Remembered dashboard manager filter (a PageManager id, or null = All Managers). */
+function initialDashManager(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(SS_DASH_MGR) || null;
+  } catch {
+    return null;
+  }
+}
 
 type Metric = "reach" | "engagement" | "follows";
 const METRICS: { key: Metric; label: string; color: string }[] = [
@@ -236,12 +248,31 @@ function NetTrend({ days, daysPrev }: { days: DayPoint[]; daysPrev: DayPoint[] }
  */
 export function PageControlNetwork() {
   const { error } = useToast();
-  // Selected manager (header autocomplete) → the dashboard filters to that manager's
-  // pages, in sync with the list. null = whole network.
-  const selectedManager = usePageControlManagerFilter();
+  // The dashboard has its OWN manager filter (chips inline with the title), independent
+  // of the list/header — its selection is remembered in sessionStorage. null = whole
+  // network. `getNetworkRollup(range, managerId)` restricts the rollup to that manager's
+  // pages (no Graph), so the chips reuse the existing aggregation.
+  const [dashManagerId, setDashManagerId] = useState<string | null>(initialDashManager);
+  const [chipManagers, setChipManagers] = useState<ChipManager[]>([]);
   const [range, setRange] = useState<Range>(dashRange);
   const [data, setData] = useState<NetworkRollup | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const activeManager = dashManagerId ? chipManagers.find((m) => m.id === dashManagerId) ?? null : null;
+
+  // Load the manager chips once (local DB, no Graph).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/page-control/managers", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled && j.ok) setChipManagers(j.managers as ChipManager[]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -252,9 +283,18 @@ export function PageControlNetwork() {
   }, [range]);
 
   useEffect(() => {
+    try {
+      if (dashManagerId) sessionStorage.setItem(SS_DASH_MGR, dashManagerId);
+      else sessionStorage.removeItem(SS_DASH_MGR);
+    } catch {
+      /* ignore */
+    }
+  }, [dashManagerId]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const url = `${NET_API}?from=${range.from}&to=${range.to}${selectedManager ? `&manager=${encodeURIComponent(selectedManager.id)}` : ""}`;
+    const url = `${NET_API}?from=${range.from}&to=${range.to}${dashManagerId ? `&manager=${encodeURIComponent(dashManagerId)}` : ""}`;
     fetch(url, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
@@ -265,21 +305,42 @@ export function PageControlNetwork() {
       .catch(() => !cancelled && error("Couldn’t load the network dashboard."))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [range.from, range.to, selectedManager, error]);
+  }, [range.from, range.to, dashManagerId, error]);
 
   const t = data?.totals;
   return (
     <div className="adm-pc-dash">
       <div className="adm-pc-dash-head">
-        <div>
+        <div className="adm-pc-dash-titlerow">
           <div className="adm-card-title" style={{ fontSize: 16 }}>Network dashboard</div>
-          {data && <div className="adm-fb-sub" style={{ marginTop: 1 }}>Based on {data.coverage.withData} of {data.coverage.total} {data.coverage.total === 1 ? "page" : "pages"} · {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</div>}
+          <div className="adm-pc-mgrchips" role="group" aria-label="Filter dashboard by manager">
+            <button
+              type="button"
+              className={`adm-pc-mgrchip adm-pc-mgrchip-all ${dashManagerId === null ? "on" : ""}`}
+              aria-pressed={dashManagerId === null}
+              onClick={() => setDashManagerId(null)}
+            >
+              All Managers
+            </button>
+            {chipManagers.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className={`adm-pc-mgrchip ${dashManagerId === m.id ? "on" : ""}`}
+                aria-pressed={dashManagerId === m.id}
+                onClick={() => setDashManagerId(m.id)}
+              >
+                <ManagerAvatar name={m.name} photo={m.photo} size={20} />
+                <span className="adm-pc-mgrchip-name">{m.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
-        {selectedManager && (
-          <div className="adm-pc-netfilter">
-            <ManagerAvatar name={selectedManager.name} photo={selectedManager.photo} size={20} />
-            <span>{selectedManager.name}</span>
-            <button type="button" onClick={() => setPageControlManagerFilter(null)} aria-label={`Clear manager filter (${selectedManager.name})`}>×</button>
+        {data && (
+          <div className="adm-fb-sub" style={{ marginTop: 4 }}>
+            {activeManager ? `${activeManager.name}’s pages · ` : ""}
+            {data.coverage.withData} of {data.coverage.total} {data.coverage.total === 1 ? "page" : "pages"} · {formatRange(range.from, range.to)}
+            {range.to === ppToday() ? " · today partial" : ""}
           </div>
         )}
       </div>
@@ -290,7 +351,16 @@ export function PageControlNetwork() {
         <p className="adm-card-sub" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
           <span className="adm-spinner" aria-hidden /> Building the network rollup…
         </p>
-      ) : !data ? null : data.coverage.withData === 0 ? (
+      ) : !data ? null : data.coverage.total === 0 ? (
+        <div className="adm-card adm-card-pad" style={{ marginTop: 12 }}>
+          <div className="adm-card-title" style={{ fontSize: 14 }}>{activeManager ? `${activeManager.name} has no assigned pages` : "No monitored pages yet"}</div>
+          <p className="adm-card-sub" style={{ marginTop: 6 }}>
+            {activeManager
+              ? "Assign Pages to this manager (in the Managers tab or the list) and they’ll roll up here."
+              : "Connect Pages in the list to populate the network dashboard."}
+          </p>
+        </div>
+      ) : data.coverage.withData === 0 ? (
         <div className="adm-card adm-card-pad" style={{ marginTop: 12 }}>
           <div className="adm-card-title" style={{ fontSize: 14 }}>No cached data for this range yet</div>
           <p className="adm-card-sub" style={{ marginTop: 6 }}>
