@@ -354,7 +354,7 @@ function PartialNote() {
 
 /** KPI cards + metric-switchable trend chart, shared by the network overview and
  *  the per-Page detail. `curRows`/`prevRows` are equal-length day rows. */
-export function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesToday }: { curRows: DayRow[]; prevRows: DayRow[]; prevPostsTotal: number; includesToday: boolean }) {
+export function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesToday, showPosts = true }: { curRows: DayRow[]; prevRows: DayRow[]; prevPostsTotal: number; includesToday: boolean; showPosts?: boolean }) {
   const [metric, setMetric] = useState<Metric>("reach");
   const [comparePrev, setComparePrev] = useState(false);
   const metricInfo = METRICS.find((m) => m.key === metric) ?? METRICS[0];
@@ -363,7 +363,9 @@ export function InsightsDashboard({ curRows, prevRows, prevPostsTotal, includesT
     { label: "Reach", value: sumRows(curRows, "reach"), prev: sumRows(prevRows, "reach"), points: seriesOf(curRows, "reach"), color: "var(--section-accent)" },
     { label: "Engagement", value: sumRows(curRows, "engagement"), prev: sumRows(prevRows, "engagement"), points: seriesOf(curRows, "engagement"), color: "var(--chart-2)" },
     { label: "Net follows", value: sumRows(curRows, "follows"), prev: sumRows(prevRows, "follows"), points: seriesOf(curRows, "follows"), color: "var(--chart-3)", signed: true },
-    { label: "Our posts", value: sumShares(curRows), prev: prevPostsTotal, points: postsSeries(curRows), color: "var(--chart-6)" },
+    // "Our posts" counts shares WE made via the farm — meaningless for watch-only
+    // (Page Control) pages, so it's omitted there rather than shown as a flat 0.
+    ...(showPosts ? [{ label: "Our posts", value: sumShares(curRows), prev: prevPostsTotal, points: postsSeries(curRows), color: "var(--chart-6)" }] : []),
   ];
 
   return (
@@ -509,6 +511,7 @@ export function PageDetail({
   onClose,
   embedded,
   detailApi = API,
+  hideSystemPosts,
 }: {
   page: InsightsPageRow;
   initialRange: Range;
@@ -516,6 +519,7 @@ export function PageDetail({
   onClose?: () => void;
   embedded?: boolean;
   detailApi?: string;
+  hideSystemPosts?: boolean;
 }) {
   const { error } = useToast();
   const [internalRange, setRange] = useState<Range>(initialRange);
@@ -590,23 +594,25 @@ export function PageDetail({
           This Page’s token can’t read insights. Recent posts below still work.
         </p>
       ) : (
-        <InsightsDashboard curRows={curRows} prevRows={prevRows} prevPostsTotal={data.prevPostsTotal} includesToday={includesToday} />
+        <InsightsDashboard curRows={curRows} prevRows={prevRows} prevPostsTotal={data.prevPostsTotal} includesToday={includesToday} showPosts={!hideSystemPosts} />
       )}
 
-      <div style={{ marginTop: 18 }}>
-        <div className="adm-card-title" style={{ fontSize: 14 }}>Top posts via our system</div>
-        {!data || rankedPosts.length === 0 ? (
-          <p className="adm-card-sub" style={{ marginTop: 8 }}>
-            No posts shared to this Page yet. Share an article from the <strong>Share</strong> tab and its stats appear here.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-            {rankedPosts.map((p) => (
-              <PostRow key={p.id} post={p} />
-            ))}
-          </div>
-        )}
-      </div>
+      {!hideSystemPosts && (
+        <div style={{ marginTop: 18 }}>
+          <div className="adm-card-title" style={{ fontSize: 14 }}>Top posts via our system</div>
+          {!data || rankedPosts.length === 0 ? (
+            <p className="adm-card-sub" style={{ marginTop: 8 }}>
+              No posts shared to this Page yet. Share an article from the <strong>Share</strong> tab and its stats appear here.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+              {rankedPosts.map((p) => (
+                <PostRow key={p.id} post={p} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {data && data.status !== "reconnect" && <DayTable rows={curRows} />}
     </div>

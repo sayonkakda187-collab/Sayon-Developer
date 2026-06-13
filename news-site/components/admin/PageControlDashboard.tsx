@@ -178,7 +178,7 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
           <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
         )}
         {tab === "content" && <PageControlContent pageDbId={page.id} />}
-        {tab === "analytics" && <PageDetail page={page} initialRange={range} range={range} embedded detailApi={DETAIL_API} />}
+        {tab === "analytics" && <PageDetail page={page} initialRange={range} range={range} embedded detailApi={DETAIL_API} hideSystemPosts />}
       </div>
     </ToastProvider>
   );
