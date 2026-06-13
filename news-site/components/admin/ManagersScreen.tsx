@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon, SearchIcon, CloseIcon } from "@/components/admin/icons";
+import { useEffect, useMemo, useState } from "react";
+import { PlusIcon, PencilIcon, TrashIcon, SearchIcon, CloseIcon, CopyIcon, RefreshIcon, CheckIcon } from "@/components/admin/icons";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { ManagerDialog } from "@/components/admin/ManagerDialog";
@@ -24,6 +24,7 @@ export function ManagersScreen({
   onUpdate,
   onDelete,
   onAssign,
+  onRegenerateCode,
   onError,
 }: {
   managers: Manager[];
@@ -33,6 +34,7 @@ export function ManagersScreen({
   onUpdate: (id: string, input: { name?: string; photo?: string | null }) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onAssign: (pageId: string, managerId: string | null) => Promise<boolean>;
+  onRegenerateCode: (id: string) => Promise<string | null>;
   onError: (m: string) => void;
 }) {
   const [dialog, setDialog] = useState<{ mode: "add" } | { mode: "edit"; manager: Manager } | null>(null);
@@ -89,6 +91,7 @@ export function ManagersScreen({
                     </button>
                   </div>
                 </div>
+                <LinkCodeStrip manager={m} onRegenerate={onRegenerateCode} onError={onError} />
                 {isOpen && (
                   <ManagerPages manager={m} pages={pages} assignments={assignments} nameById={nameById} onAssign={onAssign} />
                 )}
@@ -122,6 +125,62 @@ export function ManagersScreen({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** The earnings-bot link strip on each manager card: link status (Linked ✓ / Not
+ *  linked), the manager's `/start` code, a Copy button, and a regenerate ("New code")
+ *  button. The admin reads/copies the code to the manager, who DMs it to the bot. */
+function LinkCodeStrip({
+  manager,
+  onRegenerate,
+  onError,
+}: {
+  manager: Manager;
+  onRegenerate: (id: string) => Promise<string | null>;
+  onError: (m: string) => void;
+}) {
+  const [code, setCode] = useState(manager.linkCode ?? "");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Reconcile when the parent re-renders with a fresh code (create / regenerate).
+  useEffect(() => setCode(manager.linkCode ?? ""), [manager.linkCode]);
+
+  async function copy() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      onError("Couldn’t copy — select the code and copy it manually.");
+    }
+  }
+
+  async function regen() {
+    setBusy(true);
+    const next = await onRegenerate(manager.id);
+    setBusy(false);
+    if (next) setCode(next);
+  }
+
+  return (
+    <div className="adm-mgr-link">
+      <span className="adm-mgr-link-label">Earnings bot</span>
+      <span className={`adm-mgr-linkstatus ${manager.linked ? "on" : ""}`}>
+        {manager.linked ? <><CheckIcon className="h-3.5 w-3.5" /> Linked</> : "Not linked"}
+      </span>
+      <code className="adm-mgr-linkcode" title="Earnings-bot link code">{code || "—"}</code>
+      <button type="button" className="adm-mgr-linkbtn" onClick={copy} disabled={!code} aria-label={`Copy ${manager.name}'s link code`}>
+        {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+      <button type="button" className="adm-mgr-linkbtn" onClick={regen} disabled={busy} aria-label={`Regenerate ${manager.name}'s link code`}>
+        {busy ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
+        <span>New code</span>
+      </button>
     </div>
   );
 }

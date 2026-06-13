@@ -7,7 +7,7 @@ import { PageControlList, type MonitoredRow } from "@/components/admin/PageContr
 import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { ManagersScreen, type ManagedPage } from "@/components/admin/ManagersScreen";
 import type { Manager } from "@/components/admin/ManagerAvatar";
-import { createManager, updateManager, deleteManager, assignManager } from "@/app/admin/page-manager-actions";
+import { createManager, updateManager, deleteManager, assignManager, regenerateManagerLinkCode } from "@/app/admin/page-manager-actions";
 
 const byName = (a: Manager, b: Manager) => a.name.localeCompare(b.name);
 
@@ -60,7 +60,7 @@ export function PageControlTabs({
       error(res.error);
       return null;
     }
-    const m: Manager = { id: res.data.id, name: name.trim(), photo: photo ?? null };
+    const m: Manager = { id: res.data.id, name: name.trim(), photo: photo ?? null, linkCode: res.data.linkCode, linked: false };
     setManagers((ms) => [...ms, m].sort(byName));
     success("Manager added.");
     router.refresh();
@@ -104,6 +104,17 @@ export function PageControlTabs({
     return true;
   }
 
+  async function onRegenerateCode(id: string): Promise<string | null> {
+    const res = await regenerateManagerLinkCode(id);
+    if (!res.ok) {
+      error(res.error);
+      return null;
+    }
+    setManagers((ms) => ms.map((m) => (m.id === id ? { ...m, linkCode: res.data.linkCode } : m)));
+    success("New link code generated.");
+    return res.data.linkCode;
+  }
+
   const managedPages: ManagedPage[] = pages.map((p) => ({ id: p.id, name: p.pageName, avatarUrl: p.avatarUrl }));
 
   return (
@@ -137,6 +148,7 @@ export function PageControlTabs({
           onUpdate={onUpdate}
           onDelete={onDelete}
           onAssign={onAssign}
+          onRegenerateCode={onRegenerateCode}
           onError={error}
         />
       )}

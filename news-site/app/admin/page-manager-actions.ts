@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { generateUniqueLinkCode } from "@/lib/earningsLinkCode";
 
 // Page-manager (team member) CRUD + page assignment. Managers are LOCAL app data
 // (name + optional uploaded photo) — never mixed with Facebook tokens. All actions
@@ -14,16 +15,33 @@ function fail(error: string): ActionResult<never> {
   return { ok: false, error };
 }
 
-export async function createManager(input: { name: string; photo?: string | null }): Promise<ActionResult<{ id: string }>> {
+export async function createManager(input: { name: string; photo?: string | null }): Promise<ActionResult<{ id: string; linkCode: string }>> {
   await requireAdmin();
   const name = input.name?.trim();
   if (!name) return fail("A name is required.");
   try {
-    const m = await prisma.pageManager.create({ data: { name, photo: input.photo?.trim() || null } });
+    const linkCode = await generateUniqueLinkCode(name);
+    const m = await prisma.pageManager.create({ data: { name, photo: input.photo?.trim() || null, linkCode } });
     revalidatePath("/admin/page-control");
-    return { ok: true, data: { id: m.id } };
+    return { ok: true, data: { id: m.id, linkCode: m.linkCode } };
   } catch {
     return fail("Couldn’t add the manager.");
+  }
+}
+
+/** Issue a fresh earnings-bot link code for a manager (does NOT unlink an existing
+ *  Telegram chat — the code only matters for the next `/start`). */
+export async function regenerateManagerLinkCode(id: string): Promise<ActionResult<{ linkCode: string }>> {
+  await requireAdmin();
+  try {
+    const existing = await prisma.pageManager.findUnique({ where: { id }, select: { name: true } });
+    if (!existing) return fail("Manager not found.");
+    const linkCode = await generateUniqueLinkCode(existing.name);
+    await prisma.pageManager.update({ where: { id }, data: { linkCode } });
+    revalidatePath("/admin/page-control");
+    return { ok: true, data: { linkCode } };
+  } catch {
+    return fail("Couldn’t regenerate the link code.");
   }
 }
 
