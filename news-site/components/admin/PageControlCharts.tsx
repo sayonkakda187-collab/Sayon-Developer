@@ -331,3 +331,163 @@ export function AnimatedGauge({ value, max, label, sub, suffix = "" }: { value: 
     </div>
   );
 }
+
+export type PostsBar = { date: string; video: number; image: number };
+
+/**
+ * Posts-per-day stacked bars (video on the bottom, image stacked above) that scale to
+ * the container width — each day's bar grows up from the baseline once on reveal, with
+ * a tap/hover tooltip showing the date + the video/image split. Zero-filled empty days
+ * keep the range continuous. Reduced-motion → final state instantly.
+ */
+export function AnimatedStackedBars({
+  data,
+  videoColor = "#2563eb",
+  imageColor = "#ea580c",
+  height = 116,
+}: {
+  data: PostsBar[];
+  videoColor?: string;
+  imageColor?: string;
+  height?: number;
+}) {
+  const reduced = useReducedMotion();
+  const [ref, inView] = useRevealOnce<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+
+  const n = data.length;
+  const hasPosts = data.some((d) => d.video + d.image > 0);
+  if (n === 0 || !hasPosts) {
+    return (
+      <div ref={ref}>
+        <p className="adm-fb-sub" style={{ marginTop: 8 }}>No posts in this range yet.</p>
+      </div>
+    );
+  }
+
+  const W = 600;
+  const H = height;
+  const padTop = 8;
+  const padBot = 4;
+  const usableH = H - padTop - padBot;
+  const max = Math.max(1, ...data.map((d) => d.video + d.image));
+  const groupW = W / n;
+  const barW = Math.max(2, Math.min(groupW * 0.72, 26));
+  const scale = (v: number) => (v / max) * usableH;
+  const draw = reduced || inView;
+
+  function pick(clientX: number, el: HTMLElement) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const rel = (clientX - rect.left) / rect.width;
+    setHover(Math.max(0, Math.min(n - 1, Math.floor(rel * n))));
+  }
+
+  const hd = hover != null ? data[hover] : null;
+  const hoverLeftPct = hover != null ? (((hover + 0.5) * groupW) / W) * 100 : 0;
+
+  return (
+    <div
+      ref={ref}
+      className="adm-pc-chart"
+      onMouseMove={(e) => pick(e.clientX, e.currentTarget)}
+      onMouseLeave={() => setHover(null)}
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        pick(e.touches[0].clientX, e.currentTarget);
+      }}
+      onTouchMove={(e) => {
+        e.stopPropagation();
+        pick(e.touches[0].clientX, e.currentTarget);
+      }}
+      onTouchEnd={() => setHover(null)}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }} aria-hidden>
+        <line x1={0} y1={H - padBot} x2={W} y2={H - padBot} stroke="var(--adm-bd)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {data.map((d, i) => {
+          const x = i * groupW + (groupW - barW) / 2;
+          const vH = scale(d.video);
+          const iH = scale(d.image);
+          const vy = H - padBot - vH;
+          const iy = vy - iH;
+          const dim = hover != null && hover !== i;
+          return (
+            <g
+              key={d.date}
+              style={{
+                transformBox: "fill-box",
+                transformOrigin: "bottom",
+                transform: draw ? "scaleY(1)" : "scaleY(0)",
+                transition: reduced ? "none" : `transform 480ms ease-out ${Math.min(i * 10, 220)}ms`,
+                opacity: dim ? 0.5 : 1,
+              }}
+            >
+              {d.video > 0 && <rect x={x} y={vy} width={barW} height={vH} fill={videoColor} rx={1.5} />}
+              {d.image > 0 && <rect x={x} y={iy} width={barW} height={iH} fill={imageColor} rx={1.5} />}
+            </g>
+          );
+        })}
+      </svg>
+
+      {hd && (
+        <div className="adm-pc-chart-tip" style={{ left: `${hoverLeftPct}%` }}>
+          <span className="adm-pc-chart-tip-v">{hd.video + hd.image} post{hd.video + hd.image === 1 ? "" : "s"}</span>
+          <span className="adm-pc-chart-tip-d">{formatDay(hd.date)} · 🎥 {hd.video} · 🖼 {hd.image}</span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <span className="adm-fb-sub" style={{ fontSize: 10.5 }}>{formatDay(data[0].date)}</span>
+        <span className="adm-fb-sub" style={{ fontSize: 10.5 }}>{formatDay(data[n - 1].date)}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact video-vs-image ratio as a single horizontal stacked bar with % labels +
+ * a count legend. Each segment grows from 0 to its share once on reveal (reduced-
+ * motion → instant). "No posts" when the range is empty.
+ */
+export function TypeMixBar({
+  video,
+  image,
+  videoColor = "#2563eb",
+  imageColor = "#ea580c",
+}: {
+  video: number;
+  image: number;
+  videoColor?: string;
+  imageColor?: string;
+}) {
+  const reduced = useReducedMotion();
+  const [ref, inView] = useRevealOnce<HTMLDivElement>();
+  const total = video + image;
+  if (total === 0) {
+    return (
+      <div ref={ref}>
+        <p className="adm-fb-sub" style={{ marginTop: 8 }}>No posts in this range yet.</p>
+      </div>
+    );
+  }
+  const pV = Math.round((video / total) * 100);
+  const pI = 100 - pV;
+  const grow = reduced || inView;
+
+  return (
+    <div ref={ref}>
+      <div className="adm-pc-mixbar" role="img" aria-label={`Video ${pV}%, image ${pI}%`}>
+        <span className="adm-pc-mixseg" style={{ width: grow ? `${pV}%` : "0%", background: videoColor, transition: reduced ? "none" : "width 600ms ease-out" }}>
+          {pV >= 12 ? `${pV}%` : ""}
+        </span>
+        <span className="adm-pc-mixseg" style={{ width: grow ? `${pI}%` : "0%", background: imageColor, transition: reduced ? "none" : "width 600ms ease-out 80ms" }}>
+          {pI >= 12 ? `${pI}%` : ""}
+        </span>
+      </div>
+      <div className="adm-pc-mixlegend">
+        <span><i style={{ background: videoColor }} />🎥 Video {video} · {pV}%</span>
+        <span><i style={{ background: imageColor }} />🖼 Image {image} · {pI}%</span>
+      </div>
+    </div>
+  );
+}
