@@ -365,6 +365,7 @@ model MonitoredPage {
   postsCache MonitoredPagePostsCache?
   dailyCache MonitoredPageDailyCache[]
   rangePostsCache MonitoredPageRangePostsCache[]
+  earnings   PageEarning[]
 
   @@index([status])
   @@index([managerId])
@@ -378,10 +379,37 @@ model PageManager {
   id        String   @id @default(cuid())
   name      String
   photo     String?
+  // Earnings Telegram bot: `linkCode` is the short human code the admin hands to the
+  // manager, who DMs the bot `/start <linkCode>` to link their chat. `telegramChatId`
+  // is null until linked (then unique → one Telegram chat per manager).
+  linkCode       String  @unique
+  telegramChatId String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  pages MonitoredPage[]
+  pages    MonitoredPage[]
+  earnings PageEarning[]
+}
+
+// Daily per-page EARNINGS — LOCAL app data entered by the page's manager via the
+// earnings Telegram bot (Facebook has no earnings API). One row per (page, Phnom-Penh
+// day); re-entering a day overwrites (upsert on @@unique). `date` is a PP "YYYY-MM-DD"
+// (same day convention as the insight caches). `amount` is in `currency` (default USD).
+model PageEarning {
+  id                 String        @id @default(cuid())
+  monitoredPageId    String
+  monitoredPage      MonitoredPage @relation(fields: [monitoredPageId], references: [id], onDelete: Cascade)
+  date               String // Phnom-Penh day "YYYY-MM-DD"
+  amount             Decimal       @db.Decimal(12, 2)
+  currency           String        @default("USD")
+  enteredByManagerId String?
+  enteredByManager   PageManager?  @relation(fields: [enteredByManagerId], references: [id], onDelete: SetNull)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([monitoredPageId, date])
+  @@index([date])
+  @@index([enteredByManagerId])
 }
 
 // Per-(monitored page, date-range) cache of the page's REAL published-post counts

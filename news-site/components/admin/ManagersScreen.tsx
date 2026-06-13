@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon, SearchIcon, CloseIcon } from "@/components/admin/icons";
+import { useEffect, useMemo, useState } from "react";
+import { PlusIcon, PencilIcon, TrashIcon, SearchIcon, CloseIcon, CopyIcon, RefreshIcon, CheckIcon } from "@/components/admin/icons";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { ManagerDialog } from "@/components/admin/ManagerDialog";
@@ -24,6 +24,7 @@ export function ManagersScreen({
   onUpdate,
   onDelete,
   onAssign,
+  onRegenerateCode,
   onError,
 }: {
   managers: Manager[];
@@ -33,6 +34,7 @@ export function ManagersScreen({
   onUpdate: (id: string, input: { name?: string; photo?: string | null }) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onAssign: (pageId: string, managerId: string | null) => Promise<boolean>;
+  onRegenerateCode: (id: string) => Promise<string | null>;
   onError: (m: string) => void;
 }) {
   const [dialog, setDialog] = useState<{ mode: "add" } | { mode: "edit"; manager: Manager } | null>(null);
@@ -50,6 +52,8 @@ export function ManagersScreen({
           <PlusIcon className="h-4 w-4" /> Add manager
         </button>
       </div>
+
+      <EarningsBotSetup />
 
       {managers.length === 0 ? (
         <div className="adm-card adm-card-pad" style={{ textAlign: "center", padding: "28px 18px", marginTop: 10 }}>
@@ -89,6 +93,7 @@ export function ManagersScreen({
                     </button>
                   </div>
                 </div>
+                <LinkCodeStrip manager={m} onRegenerate={onRegenerateCode} onError={onError} />
                 {isOpen && (
                   <ManagerPages manager={m} pages={pages} assignments={assignments} nameById={nameById} onAssign={onAssign} />
                 )}
@@ -122,6 +127,157 @@ export function ManagersScreen({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** One-click earnings-bot status/setup banner atop the Managers tab. Reads
+ *  GET /api/admin/earnings-bot (token configured? current Telegram webhook) and POSTs
+ *  to register THIS deployment's webhook — the bot token never touches the client. */
+function EarningsBotSetup() {
+  const [loading, setLoading] = useState(true);
+  const [configured, setConfigured] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const here = typeof window !== "undefined" ? `${window.location.origin}/api/earnings-bot` : "";
+
+  async function load() {
+    try {
+      const res = await fetch("/api/admin/earnings-bot", { cache: "no-store" });
+      const j = await res.json();
+      if (!j.ok) {
+        setConfigured(false);
+        setMsg(j.error || "Couldn’t check the bot.");
+        return;
+      }
+      setConfigured(!!j.configured);
+      const info = (j.info ?? null) as { url?: string; last_error_message?: string } | null;
+      setUrl(info?.url || null);
+      setLastError(info?.last_error_message || null);
+      setMsg(null);
+    } catch {
+      setConfigured(false);
+      setMsg("Couldn’t reach the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function setup() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/earnings-bot", { method: "POST" });
+      const j = await res.json();
+      if (j.ok) {
+        await load();
+        setMsg("Webhook connected to this site. Managers can DM the bot now.");
+      } else {
+        setMsg(j.error || j.description || "Couldn’t set the webhook.");
+      }
+    } catch {
+      setMsg("Couldn’t set the webhook.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const connectedHere = !!url && url === here;
+
+  return (
+    <div className="adm-card adm-botsetup">
+      <span className="adm-botsetup-icon" aria-hidden>🤖</span>
+      <div className="adm-botsetup-meta">
+        <div className="adm-botsetup-title">Earnings Telegram bot</div>
+        <div className="adm-botsetup-sub">
+          {loading
+            ? "Checking…"
+            : !configured
+              ? "Add EARNINGS_TELEGRAM_BOT_TOKEN in Vercel and redeploy to enable the bot."
+              : connectedHere
+                ? "Connected — managers can DM the bot to enter their earnings."
+                : url
+                  ? "The bot is linked to a different URL. Re-link it to this site to use it here."
+                  : "Not connected yet — tap Set up to register the webhook for this site."}
+        </div>
+        {lastError && <div className="adm-botsetup-err">Telegram: {lastError}</div>}
+        {msg && <div className="adm-botsetup-sub">{msg}</div>}
+      </div>
+      <div className="adm-botsetup-actions">
+        {connectedHere && (
+          <span className="adm-botsetup-ok">
+            <CheckIcon className="h-3.5 w-3.5" /> Connected
+          </span>
+        )}
+        {configured && (
+          <button type="button" className={connectedHere ? "adm-btn-ghost" : "adm-btn-primary"} onClick={setup} disabled={busy}>
+            {busy && <span className="adm-spinner" aria-hidden />}
+            {connectedHere ? "Re-link" : "Set up bot"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The earnings-bot link strip on each manager card: link status (Linked ✓ / Not
+ *  linked), the manager's `/start` code, a Copy button, and a regenerate ("New code")
+ *  button. The admin reads/copies the code to the manager, who DMs it to the bot. */
+function LinkCodeStrip({
+  manager,
+  onRegenerate,
+  onError,
+}: {
+  manager: Manager;
+  onRegenerate: (id: string) => Promise<string | null>;
+  onError: (m: string) => void;
+}) {
+  const [code, setCode] = useState(manager.linkCode ?? "");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Reconcile when the parent re-renders with a fresh code (create / regenerate).
+  useEffect(() => setCode(manager.linkCode ?? ""), [manager.linkCode]);
+
+  async function copy() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      onError("Couldn’t copy — select the code and copy it manually.");
+    }
+  }
+
+  async function regen() {
+    setBusy(true);
+    const next = await onRegenerate(manager.id);
+    setBusy(false);
+    if (next) setCode(next);
+  }
+
+  return (
+    <div className="adm-mgr-link">
+      <span className="adm-mgr-link-label">Earnings bot</span>
+      <span className={`adm-mgr-linkstatus ${manager.linked ? "on" : ""}`}>
+        {manager.linked ? <><CheckIcon className="h-3.5 w-3.5" /> Linked</> : "Not linked"}
+      </span>
+      <code className="adm-mgr-linkcode" title="Earnings-bot link code">{code || "—"}</code>
+      <button type="button" className="adm-mgr-linkbtn" onClick={copy} disabled={!code} aria-label={`Copy ${manager.name}'s link code`}>
+        {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+      <button type="button" className="adm-mgr-linkbtn" onClick={regen} disabled={busy} aria-label={`Regenerate ${manager.name}'s link code`}>
+        {busy ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
+        <span>New code</span>
+      </button>
     </div>
   );
 }

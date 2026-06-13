@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
-import { previousPeriod, rangeKey } from "@/lib/fbInsightsRange";
+import { previousPeriod, rangeKey, eachDate } from "@/lib/fbInsightsRange";
 import type { DayPoint } from "@/lib/facebookInsights";
 import type { PagePost } from "@/lib/facebook";
 
@@ -17,7 +17,7 @@ import type { PagePost } from "@/lib/facebook";
  */
 
 const ROLLUP_TTL_MS = 60 * 60 * 1000; // 1h
-const ROLLUP_PREFIX = "pc_network_rollup_";
+const ROLLUP_PREFIX = "pc_network_rollup_v2_"; // v2: + earnings totals/series
 
 export type NetTotals = {
   reach: number | null;
@@ -26,6 +26,8 @@ export type NetTotals = {
   engagementPrev: number | null;
   followers: number | null;
   totalPosts: number | null;
+  earnings: number | null;
+  earningsPrev: number | null;
 };
 export type LeaderRow = { id: string; pageId: string; name: string; avatarUrl: string | null; reach: number; engagement: number; sparkReach: number[] };
 export type NetPost = PagePost & { pageDbId: string; pageName: string; avatarUrl: string | null };
@@ -40,6 +42,7 @@ export type NetworkRollup = {
   risers: MoverRow[];
   fallers: MoverRow[];
   health: { growing: number; flat: number; shrinking: number };
+  earningsDays: number[]; // per-day earnings sums across the (filtered) pages, for the KPI sparkline
 };
 
 function numOrNull(v: unknown): number | null {
@@ -194,9 +197,29 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
   }
   allPosts.sort((a, b) => engagementOf(b) - engagementOf(a) || (b.reach ?? 0) - (a.reach ?? 0));
 
+  // Earnings (manager-entered, LOCAL) for the filtered pages — current + previous period
+  // in one query, plus a per-day series for the KPI sparkline. No Graph.
+  const pageIds = pages.map((p) => p.id);
+  const earnRows = pageIds.length
+    ? await prisma.pageEarning.findMany({ where: { monitoredPageId: { in: pageIds }, date: { gte: prev.from, lte: range.to } }, select: { date: true, amount: true } })
+    : [];
+  let earnings: number | null = null;
+  let earningsPrev: number | null = null;
+  const earnByDate = new Map<string, number>();
+  for (const e of earnRows) {
+    const amt = Number(e.amount);
+    if (e.date >= range.from && e.date <= range.to) {
+      earnings = (earnings ?? 0) + amt;
+      earnByDate.set(e.date, (earnByDate.get(e.date) ?? 0) + amt);
+    } else if (e.date >= prev.from && e.date <= prev.to) {
+      earningsPrev = (earningsPrev ?? 0) + amt;
+    }
+  }
+  const earningsDays = eachDate(range.from, range.to).map((d) => earnByDate.get(d) ?? 0);
+
   const rollup: NetworkRollup = {
     coverage: { withData, total: pages.length },
-    totals: { reach: netReach, reachPrev: netReachPrev, engagement: netEng, engagementPrev: netEngPrev, followers, totalPosts },
+    totals: { reach: netReach, reachPrev: netReachPrev, engagement: netEng, engagementPrev: netEngPrev, followers, totalPosts, earnings, earningsPrev },
     trendDays: sumToDays(curSum),
     trendDaysPrev: sumToDays(prevSum),
     leaderboard: leaderboard.slice(0, 15),
@@ -204,6 +227,7 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
     risers,
     fallers,
     health: { growing, flat, shrinking },
+    earningsDays,
   };
 
   await prisma.appSetting

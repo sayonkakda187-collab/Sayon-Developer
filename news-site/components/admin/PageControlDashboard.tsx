@@ -7,8 +7,9 @@ import { ToastProvider, useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ExternalLinkIcon, RefreshIcon, TrashIcon } from "@/components/admin/icons";
 import { formatNumber } from "@/lib/site";
-import { presetRange } from "@/lib/fbInsightsRange";
+import { presetRange, formatRange, eachDate } from "@/lib/fbInsightsRange";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
+import { AnimatedAreaChart } from "@/components/admin/PageControlCharts";
 import { MonitoredDashboard } from "@/components/admin/MonitoredDashboard";
 import { PageControlSummary } from "@/components/admin/PageControlSummary";
 import { PageControlContent } from "@/components/admin/PageControlContent";
@@ -81,6 +82,59 @@ function initialRange(): Range {
     // fall through to default
   }
   return fallback;
+}
+
+type DailyEarning = { date: string; amount: number };
+
+/** Full per-day earnings series (0 for days with no entry). */
+function earnSeries(from: string, to: string, daily: DailyEarning[]): { date: string; value: number }[] {
+  const m = new Map(daily.map((e) => [e.date, e.amount]));
+  return eachDate(from, to).map((d) => ({ date: d, value: m.get(d) ?? 0 }));
+}
+
+/** Page-detail earnings: the page's manager-entered daily earnings over the shared
+ *  range (same row-charts endpoint) — a total + a small area chart. */
+function PageEarningsCard({ pageDbId, range }: { pageDbId: string; range: Range }) {
+  const [state, setState] = useState<{ daily: DailyEarning[] } | "loading" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setState("loading");
+    fetch(`/api/admin/page-control/row-charts?id=${encodeURIComponent(pageDbId)}&from=${range.from}&to=${range.to}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        setState(j.ok ? { daily: (j.earningsDaily ?? []) as DailyEarning[] } : "error");
+      })
+      .catch(() => !cancelled && setState("error"));
+    return () => {
+      cancelled = true;
+    };
+  }, [pageDbId, range.from, range.to]);
+
+  return (
+    <section className="adm-card adm-card-pad" style={{ marginTop: 14 }}>
+      <div className="adm-card-title" style={{ fontSize: 14 }}>Daily earnings</div>
+      <div className="adm-fb-sub" style={{ marginTop: 1 }}>Manager-entered · {formatRange(range.from, range.to)}</div>
+      {state === "loading" ? (
+        <div className="adm-pc-skel" style={{ height: 120, marginTop: 12, borderRadius: 12 }} />
+      ) : state === "error" ? (
+        <p className="adm-card-sub" style={{ marginTop: 10 }}>Couldn’t load earnings — try again.</p>
+      ) : state.daily.length === 0 ? (
+        <p className="adm-card-sub" style={{ marginTop: 10 }}>No earnings entered for this range yet. The page’s manager adds them via the Telegram bot.</p>
+      ) : (
+        <>
+          <div style={{ fontWeight: 800, fontSize: 22, color: "var(--section-link)", marginTop: 8, fontVariantNumeric: "tabular-nums" }}>
+            ${state.daily.reduce((s, e) => s + e.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span className="adm-fb-sub" style={{ fontSize: 12, fontWeight: 600, marginLeft: 8 }}>total</span>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <AnimatedAreaChart current={earnSeries(range.from, range.to, state.daily)} color="var(--section-accent)" formatValue={(v) => `$${v.toFixed(2)}`} />
+          </div>
+        </>
+      )}
+    </section>
+  );
 }
 
 /**
@@ -176,7 +230,10 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
 
       <div className="adm-pc-panel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {tab === "summary" && (
-          <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
+          <>
+            <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
+            <PageEarningsCard pageDbId={page.id} range={range} />
+          </>
         )}
         {tab === "content" && <PageControlContent pageDbId={page.id} />}
         {tab === "analytics" && <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} showDayTable />}

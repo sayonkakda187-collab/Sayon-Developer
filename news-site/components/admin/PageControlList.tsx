@@ -15,7 +15,7 @@ import { PageControlConnectModal } from "@/components/admin/PageControlConnectMo
 import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
-import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
+import { presetRange, rangeKey, formatRange, ppToday, eachDate } from "@/lib/fbInsightsRange";
 
 const PER_PAGE = 24;
 const STATS_API = "/api/admin/page-control/stats";
@@ -58,6 +58,7 @@ type RowStatsData = {
   sparkReach: number[];
   sparkEngagement: number[];
   rangePosts: RangePosts;
+  earnings: number | null; // manager-entered earnings summed over the range (null → none)
   status: "ok" | "reconnect";
 };
 type StatEntry = RowStatsData | "loading" | "error";
@@ -118,6 +119,16 @@ function PostsPill({ rp }: { rp: RangePosts }) {
   );
 }
 
+/** Manager-entered earnings summed over the selected range ("$8.50"); "—" when none. */
+function EarningsPill({ amount }: { amount: number | null }) {
+  return (
+    <span className="adm-pc-stat adm-pc-stat-earn">
+      <span className="adm-pc-stat-k">Earnings</span>
+      <span className="adm-pc-stat-v">{amount == null ? "—" : `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+    </span>
+  );
+}
+
 /** The selected-range quick-stat pills under a row: shimmer while loading, "—" when
  *  a page has no insights / token can't read them, else Reach · Engaged · Follows + Δ%. */
 function RowStats({ entry }: { entry: StatEntry | undefined }) {
@@ -146,6 +157,7 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
         <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
         <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
         <StatPill label="Follows" value={entry.follows} prev={entry.followsPrev} />
+        <EarningsPill amount={entry.earnings} />
       </div>
       <span className="adm-pc-sparkwrap">
         <AnimatedSparkline values={spark} color="var(--section-accent)" width={92} height={28} />
@@ -408,9 +420,16 @@ type RowChartsResp = {
   reach: { date: string; value: number }[];
   posts: { date: string; video: number; image: number }[];
   typeMix: { video: number; image: number };
+  earningsDaily: { date: string; amount: number }[];
   capped: boolean;
   status: "ok" | "reconnect";
 };
+
+/** Expand sparse daily earnings into a full per-day series (0 for days with no entry). */
+function fillDaily(from: string, to: string, entries: { date: string; amount: number }[]): { date: string; value: number }[] {
+  const m = new Map(entries.map((e) => [e.date, e.amount]));
+  return eachDate(from, to).map((d) => ({ date: d, value: m.get(d) ?? 0 }));
+}
 
 /**
  * The inline panel under an expanded row: three charts (reach trend, posts/day
@@ -497,6 +516,14 @@ function ExpandedRowCharts({
           <section className="adm-pc-expand-sec">
             <div className="adm-pc-expand-h">Type mix</div>
             <TypeMixBar video={state.typeMix.video} image={state.typeMix.image} />
+          </section>
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Daily earnings</div>
+            {(state.earningsDaily?.length ?? 0) > 0 ? (
+              <AnimatedAreaChart current={fillDaily(from, to, state.earningsDaily)} color="var(--section-accent)" formatValue={(v) => `$${v.toFixed(2)}`} />
+            ) : (
+              <p className="adm-card-sub" style={{ margin: "6px 2px" }}>No earnings entered for this range yet.</p>
+            )}
           </section>
         </div>
       )}

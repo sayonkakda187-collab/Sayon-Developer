@@ -28,7 +28,7 @@ export default async function PageControlPage() {
     managerId: p.managerId,
   }));
 
-  const managers: Manager[] = managerRecords.map((m) => ({ id: m.id, name: m.name, photo: m.photo }));
+  const managers: Manager[] = managerRecords.map((m) => ({ id: m.id, name: m.name, photo: m.photo, linkCode: m.linkCode, linked: m.telegramChatId != null }));
 
   return (
     <div>

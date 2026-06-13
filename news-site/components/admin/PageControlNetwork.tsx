@@ -74,15 +74,20 @@ function engagementOf(p: NetPost): number {
   return (p.reactions ?? 0) + (p.comments ?? 0) + (p.shares ?? 0);
 }
 
+/** Money like "$1,234.50" for the earnings KPI. */
+function fmtMoney(n: number): string {
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /** KPI card: count-up number + %-change + sparkline (snapshot ones skip the delta). */
-function Kpi({ label, value, prev, values, color, snapshot }: { label: string; value: number | null; prev: number | null; values: number[]; color: string; snapshot?: boolean }) {
+function Kpi({ label, value, prev, values, color, snapshot, format = formatNumber }: { label: string; value: number | null; prev: number | null; values: number[]; color: string; snapshot?: boolean; format?: (n: number) => string }) {
   const d = snapshot ? null : delta(value, prev);
   const dirColor = d == null || d.cls === "flat" ? "var(--adm-muted, #94a3b8)" : d.cls === "up" ? "#15803d" : "#b91c1c";
   return (
     <div className="adm-pc-kpi">
       <div className="adm-fb-sub" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontWeight: 800, fontSize: 22, color: "var(--adm-ink)", fontVariantNumeric: "tabular-nums", marginTop: 2 }}>
-        {value == null ? "—" : <CountUp value={value} format={formatNumber} />}
+        {value == null ? "—" : <CountUp value={value} format={format} />}
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginTop: 1, minHeight: 16 }}>
         {!snapshot && <><span style={{ color: dirColor, fontWeight: 700, fontSize: 12 }}>{d == null ? "—" : d.txt}</span><span className="adm-fb-sub" style={{ fontSize: 10.5 }}>vs prev</span></>}
@@ -372,6 +377,7 @@ export function PageControlNetwork() {
         <>
           {/* 1) Network totals */}
           <div className="adm-pc-kpis">
+            <Kpi label="Total earnings" value={t!.earnings} prev={t!.earningsPrev} values={t!.earnings != null ? data.earningsDays : []} color="var(--section-accent)" format={fmtMoney} />
             <Kpi label="Reach" value={t!.reach} prev={t!.reachPrev} values={seriesValues(data.trendDays, "reach")} color="var(--section-accent)" />
             <Kpi label="Engagement" value={t!.engagement} prev={t!.engagementPrev} values={seriesValues(data.trendDays, "engagement")} color="var(--chart-2)" />
             <Kpi label="Followers" value={t!.followers} prev={null} values={[]} color="var(--chart-3)" snapshot />

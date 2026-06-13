@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { avatarColor } from "@/components/admin/FacebookPageAvatar";
 
-/** A page manager / team member — LOCAL app data (a name + optional uploaded photo). */
-export type Manager = { id: string; name: string; photo: string | null };
+/** A page manager / team member — LOCAL app data (a name + optional uploaded photo).
+ *  `linkCode` / `linked` are populated on the Managers tab (earnings-bot link state). */
+export type Manager = { id: string; name: string; photo: string | null; linkCode?: string; linked?: boolean };
 
 /**
  * Small round avatar for a page manager (team member). Mirrors FacebookPageAvatar's
