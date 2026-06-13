@@ -1228,9 +1228,21 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   prev-28d). Endpoints: `/posts` (`lib/pageControlPosts.ts`), `/insights`
   (`?detail=&from=&to=&refresh=1`), `/stats` (`POST {ids}`, batched, `mapLimit` 6). All
   reuse the shared self-healing Graph client.
+- **"Total posts" gauge** (Summary): an animated semicircular gauge (reuses the
+  dashboard `.adm-gauge` StatGauge style + emerald accent + the #132 `AnimatedGauge`/
+  IntersectionObserver/`CountUp` reveal — arc sweeps + number counts up once in view,
+  reduced-motion → instant) showing a page's all-time published-post count. **Counting
+  method** (`lib/facebook.ts` `getPageTotalPosts`): Graph v25.0 has NO post-count field,
+  so it first asks `summary=total_count` on `/{page}/published_posts` (EXACT count in one
+  call when the edge returns it); otherwise it cursor-paginates `fields=id` (100/page) up
+  to a **12-page cap (~1200)** and labels the result **"N+"** (`capped`). Fetched lazily
+  (only the opened page) via `/api/admin/page-control/total-posts`, cached **~24h** on the
+  `MonitoredPage` row (`getMonitoredTotalPosts`). Graceful loading / unavailable /
+  needs-reconnect states.
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
-  (`20260613050000_monitored_page_daily_cache`), all auto-apply. **No new env** (App
+  (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`
+  (`20260613060000_monitored_page_total_posts`), all auto-apply. **No new env** (App
   creds can reuse `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab).
   Read-only.
 

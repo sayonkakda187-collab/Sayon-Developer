@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { MonitoredDashboard } from "@/components/admin/MonitoredDashboard";
 import { PagePostCard } from "@/components/admin/PageControlContent";
+import { TotalPostsGauge } from "@/components/admin/TotalPostsGauge";
 import type { PagePost } from "@/lib/facebook";
 
 // Page Control's OWN endpoints (MonitoredPage store), independent from the farm.
@@ -44,6 +45,9 @@ export function PageControlSummary({
 
   return (
     <div>
+      {/* All-time post count gauge */}
+      <TotalPostsGauge pageDbId={page.id} />
+
       {/* Animated KPI cards + mini trend chart */}
       <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} />
 
