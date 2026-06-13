@@ -1254,12 +1254,27 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   (only the opened page) via `/api/admin/page-control/total-posts`, cached **~24h** on the
   `MonitoredPage` row (`getMonitoredTotalPosts`). Graceful loading / unavailable /
   needs-reconnect states.
+- **Two-box layout + Network dashboard.** The list route (`page-control/page.tsx`) puts the
+  EXISTING `PageControlList` (left, **unchanged**) and a new **`PageControlNetwork`** (right)
+  in a 45/55 grid that **stacks on mobile** (list on top). Each box has its **own** range
+  chips (the list keeps its own; the dashboard has its own). The dashboard aggregates the
+  whole set from **EXISTING per-page caches only** (`MonitoredPageDailyCache` +
+  `MonitoredPage.followers/.totalPosts` + `MonitoredPagePostsCache`) — **no Graph calls,
+  never bulk-fetches** — via `lib/pageControlNetwork.ts` `getNetworkRollup`, cached **~1h
+  per range** in `AppSetting` (`pc_network_rollup_<rangeKey>`); coverage is reported as
+  "N of M pages" (pages without a cached daily series for the range are excluded). Endpoint
+  `app/api/admin/page-control/network` (`?from=&to=&refresh=1`). Sections: **totals** (Reach/
+  Engagement %-change + sparkline, Followers/Total-posts snapshots), **trend** (reuses
+  `AnimatedAreaChart`), **top-pages leaderboard** (Reach/Engagement toggle, tap → page
+  dashboard), **top posts network-wide** (from cached posts), **risers & fallers** (reach
+  %-change), **page-health split** (growing/flat/shrinking followers). Reuses the #132/#134
+  animated chart primitives (count-up + draw-in, once on scroll-in, reduced-motion safe).
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
   (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`
-  (`20260613060000_monitored_page_total_posts`), all auto-apply. **No new env** (App
-  creds can reuse `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab).
-  Read-only.
+  (`20260613060000_monitored_page_total_posts`), all auto-apply. The network rollup reuses
+  `AppSetting` (no new table). **No new env** (App creds can reuse
+  `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab). Read-only.
 
 ## Roadmap
 
