@@ -1200,18 +1200,24 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   watch-only replacement); `post_clicks`; and an exact **range post-count** KPI (no
   cheap metric — the Content tab shows the actual posts instead).
 - **Landing** (`PageControlList`): shows **ONLY** `MonitoredPage`s (searchable, avatar'd,
-  paginated). Each row carries an all-time **Posts** pill (emerald, tiny count-up,
-  `getMonitoredTotalPosts` cached ~24h, "N+" when capped) + **28-day quick stats** —
-  Reach · Engaged · Follows with a small **Δ% vs the previous 28d** ("—" when absent) +
-  a sparkline. All come from **one batched call per page** (`POST
-  /api/admin/page-control/stats` returns stats + `totalPosts`), fetched **lazily in small
-  batches** with a **per-row shimmer** (stats cached ~6h, the count ~24h); never a bulk
-  hammer. **Empty state** = a "Connect your first page" CTA. Live data loads **only on
-  open** (lazy; the set is small/hand-picked). **Search** is the admin **header** bar: on
-  the `/admin/page-control` list route ONLY, `AdminShell` swaps the global "Search articles…"
-  `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") feeding a shared store
-  (`pageControlSearchStore`) the list filters by (debounced, case-insensitive, by name) —
-  exactly ONE page-search input, in the header; every other admin route keeps the article search.
+  paginated). A **range control at the top** (`RangeControl` — Today/Yesterday/7d/28d
+  (default)/90d/Custom, Phnom Penh, chips scroll on mobile, remembered in `sessionStorage`
+  under `pageControl.listRange`) drives each row's stats for the selected range. Each row
+  carries an all-time **Posts** pill (emerald, tiny count-up, `getMonitoredTotalPosts`
+  cached ~24h, "N+" when capped) + **quick stats** — Reach · Engaged · Follows with a small
+  **Δ% vs the equal-length previous period** ("—" when absent) — plus a **Reach sparkline**
+  (Engagement fallback). All come from **one batched call per page** (`POST
+  /api/admin/page-control/stats` with `{ids, from, to}` → stats + `totalPosts`), fetched
+  **lazily in small batches** with a **per-row shimmer**; stats cached **per (page + range)**
+  (`MonitoredPageDailyCache`, keyed by rangeKey, ~6h) + the count ~24h, so switching range
+  refetches only not-yet-seen combos (client `statsMap`/`requestedRef` keyed `${rangeKey}|${id}`)
+  and switching back is instant — never a bulk hammer. **Empty state** = a "Connect your
+  first page" CTA. Live data loads **only on open** (lazy). **Search** is the admin
+  **header** bar: on the `/admin/page-control` list route ONLY, `AdminShell` swaps the global
+  "Search articles…" `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") feeding a
+  shared store (`pageControlSearchStore`) the list filters by (debounced, case-insensitive,
+  by name) — exactly ONE page-search input, in the header; every other admin route keeps the
+  article search.
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three
@@ -1230,9 +1236,11 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
     **day-by-day table**.
 - **Data layer + caches** (keyed by monitored-page id, session-gated, `maxDuration = 60`):
   `lib/pageControlInsights.ts` `getMonitoredDaily` caches the day-by-day series in
-  **`MonitoredPageDailyCache`** (~6h today-inclusive / 24h historical) and powers both the
-  dashboard trends AND `getMonitoredRowStats` (one cached 56-day window → last-28d vs
-  prev-28d). Endpoints: `/posts` (`lib/pageControlPosts.ts`), `/insights`
+  **`MonitoredPageDailyCache`** (~6h today-inclusive / 24h historical, keyed per
+  page+range) and powers both the dashboard trends AND `getMonitoredRowStats(page, range)`
+  (the list rows — one cached prev-start..to window → the selected range vs the
+  equal-length previous period + the range's sparkline series). Endpoints: `/posts`
+  (`lib/pageControlPosts.ts`), `/insights`
   (`?detail=&from=&to=&refresh=1`), `/stats` (`POST {ids}`, batched, `mapLimit` 6). All
   reuse the shared self-healing Graph client.
 - **"Total posts" gauge** (Summary): an animated semicircular gauge (reuses the
