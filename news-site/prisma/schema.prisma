@@ -342,3 +342,40 @@ model ScheduledPost {
   @@index([articleId])
   @@index([facebookPageId])
 }
+
+// ── Page Control (INDEPENDENT watch-only monitoring) ─────────────────────────
+// A SEPARATE set of Facebook Pages, hand-picked in the Page Control admin tab via
+// its OWN connect flow (possibly a DIFFERENT Facebook account than the posting
+// "farm"). Completely independent from FacebookPage: its own table + tokens, so a
+// page here has NO effect on the farm and vice-versa. Watch-only — Page Control
+// never posts, so the stored Page token only needs read scopes (pages_show_list,
+// pages_read_engagement, read_insights). Token ENCRYPTED at rest (AES-256-GCM),
+// decrypted server-side only. The connect credentials (App ID/Secret + long-lived
+// user token) live under their own `pc_*` AppSetting keys (lib/pageControlSettings).
+model MonitoredPage {
+  id              String    @id @default(cuid())
+  pageId          String    @unique // the Facebook Page id (unique within Page Control)
+  pageName        String
+  accessToken     String // ENCRYPTED long-lived Page access token (read scopes only)
+  avatarUrl       String? // cached public CDN url (no token); null → initials
+  avatarFetchedAt DateTime?
+  followers       Int? // cached follower count for the dashboard header
+  status          String    @default("Connected") // "Connected" | "Expired"
+  lastSyncedAt    DateTime? // last successful token validation
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  postsCache MonitoredPagePostsCache?
+
+  @@index([status])
+}
+
+// ~6h cache of a MonitoredPage's REAL published posts (first page of ~15) for the
+// Page Control → Content view. Independent from the farm's PagePostsCache. One row
+// per monitored page; `data` is a JSON snapshot { posts: PagePost[], after }.
+model MonitoredPagePostsCache {
+  monitoredPageId String        @id
+  monitoredPage   MonitoredPage @relation(fields: [monitoredPageId], references: [id], onDelete: Cascade)
+  data            String
+  fetchedAt       DateTime      @default(now())
+}

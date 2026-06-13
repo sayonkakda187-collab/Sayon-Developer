@@ -2,14 +2,60 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ToastProvider } from "@/components/admin/Toast";
+import { useRouter } from "next/navigation";
+import { ToastProvider, useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { ExternalLinkIcon } from "@/components/admin/icons";
+import { ExternalLinkIcon, RefreshIcon, TrashIcon } from "@/components/admin/icons";
 import { formatNumber } from "@/lib/site";
 import { presetRange } from "@/lib/fbInsightsRange";
 import { PageDetail, RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { PageControlSummary } from "@/components/admin/PageControlSummary";
 import { PageControlContent } from "@/components/admin/PageControlContent";
+import { pageControlReconnectPage, removeMonitoredPage } from "@/app/admin/page-control-actions";
+
+const DETAIL_API = "/api/admin/page-control/insights";
+
+/** Reconnect / Remove for a monitored page (lives inside ToastProvider). */
+function HeaderActions({ id, status }: { id: string; status: string }) {
+  const { success, error } = useToast();
+  const router = useRouter();
+  const [busy, setBusy] = useState<null | "reconnect" | "remove">(null);
+
+  async function onReconnect() {
+    setBusy("reconnect");
+    const res = await pageControlReconnectPage(id);
+    setBusy(null);
+    if (res.ok) {
+      success("Reconnected — token refreshed.");
+      router.refresh();
+    } else {
+      error(res.error);
+    }
+  }
+  async function onRemove() {
+    if (!window.confirm("Stop monitoring this page? This only affects Page Control — the posting farm is untouched.")) return;
+    setBusy("remove");
+    const res = await removeMonitoredPage(id);
+    if (res.ok) router.push("/admin/page-control");
+    else {
+      setBusy(null);
+      error(res.error);
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="adm-btn-ghost" onClick={onReconnect} disabled={busy !== null} title="Refresh this page's token">
+        {busy === "reconnect" ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
+        {status === "Connected" ? "Refresh token" : "Reconnect"}
+      </button>
+      <button type="button" className="adm-btn-ghost" onClick={onRemove} disabled={busy !== null} title="Stop monitoring this page">
+        {busy === "remove" ? <span className="adm-spinner" aria-hidden /> : <TrashIcon className="h-4 w-4" />}
+        Remove
+      </button>
+    </>
+  );
+}
 
 type Tab = "summary" | "content" | "analytics";
 const TABS: { key: Tab; label: string }[] = [
@@ -79,25 +125,31 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
   return (
     <ToastProvider>
       <div className="adm-pc-top">
-        <Link href="/admin/page-control" className="adm-link adm-pc-back">← Pages</Link>
+        <Link href="/admin/page-control" className="adm-link adm-pc-back">← Monitored pages</Link>
         <div className="adm-pc-id">
           <FacebookPageAvatar dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={40} />
           <div style={{ minWidth: 0 }}>
-            <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page.pageName}</div>
+            <div className="adm-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {page.pageName}
+              {page.status !== "Connected" && <span className="adm-pill amber" style={{ marginLeft: 8, verticalAlign: "middle" }}>Needs reconnect</span>}
+            </div>
             <div className="adm-card-sub" style={{ marginTop: 1 }}>
-              {page.categoryGroup}
+              Watch-only
               {followers != null && <> · <strong>{formatNumber(followers)}</strong> followers</>}
             </div>
           </div>
         </div>
-        <a
-          href={`https://www.facebook.com/${encodeURIComponent(page.pageId)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="adm-btn-ghost adm-pc-open"
-        >
-          Open Page <ExternalLinkIcon className="h-4 w-4" />
-        </a>
+        <div className="adm-pc-actions">
+          <HeaderActions id={page.id} status={page.status} />
+          <a
+            href={`https://www.facebook.com/${encodeURIComponent(page.pageId)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="adm-btn-ghost adm-pc-open"
+          >
+            Open Page <ExternalLinkIcon className="h-4 w-4" />
+          </a>
+        </div>
       </div>
 
       <div className="adm-pc-subtabs" role="tablist" aria-label="Page sections">
@@ -126,7 +178,7 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
           <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
         )}
         {tab === "content" && <PageControlContent pageDbId={page.id} />}
-        {tab === "analytics" && <PageDetail page={page} initialRange={range} range={range} embedded />}
+        {tab === "analytics" && <PageDetail page={page} initialRange={range} range={range} embedded detailApi={DETAIL_API} />}
       </div>
     </ToastProvider>
   );

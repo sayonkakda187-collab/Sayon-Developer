@@ -508,12 +508,14 @@ export function PageDetail({
   range: controlledRange,
   onClose,
   embedded,
+  detailApi = API,
 }: {
   page: InsightsPageRow;
   initialRange: Range;
   range?: Range;
   onClose?: () => void;
   embedded?: boolean;
+  detailApi?: string;
 }) {
   const { error } = useToast();
   const [internalRange, setRange] = useState<Range>(initialRange);
@@ -524,7 +526,7 @@ export function PageDetail({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API}?detail=${encodeURIComponent(page.id)}&from=${range.from}&to=${range.to}`, { cache: "no-store" })
+    fetch(`${detailApi}?detail=${encodeURIComponent(page.id)}&from=${range.from}&to=${range.to}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
@@ -540,7 +542,7 @@ export function PageDetail({
     return () => {
       cancelled = true;
     };
-  }, [page.id, range.from, range.to, error]);
+  }, [page.id, range.from, range.to, error, detailApi]);
 
   const curRows = useMemo(() => (data ? buildDayRows(range.from, range.to, new Map(data.days.map((d) => [d.date, d])), data.shares) : []), [data, range.from, range.to]);
   const prevRows = useMemo(() => {
