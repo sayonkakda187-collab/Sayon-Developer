@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getMonitoredRowStats } from "@/lib/pageControlInsights";
+import { getMonitoredTotalPosts } from "@/lib/pageControlTotals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,10 +25,12 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 }
 
 /**
- * POST `{ ids: string[], refresh?: boolean }` — last-28d quick stats (reach /
- * engagement / net follows + the previous 28d for % change) for a BATCH of
- * monitored pages, for the landing-list row pills. The client sends small batches
- * (with a per-row shimmer); each page is at most one cached Graph call per ~6h.
+ * POST `{ ids: string[], refresh?: boolean }` — for a BATCH of monitored pages, the
+ * landing-list row data: last-28d quick stats (reach / engagement / net follows +
+ * the previous 28d for % change + sparkline) AND the all-time `totalPosts` count.
+ * The client sends small batches (per-row shimmer). The stats use a ~6h cache; the
+ * post count its own ~24h cache (summary=total_count when available, else a capped
+ * count) — so a row is at most one cached call each per page, never a bulk hammer.
  * One page failing never blocks the rest.
  */
 export async function POST(req: Request) {
@@ -46,12 +49,16 @@ export async function POST(req: Request) {
 
   const pages = await prisma.monitoredPage.findMany({
     where: { id: { in: list } },
-    select: { id: true, pageId: true, accessToken: true },
+    select: { id: true, pageId: true, accessToken: true, totalPosts: true, totalPostsCapped: true, totalPostsAt: true },
   });
 
   const rows = await mapLimit(pages, 6, async (p) => {
-    const stats = await getMonitoredRowStats(p, refresh === true);
-    return { id: p.id, ...stats };
+    // Daily quick stats (cached ~6h) + all-time post count (cached ~24h) in parallel.
+    const [stats, totals] = await Promise.all([
+      getMonitoredRowStats(p, refresh === true),
+      getMonitoredTotalPosts(p, refresh === true),
+    ]);
+    return { id: p.id, ...stats, totalPosts: totals.count, totalPostsCapped: totals.capped };
   });
 
   return NextResponse.json({ ok: true, rows });

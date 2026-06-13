@@ -1200,16 +1200,18 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   watch-only replacement); `post_clicks`; and an exact **range post-count** KPI (no
   cheap metric — the Content tab shows the actual posts instead).
 - **Landing** (`PageControlList`): shows **ONLY** `MonitoredPage`s (searchable, avatar'd,
-  paginated). Each row carries **28-day quick stats** — Reach · Engaged · Follows with a
-  small **Δ% vs the previous 28d** ("—" when absent) — fetched **lazily in small batches**
-  (`POST /api/admin/page-control/stats`) with a **per-row shimmer**, cached ~6h; never a
-  bulk hammer. **Empty state** = a "Connect your first page" CTA. Live data loads **only
-  on open** (lazy; the set is small/hand-picked). **Search** is the admin **header** bar:
-  on the `/admin/page-control` list route ONLY, `AdminShell` swaps the global "Search
-  articles…" `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") which feeds a
-  shared module store (`pageControlSearchStore` `usePageControlSearch`) the list filters by
-  (debounced, case-insensitive, by name); there's exactly ONE page-search input, in the
-  header. Every other admin route (incl. a Page's dashboard) keeps the normal article search.
+  paginated). Each row carries an all-time **Posts** pill (emerald, tiny count-up,
+  `getMonitoredTotalPosts` cached ~24h, "N+" when capped) + **28-day quick stats** —
+  Reach · Engaged · Follows with a small **Δ% vs the previous 28d** ("—" when absent) +
+  a sparkline. All come from **one batched call per page** (`POST
+  /api/admin/page-control/stats` returns stats + `totalPosts`), fetched **lazily in small
+  batches** with a **per-row shimmer** (stats cached ~6h, the count ~24h); never a bulk
+  hammer. **Empty state** = a "Connect your first page" CTA. Live data loads **only on
+  open** (lazy; the set is small/hand-picked). **Search** is the admin **header** bar: on
+  the `/admin/page-control` list route ONLY, `AdminShell` swaps the global "Search articles…"
+  `GlobalSearch` for `PageControlHeaderSearch` ("Search Pages…") feeding a shared store
+  (`pageControlSearchStore`) the list filters by (debounced, case-insensitive, by name) —
+  exactly ONE page-search input, in the header; every other admin route keeps the article search.
 - **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a persistent
   header (avatar · name · followers · **Reconnect** · **Remove** · "Open Page"), a
   **shared range control** (`RangeControl`, default 28d, `sessionStorage`), and three
