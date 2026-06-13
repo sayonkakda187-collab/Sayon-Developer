@@ -29,6 +29,7 @@ import {
   SitesIcon,
   AiImageIcon,
   ClockIcon,
+  PageControlIcon,
 } from "./icons";
 
 type SiteOption = { id: string; name: string; isDefault: boolean };
@@ -42,6 +43,7 @@ const SECTION_ROUTES: [string, string][] = [
   ["categories", "/admin/categories"],
   ["comments", "/admin/comments"],
   ["facebook", "/admin/facebook"],
+  ["page-control", "/admin/page-control"],
   ["ai-assistant", "/admin/ai-assistant"],
   ["ai-images", "/admin/ai-images"],
   ["scheduled", "/admin/scheduled"],
@@ -196,6 +198,15 @@ export function AdminShell({
             })}
           </div>
           <div className="adm-navfoot">
+            <Link
+              href="/admin/page-control"
+              data-tab="page-control"
+              className={`adm-navitem ${isActive("/admin/page-control") ? "on" : ""}`}
+              aria-current={isActive("/admin/page-control") ? "page" : undefined}
+            >
+              <PageControlIcon />
+              Page Control
+            </Link>
             <Link
               href="/admin/scheduled"
               data-tab="scheduled"
@@ -361,6 +372,16 @@ export function AdminShell({
               })}
             </div>
             <div className="adm-dfoot">
+              <Link
+                href="/admin/page-control"
+                data-tab="page-control"
+                className={`adm-dlink ${isActive("/admin/page-control") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/page-control") ? "page" : undefined}
+              >
+                <PageControlIcon />
+                Page Control
+              </Link>
               <Link
                 href="/admin/scheduled"
                 data-tab="scheduled"

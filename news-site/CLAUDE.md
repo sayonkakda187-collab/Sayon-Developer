@@ -1157,6 +1157,62 @@ official Graph API only; tokens never reach the browser.
   picture) store null → initials. Best-effort throughout — avatar work never breaks
   token sync or the insights table. **No token is ever put in a client-visible URL.**
 
+## Page Control (per-Page dashboard — Summary · Content · Analytics)
+
+A top-level admin section (`/admin/page-control`, **deep-emerald** accent
+`#047857` — chosen distinct from the success-green status color, AA in light+dark;
+nav **footer
+group** — sidebar + mobile drawer, deliberately NOT the crowded phone bottom bar)
+that gives each connected Page a Facebook-app-style Page view. It's almost entirely
+a **new presentation layer** over the EXISTING Facebook plumbing — same token
+storage + reconnect flow, same Insights services/caches, same Graph v25.0 client,
+same `FacebookPageAvatar`. **One** new data type (real published posts) + **one**
+new cache table is all that was added.
+
+- **Landing** (`PageControlList`): a searchable, avatar'd, paginated (24/page) list
+  of every connected `FacebookPage` (reuses `InsightsPageRow`); an `Expired` token
+  shows a **Reconnect** pill. Tap → that Page's dashboard. The list is light (counts
+  only); a Page's live data is fetched **only when its dashboard opens** (lazy).
+- **Dashboard** (`PageControlDashboard`, `/admin/page-control/[pageId]`): a
+  persistent identity header (avatar · name · followers · "Open Page" link), a
+  **shared range control** (Today/Yesterday/7d/28d/90d/Custom — the exact
+  `RangeControl` exported from the Insights tab, default 28d, remembered in
+  `sessionStorage`), and three **swipeable** sub-tabs. Only the active sub-tab
+  mounts (lazy fetch); touch-swipe + the tab row both switch.
+  - **Summary** (`PageControlSummary`): the KPI cards + mini trend for the range —
+    the **exported `InsightsDashboard`** fed by the same `?detail=` data (no
+    duplication) — plus the 3 most recent real posts (from Content) with a "See
+    all →".
+  - **Content** (`PageControlContent`): the Page's **REAL published posts** pulled
+    live from the Graph API — thumbnail, caption excerpt, date,
+    reactions/comments/shares/reach, "View on Facebook". Cursor "Load more"
+    (~15/page), a sort toggle (Most recent / Most engagement over loaded posts), a
+    Refresh, skeletons + empty/reconnect states.
+  - **Analytics** (reuses the Insights tab's per-Page dashboard **verbatim**):
+    `PageDetail` was exported + made embeddable (`embedded` drops its duplicate
+    header/close/inner range; a controlled `range` lets the shared chips drive it)
+    — KPI cards + trend + our-shared-post stats + day-by-day table.
+- **Real posts** (`lib/facebook.ts` `getPagePosts` → `GET /{pageId}/published_posts`
+  + best-effort `getPostReach`): caption (`message`), `created_time`,
+  `permalink_url`, `full_picture` thumbnail, and inline `reactions/comments/shares`
+  summary counts, with cursor paging. **Graph v25.0 fields VERIFIED + omitted on
+  purpose:** deep `attachments{media}` (can error a whole post — `full_picture` is
+  the reliable thumbnail) and **inline per-post `insights`** (a single retired
+  metric would fail the list) — reach is fetched **separately + best-effort** via
+  `post_impressions_unique` and degrades to `null` (needs `read_insights`).
+  `pages_read_engagement` is required; a missing scope / invalid token → the same
+  **"Needs reconnect"** state as Insights.
+- **Service + cache** (`lib/facebookPosts.ts` `getPagePostsForView`): the first
+  page (~15 posts, with reach) is cached **~6h** in the new **`PagePostsCache`**
+  (one row per Page) so opening a Page is cheap at ~264 Pages on Vercel Hobby;
+  "Load more" + Refresh go live (Refresh rewrites the cache). Reach enrichment is
+  concurrency-limited (`mapLimit` 5). API: `app/api/admin/facebook/page-posts`
+  (session-gated, `maxDuration = 60`) — `?page=&after=&refresh=1`. **Never
+  bulk-fetches all Pages** — only the opened Page.
+- **Migration:** additive `PagePostsCache` (`20260612210000_page_posts_cache`,
+  auto-applies via `prisma migrate deploy`). **No new env.** Read-only — Page
+  Control never posts.
+
 ## Roadmap
 
 Build in 4 phases, one at a time. Stop and report after each.

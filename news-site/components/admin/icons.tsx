@@ -166,6 +166,17 @@ export const TrendingIcon = (p: P) => (
     <path d="M17 7h4v4" />
   </svg>
 );
+// Page Control: a page/panel with control sliders — the per-Page dashboard.
+export const PageControlIcon = (p: P) => (
+  <svg {...base} className={p.className} aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <path d="M3 8.5h18" />
+    <path d="M6.5 13h5" />
+    <circle cx="14.5" cy="13" r="1.5" fill="currentColor" stroke="none" />
+    <path d="M6.5 17h2.5" />
+    <circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 // Category tile icons (filled-on-color tiles on the Categories screen).
 export const CategoryGlyph = ({ name, className }: { name: string; className?: string }) => {
