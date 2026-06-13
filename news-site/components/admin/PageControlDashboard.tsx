@@ -8,7 +8,8 @@ import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ExternalLinkIcon, RefreshIcon, TrashIcon } from "@/components/admin/icons";
 import { formatNumber } from "@/lib/site";
 import { presetRange } from "@/lib/fbInsightsRange";
-import { PageDetail, RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
+import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
+import { MonitoredDashboard } from "@/components/admin/MonitoredDashboard";
 import { PageControlSummary } from "@/components/admin/PageControlSummary";
 import { PageControlContent } from "@/components/admin/PageControlContent";
 import { pageControlReconnectPage, removeMonitoredPage } from "@/app/admin/page-control-actions";
@@ -178,7 +179,7 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
           <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
         )}
         {tab === "content" && <PageControlContent pageDbId={page.id} />}
-        {tab === "analytics" && <PageDetail page={page} initialRange={range} range={range} embedded detailApi={DETAIL_API} hideSystemPosts />}
+        {tab === "analytics" && <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} showDayTable />}
       </div>
     </ToastProvider>
   );

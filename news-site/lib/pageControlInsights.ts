@@ -102,6 +102,19 @@ function sumWindow(days: DayPoint[], from: string, to: string, key: "reach" | "e
   return any ? sum : null;
 }
 
+/** Chronological daily values for [from, to] (null → 0) — the row sparkline series.
+ *  Returns [] when the metric is entirely absent (so the UI shows a flat placeholder). */
+function windowSeries(days: DayPoint[], from: string, to: string, key: "reach" | "engagement"): number[] {
+  const out: number[] = [];
+  let any = false;
+  for (const d of days) {
+    if (d.date < from || d.date > to) continue;
+    if (d[key] != null) any = true;
+    out.push(d[key] ?? 0);
+  }
+  return any ? out : [];
+}
+
 export type MonitoredRowStats = {
   reach: number | null;
   engagement: number | null;
@@ -109,14 +122,17 @@ export type MonitoredRowStats = {
   reachPrev: number | null;
   engagementPrev: number | null;
   followsPrev: number | null;
+  /** Last-28-day daily series (chronological) for the row sparkline. */
+  sparkReach: number[];
+  sparkEngagement: number[];
   status: "ok" | "reconnect";
 };
 
 /**
  * Landing-list quick stats for one monitored page: last-28-day reach / engagement /
- * net new follows, plus the previous 28 days (for a % change). Computed from ONE
- * cached 56-day daily series — so a page's row costs at most one Graph call per
- * ~6h, never a bulk hammer.
+ * net new follows, plus the previous 28 days (for a % change) and a 28-day daily
+ * series for the row sparkline. Computed from ONE cached 56-day daily series — so a
+ * page's row costs at most one Graph call per ~6h, never a bulk hammer.
  */
 export async function getMonitoredRowStats(
   page: { id: string; pageId: string; accessToken: string },
@@ -126,7 +142,7 @@ export async function getMonitoredRowStats(
   const winFrom = addDays(today, -55);
   const { days, status } = await getMonitoredDaily(page, winFrom, today, wantFresh);
   if (status === "reconnect") {
-    return { reach: null, engagement: null, follows: null, reachPrev: null, engagementPrev: null, followsPrev: null, status };
+    return { reach: null, engagement: null, follows: null, reachPrev: null, engagementPrev: null, followsPrev: null, sparkReach: [], sparkEngagement: [], status };
   }
   const curFrom = addDays(today, -27);
   const prevFrom = winFrom;
@@ -138,6 +154,8 @@ export async function getMonitoredRowStats(
     reachPrev: sumWindow(days, prevFrom, prevTo, "reach"),
     engagementPrev: sumWindow(days, prevFrom, prevTo, "engagement"),
     followsPrev: sumWindow(days, prevFrom, prevTo, "follows"),
+    sparkReach: windowSeries(days, curFrom, today, "reach"),
+    sparkEngagement: windowSeries(days, curFrom, today, "engagement"),
     status: "ok",
   };
 }
