@@ -1203,13 +1203,18 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   paginated). A **range control at the top** (`RangeControl` — Today/Yesterday/7d/28d
   (default)/90d/Custom, Phnom Penh, chips scroll on mobile, remembered in `sessionStorage`
   under `pageControl.listRange`) drives each row's stats for the selected range. Each row
-  carries an all-time **Posts** pill (emerald, tiny count-up, `getMonitoredTotalPosts`
-  cached ~24h, "N+" when capped) + **quick stats** — Reach · Engaged · Follows with a small
-  **Δ% vs the equal-length previous period** ("—" when absent) — plus a **Reach sparkline**
-  (Engagement fallback). All come from **one batched call per page** (`POST
-  /api/admin/page-control/stats` with `{ids, from, to}` → stats + `totalPosts`), fetched
-  **lazily in small batches** with a **per-row shimmer**; stats cached **per (page + range)**
-  (`MonitoredPageDailyCache`, keyed by rangeKey, ~6h) + the count ~24h, so switching range
+  carries a **range-aware Posts pill** (emerald, tiny count-up) — the count of posts the
+  page PUBLISHED in the selected range (created_time within the PP since/until), split into
+  **🎥 video (blue)** + **🖼 image/other (coral)**; "Posts 0" when none, "N+" when the
+  range-bounded fetch hits its cap. Classified from each post's `attachments{media_type}`
+  (`"video"` → video; else image/other). Plus **quick stats** — Reach · Engaged · Follows
+  with a small **Δ% vs the equal-length previous period** ("—" when absent) — and a **Reach
+  sparkline** (Engagement fallback). All come from **one batched call per page** (`POST
+  /api/admin/page-control/stats` with `{ids, from, to}` → stats + `rangePosts`), fetched
+  **lazily in small batches** with a **per-row shimmer**; both cached **per (page + range)**
+  (`MonitoredPageDailyCache` for stats ~6h, `MonitoredPageRangePostsCache` for the post
+  count — `getPagePostsInRange` via `lib/pageControlRangePosts`, ~3h today-inclusive / 24h
+  historical, one range-bounded capped Graph call), so switching range
   refetches only not-yet-seen combos (client `statsMap`/`requestedRef` keyed `${rangeKey}|${id}`)
   and switching back is instant — never a bulk hammer. **Empty state** = a "Connect your
   first page" CTA. Live data loads **only on open** (lazy). **Search** is the admin
@@ -1272,7 +1277,9 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
   (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`
-  (`20260613060000_monitored_page_total_posts`), all auto-apply. The network rollup reuses
+  (`20260613060000_monitored_page_total_posts`) + `MonitoredPageRangePostsCache`
+  (`20260613070000_monitored_page_range_posts`, the list row's range-aware post counts),
+  all auto-apply. The network rollup reuses
   `AppSetting` (no new table). **No new env** (App creds can reuse
   `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab). Read-only.
 

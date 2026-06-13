@@ -549,6 +549,47 @@ export async function getPageTotalPosts(
   return { count, capped: Boolean(after) };
 }
 
+/** Per-range breakdown of a Page's PUBLISHED posts created WITHIN [since, until]
+ *  (unix seconds), split into video vs image/other. Each post is classified from
+ *  its `attachments{media_type}` — `"video"` → video; anything else (photo / album /
+ *  link / status / no attachment / undetermined) → image/other, still counted in the
+ *  total. Range-bounded to ONE page of `cap` (default 100) — it never paginates a
+ *  page's whole history; `capped` flags more posts in the range beyond the cap.
+ *  Needs `pages_read_engagement`. SERVER-SIDE ONLY. */
+export async function getPagePostsInRange(
+  pageId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+  cap = 100,
+): Promise<{ total: number; video: number; image: number; capped: boolean }> {
+  const limit = Math.min(100, Math.max(1, Math.round(cap)));
+  const params = new URLSearchParams();
+  params.set("fields", "id,attachments{media_type,type}");
+  params.set("since", String(since));
+  params.set("until", String(until));
+  params.set("limit", String(limit));
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}/published_posts?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{
+    data?: { id?: string; attachments?: { data?: { media_type?: string; type?: string }[] } }[];
+    paging?: { next?: string };
+  }>(res, "Could not load this Page's posts for the range");
+
+  let video = 0;
+  let image = 0;
+  for (const p of data.data ?? []) {
+    if (!p.id) continue;
+    const a = p.attachments?.data?.[0];
+    const mt = (a?.media_type || "").toLowerCase();
+    const ty = (a?.type || "").toLowerCase();
+    if (mt === "video" || ty.includes("video")) video++;
+    else image++; // photo / album / link / status / undetermined → image/other
+  }
+  return { total: video + image, video, image, capped: Boolean(data.paging?.next) };
+}
+
 // ── Page Insights (Pages performance overview + trends) ──────────────────────
 //
 // Meta has retired many Page metrics (e.g. page_impressions* / page_fans were
