@@ -1,15 +1,17 @@
 import { prisma } from "@/lib/db";
 import { ToastProvider } from "@/components/admin/Toast";
-import { PageControlList, type MonitoredRow } from "@/components/admin/PageControlList";
-import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
+import { type MonitoredRow } from "@/components/admin/PageControlList";
+import { PageControlTabs } from "@/components/admin/PageControlTabs";
+import type { Manager } from "@/components/admin/ManagerAvatar";
 import { getPageControlConnectStatus } from "@/lib/pageControlSettings";
 
 // Live monitored-page/token state; never statically cache.
 export const dynamic = "force-dynamic";
 
 export default async function PageControlPage() {
-  const [pages, connect] = await Promise.all([
+  const [pages, managerRecords, connect] = await Promise.all([
     prisma.monitoredPage.findMany({ orderBy: { pageName: "asc" } }),
+    prisma.pageManager.findMany({ orderBy: { name: "asc" } }),
     getPageControlConnectStatus(),
   ]);
 
@@ -23,7 +25,10 @@ export default async function PageControlPage() {
     postedCount: 0,
     lastSharedAt: null,
     followers: p.followers,
+    managerId: p.managerId,
   }));
+
+  const managers: Manager[] = managerRecords.map((m) => ({ id: m.id, name: m.name, photo: m.photo }));
 
   return (
     <div>
@@ -32,16 +37,7 @@ export default async function PageControlPage() {
         <p>An independent, watch-only dashboard. Connect Pages here (separate from the Facebook posting tab) to track each one’s Summary, Content, and Analytics.</p>
       </div>
       <ToastProvider>
-        <div className="adm-pc-twobox">
-          {/* LEFT box — the existing monitored-pages list, UNCHANGED. */}
-          <div className="adm-pc-box">
-            <PageControlList pages={rows} appConfigured={connect.appConfigured} />
-          </div>
-          {/* RIGHT box — the network dashboard (its own range chips). */}
-          <div className="adm-pc-box">
-            <PageControlNetwork />
-          </div>
-        </div>
+        <PageControlTabs pages={rows} appConfigured={connect.appConfigured} managers={managers} />
       </ToastProvider>
     </div>
   );

@@ -2687,3 +2687,125 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-pc-skel, .adm-pc-stat-skel { animation: none; }
   .adm-pc-row { transition: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE CONTROL — MANAGERS (Pages | Managers sub-tabs + per-row manager chip).
+   Managers are LOCAL app data (name + optional uploaded photo). Emerald accent,
+   small round avatars, AA in light + dark, fully mobile (≥44px targets, no overflow).
+   ════════════════════════════════════════════════════════════════════════════ */
+/* Top-level sub-tabs (reuse the swipeable .adm-pc-subtabs row; a touch more prominent). */
+.adm-pc-toptabs { margin-bottom: 16px; }
+.adm-pc-toptabs .adm-pc-subtab { font-size: 14.5px; padding: 12px 18px; }
+
+/* Per-row manager chip (added under the page name; never restructures the row). It's a
+   span — valid inside the row's <a> — that opens the picker instead of navigating. */
+.adm-pc-mgrline { margin-top: 7px; }
+.adm-pc-mgrchip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 3px 10px 3px 4px; border-radius: 999px; cursor: pointer; min-height: 26px;
+  border: 1px solid var(--adm-bd); background: var(--adm-card);
+  font-size: 12px; line-height: 1.4; color: var(--adm-ink);
+  transition: border-color .15s, background .15s;
+}
+.adm-pc-mgrchip:hover { border-color: var(--section-accent); background: var(--section-tint); }
+.adm-pc-mgrchip:focus-visible { outline: 2px solid var(--section-accent); outline-offset: 1px; }
+.adm-pc-mgrchip.on { border-color: var(--section-accent); background: var(--section-tint); }
+.adm-pc-mgrchip:not(.on) { border-style: dashed; color: var(--section-link); padding-left: 9px; }
+.adm-pc-mgrchip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; font-weight: 600; }
+.adm-pc-mgrchip-add {
+  width: 17px; height: 17px; flex: none; border-radius: 999px; display: grid; place-items: center;
+  background: var(--section-tint-2); color: var(--section-link); font-weight: 800; font-size: 13px; line-height: 1;
+}
+
+/* Manager-search box (top of the Pages list) + grouped headers when it's active. */
+.adm-mgr-search { display: flex; align-items: center; gap: 8px; position: relative; }
+.adm-mgr-search > svg { flex: none; opacity: .5; color: var(--adm-ink); }
+.adm-mgr-search .adm-input { flex: 1; min-width: 0; }
+.adm-pc-mgrsearch { margin-bottom: 12px; }
+.adm-pc-mgrsearch .adm-input { padding-right: 32px; }
+.adm-mgr-search-clear {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  width: 24px; height: 24px; border: none; background: none; cursor: pointer; border-radius: 999px;
+  color: var(--adm-ink); opacity: .5; font-size: 18px; line-height: 1;
+}
+.adm-mgr-search-clear:hover { opacity: 1; background: var(--adm-bd); }
+.adm-pc-group + .adm-pc-group { margin-top: 14px; }
+.adm-pc-group .adm-pc-list { margin-top: 8px; }
+.adm-pc-group-head { display: flex; align-items: center; gap: 7px; padding: 0 2px; font-size: 12.5px; color: var(--adm-ink); }
+.adm-pc-group-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-pc-group-count { opacity: .6; font-weight: 600; flex: none; }
+
+/* Managers screen — list of managers, each expandable to add/remove its pages. */
+.adm-mgr-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.adm-mgr-card { padding: 0; overflow: hidden; }
+.adm-mgr-card.on { border-color: var(--section-accent); }
+.adm-mgr-row { display: flex; align-items: center; gap: 6px; padding: 7px 9px; }
+.adm-mgr-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px;
+  background: none; border: none; cursor: pointer; text-align: left; padding: 5px; border-radius: 10px;
+  color: inherit; font: inherit; min-height: 48px;
+}
+.adm-mgr-main:hover { background: var(--section-tint); }
+.adm-mgr-meta { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.adm-mgr-name { font-weight: 600; color: var(--adm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-mgr-caret { margin-left: auto; flex: none; color: var(--section-accent); font-size: 20px; line-height: 1; opacity: .7; transition: transform .15s; }
+.adm-mgr-caret.on { transform: rotate(90deg); }
+.adm-mgr-tools { display: flex; gap: 2px; flex: none; }
+.adm-mgr-pages { border-top: 1px solid var(--adm-bd); padding: 10px; display: flex; flex-direction: column; gap: 4px; background: var(--section-tint); }
+.adm-mgr-pages .adm-mgr-search { margin-bottom: 4px; }
+.adm-mgr-pages-h { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; opacity: .55; color: var(--adm-ink); margin: 6px 2px 2px; }
+.adm-mgr-ptoggle {
+  display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px;
+  border: 1px solid transparent; background: var(--adm-card); cursor: pointer; min-height: 44px;
+  font: inherit; color: var(--adm-ink); text-align: left; transition: border-color .12s, background .12s;
+}
+.adm-mgr-ptoggle:hover { border-color: var(--section-accent); }
+.adm-mgr-ptoggle.on { border-color: var(--section-accent); background: var(--section-tint-2); }
+.adm-mgr-ptoggle:disabled { opacity: .6; cursor: default; }
+.adm-mgr-check {
+  width: 22px; height: 22px; flex: none; border-radius: 999px; display: grid; place-items: center;
+  border: 1.5px solid var(--adm-bd); color: var(--adm-ink); opacity: .55; font-weight: 800; font-size: 13px; line-height: 1;
+}
+.adm-mgr-check.on { background: var(--section-accent); border-color: var(--section-accent); color: #fff; opacity: 1; }
+.adm-mgr-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.adm-mgr-pown { flex: none; font-size: 12px; opacity: .55; }
+
+/* Add/Edit dialog + per-row picker: photo input, manager picklist, quick-create. */
+.adm-mgr-modal, .adm-mgr-picker, .adm-mgr-confirm { max-width: 460px; }
+.adm-mgr-photo { display: flex; align-items: center; gap: 14px; }
+.adm-mgr-photo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.adm-mgr-photo-actions .adm-btn-ghost { flex: none; }
+.adm-mgr-newform { display: flex; flex-direction: column; gap: 14px; }
+.adm-mgr-pick-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
+.adm-mgr-pick {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; width: 100%;
+  border: 1px solid transparent; background: none; cursor: pointer; min-height: 46px; font: inherit;
+  color: var(--adm-ink); text-align: left;
+}
+.adm-mgr-pick:hover { background: var(--section-tint); }
+.adm-mgr-pick.on { border-color: var(--section-accent); background: var(--section-tint); }
+.adm-mgr-pick:disabled { opacity: .6; cursor: default; }
+.adm-mgr-pick svg { flex: none; color: var(--section-accent); margin-left: auto; }
+.adm-mgr-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.adm-mgr-pick-unassign .adm-mgr-pick-name { font-weight: 500; opacity: .8; }
+.adm-mgr-pick-x { width: 26px; height: 26px; flex: none; border-radius: 999px; display: grid; place-items: center; background: var(--adm-bd); font-size: 16px; line-height: 1; opacity: .7; }
+.adm-mgr-addnew {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border-radius: 10px;
+  border: 1px dashed var(--section-accent); background: none; cursor: pointer; min-height: 44px;
+  color: var(--section-link); font: inherit; font-weight: 600;
+}
+.adm-mgr-addnew:hover { background: var(--section-tint); }
+.adm-mgr-addnew:disabled { opacity: .6; cursor: default; }
+
+/* Destructive button (delete-manager confirm) — mirrors .adm-btn-primary's shape. */
+.adm-btn-danger {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  background: #dc2626; color: #fff; border: none; border-radius: 11px; padding: 9px 14px;
+  font-size: 13.5px; font-weight: 600; cursor: pointer; min-height: 44px; transition: background 0.15s;
+}
+.adm-btn-danger:hover { background: #b91c1c; }
+.adm-btn-danger:disabled { opacity: .65; cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-pc-mgrchip, .adm-mgr-caret, .adm-mgr-ptoggle, .adm-pc-mgrchip { transition: none; }
+}

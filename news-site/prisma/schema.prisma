@@ -357,11 +357,31 @@ model MonitoredPage {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Optional team member who manages this page (LOCAL app data — NOT from Facebook;
+  // never mixed with the Page token). A manager owns many pages; a page has 0 or 1.
+  managerId String?
+  manager   PageManager? @relation(fields: [managerId], references: [id], onDelete: SetNull)
+
   postsCache MonitoredPagePostsCache?
   dailyCache MonitoredPageDailyCache[]
   rangePostsCache MonitoredPageRangePostsCache[]
 
   @@index([status])
+  @@index([managerId])
+}
+
+// A page manager / team member — LOCAL app data (a name + optional uploaded photo),
+// independent of Facebook (no token). Assigned to MonitoredPages via `managerId`.
+// `photo` is an uploaded image URL (Vercel Blob in prod / /uploads locally, via the
+// existing /api/admin/upload); null → a deterministic coloured-initials circle.
+model PageManager {
+  id        String   @id @default(cuid())
+  name      String
+  photo     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pages MonitoredPage[]
 }
 
 // Per-(monitored page, date-range) cache of the page's REAL published-post counts

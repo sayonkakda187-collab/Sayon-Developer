@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { PlusIcon } from "@/components/admin/icons";
+import { PlusIcon, SearchIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
+import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
+import { ManagerPicker } from "@/components/admin/ManagerPicker";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
 
@@ -36,8 +38,9 @@ function initialRange(): Range {
   return fallback;
 }
 
-/** A monitored page row for the landing list (InsightsPageRow + its follower count). */
-export type MonitoredRow = InsightsPageRow & { followers: number | null };
+/** A monitored page row for the landing list (InsightsPageRow + follower count +
+ *  the id of its assigned manager, if any). */
+export type MonitoredRow = InsightsPageRow & { followers: number | null; managerId: string | null };
 
 // Posts published WITHIN the selected range, split video vs image/other (capped = floor).
 type RangePosts = { total: number; video: number; image: number; capped: boolean };
@@ -153,21 +156,47 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
 /**
  * Page Control landing — shows ONLY the pages connected INSIDE this tab
  * (MonitoredPage store), with its own "Connect Page" flow. Each row carries
- * 28-day quick stats (Reach · Engaged · Follows + Δ% vs the previous 28d), fetched
- * lazily in small batches with a per-row shimmer and cached ~6h server-side — never
- * a bulk hammer. Empty state nudges the first connection.
+ * range-aware quick stats (Reach · Engaged · Follows + Δ%) fetched lazily in small
+ * batches with a per-row shimmer and cached ~6h server-side, plus a small manager
+ * chip (assign / change the team member who owns the Page). A "Search by manager…"
+ * box filters the list to the Pages a matching person manages, grouped per manager.
  */
-export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[]; appConfigured: boolean }) {
+export function PageControlList({
+  pages,
+  appConfigured,
+  managers,
+  assignments,
+  onAssign,
+  onCreate,
+}: {
+  pages: MonitoredRow[];
+  appConfigured: boolean;
+  managers: Manager[];
+  assignments: Record<string, string | null>;
+  onAssign: (pageId: string, managerId: string | null) => Promise<boolean>;
+  onCreate: (input: { name: string; photo: string | null }) => Promise<Manager | null>;
+}) {
   const { success, error } = useToast();
   const router = useRouter();
-  // Filter query comes from the header "Search Pages…" bar (shared store), so there
-  // is exactly ONE page-search input — in the top header — not a second box here.
+  // The page-name filter comes from the header "Search Pages…" bar (shared store), so
+  // there is exactly ONE page-search input — in the top header. The manager-search box
+  // below is separate and filters by the assigned team member.
   const query = usePageControlSearch();
   const [showConnect, setShowConnect] = useState(false);
   const [statsMap, setStatsMap] = useState<Record<string, StatEntry>>({});
   const requestedRef = useRef<Set<string>>(new Set());
   const [range, setRange] = useState<Range>(initialRange);
   const rk = rangeKey(range.from, range.to);
+
+  // Manager filter (debounced) + the per-row picker target.
+  const [mq, setMq] = useState("");
+  const [mqDebounced, setMqDebounced] = useState("");
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMqDebounced(mq), 200);
+    return () => clearTimeout(t);
+  }, [mq]);
 
   useEffect(() => {
     try {
@@ -177,17 +206,46 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     }
   }, [range]);
 
+  const managerById = useMemo(() => new Map(managers.map((m) => [m.id, m])), [managers]);
+
+  // 1) Page-name filter (header search) — unchanged behavior.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return pages;
     return pages.filter((p) => p.pageName.toLowerCase().includes(q));
   }, [pages, query]);
 
-  const { page, setPage, pageCount, pageItems, total } = usePaged(filtered, PER_PAGE);
+  // 2) Manager filter — when active, narrow to Pages whose assigned manager's name
+  // matches, and prepare per-manager groups for a grouped render.
+  const mqv = mqDebounced.trim().toLowerCase();
+  const managerActive = mqv !== "";
+  const matchingManagerIds = useMemo(
+    () => (managerActive ? new Set(managers.filter((m) => m.name.toLowerCase().includes(mqv)).map((m) => m.id)) : null),
+    [managerActive, managers, mqv],
+  );
+  const managerFiltered = useMemo(() => {
+    if (!managerActive || !matchingManagerIds) return filtered;
+    return filtered.filter((p) => {
+      const id = assignments[p.id];
+      return id != null && matchingManagerIds.has(id);
+    });
+  }, [filtered, managerActive, matchingManagerIds, assignments]);
+
+  const { page, setPage, pageCount, pageItems, total } = usePaged(managerFiltered, PER_PAGE);
+
+  // In manager-search mode we render every match grouped (no pagination); otherwise the
+  // normal paginated slice. Quick stats load for whichever rows are actually visible.
+  const visibleRows = managerActive ? managerFiltered : pageItems;
+  const groups = useMemo(() => {
+    if (!managerActive || !matchingManagerIds) return [];
+    return managers
+      .filter((m) => matchingManagerIds.has(m.id))
+      .map((m) => ({ manager: m, items: managerFiltered.filter((p) => assignments[p.id] === m.id) }))
+      .filter((g) => g.items.length > 0);
+  }, [managerActive, matchingManagerIds, managers, managerFiltered, assignments]);
 
   // Stats + the "requested" set are keyed by `${rangeKey}|${id}`, so each range has
-  // its own cached view — switching ranges refetches only the not-yet-seen combos,
-  // and switching back is instant.
+  // its own cached view — switching ranges refetches only the not-yet-seen combos.
   const fetchBatch = useCallback(async (ids: string[], from: string, to: string, key: string) => {
     setStatsMap((prev) => {
       const next = { ...prev };
@@ -220,10 +278,10 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     }
   }, []);
 
-  // Fetch quick stats for the visible rows only (lazy), in small sequential batches
-  // so we never burst Graph for the whole list. Re-runs when the visible set
-  // (pagination / search) OR the selected range changes.
-  const idsKey = pageItems.map((p) => p.id).join(",");
+  // Fetch quick stats for the visible rows only (lazy), in small sequential batches so
+  // we never burst Graph for the whole list. Re-runs when the visible set (pagination /
+  // page-search / manager-search) OR the selected range changes.
+  const idsKey = visibleRows.map((p) => p.id).join(",");
   useEffect(() => {
     const visible = idsKey ? idsKey.split(",") : [];
     const todo = visible.filter((id) => !requestedRef.current.has(`${rk}|${id}`));
@@ -252,6 +310,61 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     </button>
   );
 
+  // One monitored-page row (reused in the flat list + the grouped manager view). The
+  // row stays EXACTLY as before — we only ADD the small manager chip. The chip is a
+  // span (valid inside the row's <a>) that opens the picker instead of navigating.
+  function renderRow(p: MonitoredRow) {
+    const m = assignments[p.id] ? managerById.get(assignments[p.id]!) ?? null : null;
+    return (
+      <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
+        <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="adm-pc-row-name">{p.pageName}</div>
+          <div className="adm-card-sub" style={{ marginTop: 1 }}>
+            Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
+          </div>
+          <div className="adm-pc-mgrline">
+            <span
+              className={`adm-pc-mgrchip ${m ? "on" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-label={m ? `Manager: ${m.name}. Change manager.` : `Assign a manager to ${p.pageName}`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setPickerFor(p.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPickerFor(p.id);
+                }
+              }}
+            >
+              {m ? (
+                <>
+                  <ManagerAvatar name={m.name} photo={m.photo} size={22} />
+                  <span className="adm-pc-mgrchip-name">{m.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className="adm-pc-mgrchip-add" aria-hidden>+</span>
+                  <span className="adm-pc-mgrchip-name">Assign manager</span>
+                </>
+              )}
+            </span>
+          </div>
+          <RowStats entry={statsMap[`${rk}|${p.id}`]} />
+        </div>
+        {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
+        <span className="adm-pc-chev" aria-hidden>›</span>
+      </Link>
+    );
+  }
+
+  const pickerPage = pickerFor ? pages.find((p) => p.id === pickerFor) ?? null : null;
+
   return (
     <div>
       {pages.length === 0 ? (
@@ -274,33 +387,56 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
             {connectBtn}
           </div>
 
+          {/* Manager-search — filters the list to the Pages a matching person manages. */}
+          <label className="adm-mgr-search adm-pc-mgrsearch">
+            <SearchIcon className="h-4 w-4" />
+            <input
+              className="adm-input"
+              value={mq}
+              onChange={(e) => setMq(e.target.value)}
+              placeholder="Search by manager…"
+              aria-label="Search Pages by manager"
+            />
+            {mq && (
+              <button type="button" className="adm-mgr-search-clear" aria-label="Clear manager search" onClick={() => setMq("")}>
+                ×
+              </button>
+            )}
+          </label>
+
           <div className="adm-pc-listrange">
             <RangeControl range={range} onChange={setRange} />
           </div>
 
-          <div className="adm-pc-list">
-            {pageItems.map((p) => (
-              <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
-                <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="adm-pc-row-name">{p.pageName}</div>
-                  <div className="adm-card-sub" style={{ marginTop: 1 }}>
-                    Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
+          {managerActive ? (
+            groups.length === 0 ? (
+              <p className="adm-card-sub" style={{ marginTop: 8 }}>No Pages are managed by someone matching “{mqDebounced.trim()}”.</p>
+            ) : (
+              <div className="adm-pc-list">
+                {groups.map((g) => (
+                  <div key={g.manager.id} className="adm-pc-group">
+                    <div className="adm-pc-group-head">
+                      <ManagerAvatar name={g.manager.name} photo={g.manager.photo} size={22} />
+                      <span className="adm-pc-group-name">{g.manager.name}</span>
+                      <span className="adm-pc-group-count">· {g.items.length} {g.items.length === 1 ? "page" : "pages"}</span>
+                    </div>
+                    {g.items.map(renderRow)}
                   </div>
-                  <RowStats entry={statsMap[`${rk}|${p.id}`]} />
-                </div>
-                {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
-                <span className="adm-pc-chev" aria-hidden>›</span>
-              </Link>
-            ))}
-          </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <>
+              <div className="adm-pc-list">{pageItems.map(renderRow)}</div>
 
-          {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
+              {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
 
-          <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
-            <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
-          </div>
+              <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
+                <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -309,6 +445,18 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
           appConfigured={appConfigured}
           onClose={() => setShowConnect(false)}
           onConnected={onConnected}
+          onError={error}
+        />
+      )}
+
+      {pickerPage && (
+        <ManagerPicker
+          pageName={pickerPage.pageName}
+          currentId={assignments[pickerPage.id] ?? null}
+          managers={managers}
+          onAssign={(managerId) => onAssign(pickerPage.id, managerId)}
+          onCreate={onCreate}
+          onClose={() => setPickerFor(null)}
           onError={error}
         />
       )}
