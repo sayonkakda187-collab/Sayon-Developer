@@ -11,11 +11,30 @@ import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
-import type { InsightsPageRow } from "@/components/admin/FacebookPageInsights";
+import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
+import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
 
 const PER_PAGE = 24;
 const STATS_API = "/api/admin/page-control/stats";
 const BATCH = 8;
+const SS_RANGE = "pageControl.listRange";
+
+/** Remembered list range (recompute relative presets vs today; keep custom dates). */
+function initialRange(): Range {
+  const fallback: Range = { preset: "28d", ...presetRange("28d") };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = sessionStorage.getItem(SS_RANGE);
+    if (raw) {
+      const r = JSON.parse(raw) as Partial<Range>;
+      if (r.preset === "custom" && r.from && r.to) return { preset: "custom", from: r.from, to: r.to };
+      if (r.preset && r.preset !== "custom") return { preset: r.preset, ...presetRange(r.preset) };
+    }
+  } catch {
+    // fall through
+  }
+  return fallback;
+}
 
 /** A monitored page row for the landing list (InsightsPageRow + its follower count). */
 export type MonitoredRow = InsightsPageRow & { followers: number | null };
@@ -78,8 +97,8 @@ function PostsPill({ count, capped }: { count: number | null; capped: boolean })
   );
 }
 
-/** The 28-day quick-stat pills under a row: shimmer while loading, "—" when a page
- *  has no insights / token can't read them, else Reach · Engaged · Follows + Δ%. */
+/** The selected-range quick-stat pills under a row: shimmer while loading, "—" when
+ *  a page has no insights / token can't read them, else Reach · Engaged · Follows + Δ%. */
 function RowStats({ entry }: { entry: StatEntry | undefined }) {
   if (entry === undefined || entry === "loading") {
     return (
@@ -93,7 +112,7 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
   if (entry === "error" || entry.status === "reconnect") {
     return (
       <div className="adm-pc-stats">
-        <span className="adm-pc-stat"><span className="adm-pc-stat-k">28-day reach</span><span className="adm-pc-stat-v">—</span></span>
+        <span className="adm-pc-stat"><span className="adm-pc-stat-k">Reach</span><span className="adm-pc-stat-v">—</span></span>
       </div>
     );
   }
@@ -101,7 +120,7 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
   const spark = entry.reach != null && entry.sparkReach.length > 1 ? entry.sparkReach : entry.sparkEngagement;
   return (
     <div className="adm-pc-statsrow">
-      <div className="adm-pc-stats" title="Total posts (all-time) · last 28 days vs the previous 28 days">
+      <div className="adm-pc-stats" title="Total posts (all-time) · selected range vs the previous equal-length period">
         <PostsPill count={entry.totalPosts} capped={entry.totalPostsCapped} />
         <StatPill label="Reach" value={entry.reach} prev={entry.reachPrev} />
         <StatPill label="Engaged" value={entry.engagement} prev={entry.engagementPrev} />
@@ -130,6 +149,16 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
   const [showConnect, setShowConnect] = useState(false);
   const [statsMap, setStatsMap] = useState<Record<string, StatEntry>>({});
   const requestedRef = useRef<Set<string>>(new Set());
+  const [range, setRange] = useState<Range>(initialRange);
+  const rk = rangeKey(range.from, range.to);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SS_RANGE, JSON.stringify(range));
+    } catch {
+      /* ignore (private mode / quota) */
+    }
+  }, [range]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -139,57 +168,60 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
 
   const { page, setPage, pageCount, pageItems, total } = usePaged(filtered, PER_PAGE);
 
-  const fetchBatch = useCallback(async (ids: string[]) => {
+  // Stats + the "requested" set are keyed by `${rangeKey}|${id}`, so each range has
+  // its own cached view — switching ranges refetches only the not-yet-seen combos,
+  // and switching back is instant.
+  const fetchBatch = useCallback(async (ids: string[], from: string, to: string, key: string) => {
     setStatsMap((prev) => {
       const next = { ...prev };
-      ids.forEach((id) => (next[id] = "loading"));
+      ids.forEach((id) => (next[`${key}|${id}`] = "loading"));
       return next;
     });
     try {
       const res = await fetch(STATS_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ ids, from, to }),
       });
       const json = await res.json();
       setStatsMap((prev) => {
         const next = { ...prev };
         if (json.ok && Array.isArray(json.rows)) {
           const byId = new Map<string, RowStatsData>((json.rows as RowStatsData[]).map((r) => [r.id, r]));
-          ids.forEach((id) => (next[id] = byId.get(id) ?? "error"));
+          ids.forEach((id) => (next[`${key}|${id}`] = byId.get(id) ?? "error"));
         } else {
-          ids.forEach((id) => (next[id] = "error"));
+          ids.forEach((id) => (next[`${key}|${id}`] = "error"));
         }
         return next;
       });
     } catch {
       setStatsMap((prev) => {
         const next = { ...prev };
-        ids.forEach((id) => (next[id] = "error"));
+        ids.forEach((id) => (next[`${key}|${id}`] = "error"));
         return next;
       });
     }
   }, []);
 
-  // Fetch quick stats for the visible rows only (lazy), in small sequential
-  // batches so we never burst Graph for the whole list. `idsKey` re-runs this only
-  // when the visible set changes (pagination / search), not on every render.
+  // Fetch quick stats for the visible rows only (lazy), in small sequential batches
+  // so we never burst Graph for the whole list. Re-runs when the visible set
+  // (pagination / search) OR the selected range changes.
   const idsKey = pageItems.map((p) => p.id).join(",");
   useEffect(() => {
     const visible = idsKey ? idsKey.split(",") : [];
-    const todo = visible.filter((id) => !requestedRef.current.has(id));
+    const todo = visible.filter((id) => !requestedRef.current.has(`${rk}|${id}`));
     if (todo.length === 0) return;
-    todo.forEach((id) => requestedRef.current.add(id));
+    todo.forEach((id) => requestedRef.current.add(`${rk}|${id}`));
     let cancelled = false;
     (async () => {
       for (let i = 0; i < todo.length && !cancelled; i += BATCH) {
-        await fetchBatch(todo.slice(i, i + BATCH));
+        await fetchBatch(todo.slice(i, i + BATCH), range.from, range.to, rk);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [idsKey, fetchBatch]);
+  }, [idsKey, rk, range.from, range.to, fetchBatch]);
 
   function onConnected(added: number) {
     setShowConnect(false);
@@ -225,6 +257,10 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
             {connectBtn}
           </div>
 
+          <div className="adm-pc-listrange">
+            <RangeControl range={range} onChange={setRange} />
+          </div>
+
           <div className="adm-pc-list">
             {pageItems.map((p) => (
               <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
@@ -234,7 +270,7 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
                   <div className="adm-card-sub" style={{ marginTop: 1 }}>
                     Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
                   </div>
-                  <RowStats entry={statsMap[p.id]} />
+                  <RowStats entry={statsMap[`${rk}|${p.id}`]} />
                 </div>
                 {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
                 <span className="adm-pc-chev" aria-hidden>›</span>
@@ -245,7 +281,7 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
           {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
 
           <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span className="adm-fb-sub">Stats = last 28 days</span>
+            <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
             <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
           </div>
         </>

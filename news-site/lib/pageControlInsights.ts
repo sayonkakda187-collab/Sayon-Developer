@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
 import { FacebookApiError } from "@/lib/facebook";
 import { getPageDaily, type DayPoint } from "@/lib/facebookInsights";
-import { rangeToUnix, rangeKey, ppToday, addDays } from "@/lib/fbInsightsRange";
+import { rangeToUnix, rangeKey, ppToday, previousPeriod } from "@/lib/fbInsightsRange";
 
 /**
  * Page Control insights data layer for MONITORED pages. Reuses the shared,
@@ -122,40 +122,39 @@ export type MonitoredRowStats = {
   reachPrev: number | null;
   engagementPrev: number | null;
   followsPrev: number | null;
-  /** Last-28-day daily series (chronological) for the row sparkline. */
+  /** Selected-range daily series (chronological) for the row sparkline. */
   sparkReach: number[];
   sparkEngagement: number[];
   status: "ok" | "reconnect";
 };
 
 /**
- * Landing-list quick stats for one monitored page: last-28-day reach / engagement /
- * net new follows, plus the previous 28 days (for a % change) and a 28-day daily
- * series for the row sparkline. Computed from ONE cached 56-day daily series — so a
- * page's row costs at most one Graph call per ~6h, never a bulk hammer.
+ * Landing-list quick stats for one monitored page over a SELECTED range: reach /
+ * engagement / net new follows for [from, to], the equal-length previous period
+ * (for a % change), and the range's daily series for the row sparkline. Computed
+ * from ONE cached daily series spanning prev-start..to — cached per (page, range)
+ * via `MonitoredPageDailyCache`, so each row costs at most one Graph call per range
+ * per ~6h, never a bulk hammer.
  */
 export async function getMonitoredRowStats(
   page: { id: string; pageId: string; accessToken: string },
+  range: { from: string; to: string },
   wantFresh = false,
 ): Promise<MonitoredRowStats> {
-  const today = ppToday();
-  const winFrom = addDays(today, -55);
-  const { days, status } = await getMonitoredDaily(page, winFrom, today, wantFresh);
+  const prev = previousPeriod(range.from, range.to);
+  const { days, status } = await getMonitoredDaily(page, prev.from, range.to, wantFresh);
   if (status === "reconnect") {
     return { reach: null, engagement: null, follows: null, reachPrev: null, engagementPrev: null, followsPrev: null, sparkReach: [], sparkEngagement: [], status };
   }
-  const curFrom = addDays(today, -27);
-  const prevFrom = winFrom;
-  const prevTo = addDays(today, -28);
   return {
-    reach: sumWindow(days, curFrom, today, "reach"),
-    engagement: sumWindow(days, curFrom, today, "engagement"),
-    follows: sumWindow(days, curFrom, today, "follows"),
-    reachPrev: sumWindow(days, prevFrom, prevTo, "reach"),
-    engagementPrev: sumWindow(days, prevFrom, prevTo, "engagement"),
-    followsPrev: sumWindow(days, prevFrom, prevTo, "follows"),
-    sparkReach: windowSeries(days, curFrom, today, "reach"),
-    sparkEngagement: windowSeries(days, curFrom, today, "engagement"),
+    reach: sumWindow(days, range.from, range.to, "reach"),
+    engagement: sumWindow(days, range.from, range.to, "engagement"),
+    follows: sumWindow(days, range.from, range.to, "follows"),
+    reachPrev: sumWindow(days, prev.from, prev.to, "reach"),
+    engagementPrev: sumWindow(days, prev.from, prev.to, "engagement"),
+    followsPrev: sumWindow(days, prev.from, prev.to, "follows"),
+    sparkReach: windowSeries(days, range.from, range.to, "reach"),
+    sparkEngagement: windowSeries(days, range.from, range.to, "engagement"),
     status: "ok",
   };
 }

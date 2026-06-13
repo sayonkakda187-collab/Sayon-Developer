@@ -2584,6 +2584,12 @@ a.dl-breaking-text:hover { text-decoration:none; }
 @media (min-width: 1024px) { .adm-pc-gaugewrap { max-width: 280px; } }
 .adm-pc-gauge-msg { flex-direction: column; min-height: 120px; justify-content: center; gap: 6px; }
 
+/* List range control — chips scroll horizontally on narrow screens (no overflow) */
+.adm-pc-listrange { margin-bottom: 12px; }
+.adm-pc-listrange .adm-seg { flex-wrap: nowrap !important; overflow-x: auto; max-width: 100%; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.adm-pc-listrange .adm-seg::-webkit-scrollbar { display: none; }
+.adm-pc-listrange .adm-seg-btn { flex: none; }
+
 /* Dashboard header (back · identity · open) */
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
