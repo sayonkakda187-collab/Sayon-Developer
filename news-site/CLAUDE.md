@@ -1159,7 +1159,9 @@ official Graph API only; tokens never reach the browser.
 
 ## Page Control (per-Page dashboard — Summary · Content · Analytics)
 
-A top-level admin section (`/admin/page-control`, emerald accent, nav **footer
+A top-level admin section (`/admin/page-control`, **deep-emerald** accent
+`#047857` — chosen distinct from the success-green status color, AA in light+dark;
+nav **footer
 group** — sidebar + mobile drawer, deliberately NOT the crowded phone bottom bar)
 that gives each connected Page a Facebook-app-style Page view. It's almost entirely
 a **new presentation layer** over the EXISTING Facebook plumbing — same token

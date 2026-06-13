@@ -2516,7 +2516,7 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .admin-shell[data-section="categories"]   { --sa: 124 58 237;  --sa-ink: 124 58 237;  --sa-on: 196 181 253; }
 .admin-shell[data-section="comments"]     { --sa: 2 132 199;   --sa-ink: 3 105 161;   --sa-on: 56 189 248; }
 .admin-shell[data-section="facebook"]     { --sa: 24 119 242;  --sa-ink: 21 92 196;   --sa-on: 105 169 247; }
-.admin-shell[data-section="page-control"] { --sa: 5 150 105;   --sa-ink: 4 120 87;    --sa-on: 52 211 153; }
+.admin-shell[data-section="page-control"] { --sa: 4 120 87;   --sa-ink: 6 95 70;     --sa-on: 52 211 153; }
 .admin-shell[data-section="ai-assistant"] { --sa: 139 92 246;  --sa-ink: 109 40 217;  --sa-on: 208 180 254; }
 .admin-shell[data-section="scheduled"]    { --sa: 217 119 6;   --sa-ink: 180 83 9;    --sa-on: 251 191 36; }
 .admin-shell[data-section="ai-images"]    { --sa: 219 39 119;  --sa-ink: 190 24 93;   --sa-on: 244 114 182; }
