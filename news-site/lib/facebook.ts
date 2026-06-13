@@ -496,6 +496,59 @@ export async function getPagePosts(
   return { posts, after };
 }
 
+/**
+ * All-time (or best-available) count of a Page's PUBLISHED posts. Graph v25.0 has
+ * NO direct post-count field, so: first ask `summary=total_count` on the first
+ * page — if the edge returns it we get an EXACT count in ONE cheap call; otherwise
+ * cursor-paginate `fields=id` (100/page) counting posts up to `capPages` pages and
+ * report `capped: true` when more remain (the count is then a floor, shown as
+ * "N+"). Bounded (≤ capPages calls) — meant to be called LAZILY per page + cached.
+ * Needs `pages_read_engagement`; token/permission errors throw. SERVER-SIDE ONLY.
+ */
+export async function getPageTotalPosts(
+  pageId: string,
+  accessToken: string,
+  opts: { capPages?: number } = {},
+): Promise<{ count: number; capped: boolean }> {
+  const capPages = Math.max(1, Math.round(opts.capPages ?? 12)); // up to ~1200 posts
+  const enc = encodeURIComponent;
+
+  // First page also asks for summary=total_count — an EXACT count in one call when
+  // the edge supports it; otherwise we already have page 1 to start counting from.
+  const firstUrl =
+    `${GRAPH_BASE}/${enc(pageId)}/published_posts?fields=id&summary=total_count&limit=100` +
+    `&access_token=${enc(accessToken)}`;
+  const firstRes = await graphFetch(firstUrl, { method: "GET", cache: "no-store" });
+  const first = await parseGraph<{
+    data?: { id?: string }[];
+    summary?: { total_count?: number };
+    paging?: { next?: string; cursors?: { after?: string } };
+  }>(firstRes, "Could not count this Page's posts");
+
+  if (typeof first.summary?.total_count === "number") {
+    return { count: first.summary.total_count, capped: false };
+  }
+
+  let count = (first.data ?? []).length;
+  let after = first.paging?.next ? first.paging?.cursors?.after ?? null : null;
+  let pages = 1;
+  while (after && pages < capPages) {
+    const url =
+      `${GRAPH_BASE}/${enc(pageId)}/published_posts?fields=id&limit=100&after=${enc(after)}` +
+      `&access_token=${enc(accessToken)}`;
+    const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+    const data = await parseGraph<{ data?: { id?: string }[]; paging?: { next?: string; cursors?: { after?: string } } }>(
+      res,
+      "Could not count this Page's posts",
+    );
+    count += (data.data ?? []).length;
+    after = data.paging?.next ? data.paging?.cursors?.after ?? null : null;
+    pages++;
+  }
+  // `after` still set → more posts beyond the cap → the count is a floor ("N+").
+  return { count, capped: Boolean(after) };
+}
+
 // ── Page Insights (Pages performance overview + trends) ──────────────────────
 //
 // Meta has retired many Page metrics (e.g. page_impressions* / page_fans were

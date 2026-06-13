@@ -346,6 +346,12 @@ model MonitoredPage {
   avatarUrl       String? // cached public CDN url (no token); null → initials
   avatarFetchedAt DateTime?
   followers       Int? // cached follower count for the dashboard header
+  // Cached all-time post count for the Summary "Total posts" gauge. Computed
+  // lazily (when the dashboard opens) + cached ~24h. `capped` = the count hit the
+  // pagination cap, so it's a floor shown as "N+".
+  totalPosts       Int?
+  totalPostsCapped Boolean   @default(false)
+  totalPostsAt     DateTime?
   status          String    @default("Connected") // "Connected" | "Expired"
   lastSyncedAt    DateTime? // last successful token validation
   createdAt       DateTime  @default(now())

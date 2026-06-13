@@ -2577,6 +2577,11 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pc-chart-tip-v { font-weight: 800; font-variant-numeric: tabular-nums; }
 .adm-pc-chart-tip-d { opacity: .82; font-size: 10px; }
 
+/* Total-posts gauge (Summary) — reuses the .adm-stat / .adm-gauge card style */
+.adm-pc-gaugewrap { margin-bottom: 16px; }
+@media (min-width: 1024px) { .adm-pc-gaugewrap { max-width: 280px; } }
+.adm-pc-gauge-msg { flex-direction: column; min-height: 120px; justify-content: center; gap: 6px; }
+
 /* Dashboard header (back · identity · open) */
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
