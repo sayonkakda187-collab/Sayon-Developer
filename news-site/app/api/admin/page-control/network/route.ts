@@ -21,10 +21,11 @@ function parseRange(from: string | null, to: string | null): { from: string; to:
 }
 
 /**
- * GET `?from=&to=&refresh=1` — the Page Control NETWORK rollup (totals, trend,
+ * GET `?from=&to=&manager=&refresh=1` — the Page Control NETWORK rollup (totals, trend,
  * leaderboard, top posts, risers/fallers, health) aggregated from EXISTING per-page
- * caches (no Graph calls). Cached ~1h per range. `refresh=1` recomputes from the
- * current caches. Read-only; coverage is reported in the payload.
+ * caches (no Graph calls). `manager=<PageManager id>` restricts the rollup to that
+ * manager's pages (cached separately per manager). Cached ~1h per (range, manager).
+ * `refresh=1` recomputes from the current caches. Read-only; coverage is in the payload.
  */
 export async function GET(req: Request) {
   const user = await getSessionUser();
@@ -33,9 +34,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const range = parseRange(searchParams.get("from"), searchParams.get("to"));
   const refresh = searchParams.get("refresh") === "1";
+  const managerParam = searchParams.get("manager");
+  const managerId = managerParam && managerParam.trim() ? managerParam.trim() : null;
 
   try {
-    const rollup = await getNetworkRollup(range, refresh);
+    const rollup = await getNetworkRollup(range, managerId, refresh);
     return NextResponse.json({ ok: true, from: range.from, to: range.to, rollup });
   } catch {
     return NextResponse.json({ ok: false, error: "Couldn’t build the network dashboard." });
