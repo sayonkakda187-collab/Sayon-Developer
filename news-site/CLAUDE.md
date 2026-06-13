@@ -1274,11 +1274,43 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   dashboard), **top posts network-wide** (from cached posts), **risers & fallers** (reach
   %-change), **page-health split** (growing/flat/shrinking followers). Reuses the #132/#134
   animated chart primitives (count-up + draw-in, once on scroll-in, reduced-motion safe).
+- **Managers (team members).** Top-level **`Pages` | `Managers`** sub-tabs (`PageControlTabs`,
+  swipeable row, no overflow, defaults to Pages). A **`PageManager`** store (id · name ·
+  optional `photo`) is **LOCAL app data — never a Facebook token**; each `MonitoredPage` gets
+  an optional **`managerId`** (FK `onDelete: SetNull` — deleting a manager unassigns its pages,
+  never deletes them; a manager owns many pages, a page has 0–1). CRUD + assignment via
+  `app/admin/page-manager-actions.ts` (`createManager`/`updateManager`/`deleteManager`/
+  `assignManager`, admin-only, `revalidatePath`). **Uploaded photos reuse the existing
+  `/api/admin/upload`** → **Vercel Blob** (prod) / `./public/uploads` (local dev); only the
+  URL is stored on `PageManager.photo`. No photo → deterministic coloured-initials circle
+  (`ManagerAvatar`, reuses `avatarColor`). UI: (1) **Managers tab** (`ManagersScreen`) lists
+  managers (avatar + "manages N pages"), Add/Edit (`ManagerDialog` + `ManagerPhotoInput`),
+  Delete (confirm), expand → add/remove that manager's pages — **the single place assignments
+  happen**; (2) each Pages-list row shows its assigned manager as a small **read-only badge**
+  (avatar + name) in the **top-right corner** opposite the page name (nothing when unassigned);
+  rows have **no assign control**; (3) **"Search by manager…"** box atop the list filters to the
+  pages a matching person manages, **grouped** per manager ("Dara · 3 pages"); the header
+  "Search Pages" stays the page-search. `PageControlTabs` is the single state owner (optimistic
+  + `router.refresh()`) so the row badges, counts and both tabs stay in sync. Touches only Page
+  Control + the manager store.
+- **Expandable row charts.** Each list row (Box 1) stays compact but is now a tap-toggle (`role=
+  button`, ⌄ caret) that reveals an inline charts panel below it (accordion, one open at a time);
+  the full-dashboard action moves to an **"Open page →"** link inside the panel. The panel lazily
+  GETs `app/api/admin/page-control/row-charts` (`?id&from&to`) ONLY when expanded and memoises per
+  (page, range) client-side. Three charts for the selected range, all from EXISTING caches (no bulk
+  Graph): **reach trend** (`AnimatedAreaChart`, tap/hover tooltips — reuses the SAME
+  `MonitoredPageDailyCache` entry the row stats populate, sliced to range), **posts/day** (new
+  `AnimatedStackedBars`, video·image) and **type mix** (new `TypeMixBar`, %). Server: `lib/
+  pageControlRowCharts.ts` (`getMonitoredRowCharts`) + a new `getPagePostsDailyInRange` (created_time
+  + media_type, one capped range call) bucketed per Phnom-Penh day and cached in
+  `MonitoredPageRangePostsCache` under a namespaced `<rangeKey>#daily` key (**no migration**). All
+  reduced-motion safe. Touches only the list row + its expand/chart logic.
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
   (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`
   (`20260613060000_monitored_page_total_posts`) + `MonitoredPageRangePostsCache`
-  (`20260613070000_monitored_page_range_posts`, the list row's range-aware post counts),
+  (`20260613070000_monitored_page_range_posts`, the list row's range-aware post counts)
+  + `PageManager` table & `MonitoredPage.managerId` FK (`20260613080000_page_manager`),
   all auto-apply. The network rollup reuses
   `AppSetting` (no new table). **No new env** (App creds can reuse
   `FACEBOOK_APP_ID`/`SECRET`; the user token is pasted in the tab). Read-only.

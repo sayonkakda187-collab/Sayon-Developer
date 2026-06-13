@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { PlusIcon } from "@/components/admin/icons";
+import { PlusIcon, SearchIcon } from "@/components/admin/icons";
 import { usePaged, AdminPager } from "@/components/admin/Pager";
 import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
-import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
+import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
+import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
 
@@ -36,8 +37,9 @@ function initialRange(): Range {
   return fallback;
 }
 
-/** A monitored page row for the landing list (InsightsPageRow + its follower count). */
-export type MonitoredRow = InsightsPageRow & { followers: number | null };
+/** A monitored page row for the landing list (InsightsPageRow + follower count +
+ *  the id of its assigned manager, if any). */
+export type MonitoredRow = InsightsPageRow & { followers: number | null; managerId: string | null };
 
 // Posts published WITHIN the selected range, split video vs image/other (capped = floor).
 type RangePosts = { total: number; video: number; image: number; capped: boolean };
@@ -153,21 +155,48 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
 /**
  * Page Control landing — shows ONLY the pages connected INSIDE this tab
  * (MonitoredPage store), with its own "Connect Page" flow. Each row carries
- * 28-day quick stats (Reach · Engaged · Follows + Δ% vs the previous 28d), fetched
- * lazily in small batches with a per-row shimmer and cached ~6h server-side — never
- * a bulk hammer. Empty state nudges the first connection.
+ * range-aware quick stats (Reach · Engaged · Follows + Δ%) fetched lazily in small
+ * batches with a per-row shimmer and cached ~6h server-side, plus a small read-only
+ * badge in the top-right showing the assigned manager (none if unassigned). All
+ * assigning happens in the Managers tab. A "Search by manager…" box filters the list
+ * to the Pages a matching person manages, grouped per manager.
  */
-export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[]; appConfigured: boolean }) {
+export function PageControlList({
+  pages,
+  appConfigured,
+  managers,
+  assignments,
+}: {
+  pages: MonitoredRow[];
+  appConfigured: boolean;
+  managers: Manager[];
+  assignments: Record<string, string | null>;
+}) {
   const { success, error } = useToast();
   const router = useRouter();
-  // Filter query comes from the header "Search Pages…" bar (shared store), so there
-  // is exactly ONE page-search input — in the top header — not a second box here.
+  // The page-name filter comes from the header "Search Pages…" bar (shared store), so
+  // there is exactly ONE page-search input — in the top header. The manager-search box
+  // below is separate and filters by the assigned team member.
   const query = usePageControlSearch();
   const [showConnect, setShowConnect] = useState(false);
   const [statsMap, setStatsMap] = useState<Record<string, StatEntry>>({});
   const requestedRef = useRef<Set<string>>(new Set());
   const [range, setRange] = useState<Range>(initialRange);
   const rk = rangeKey(range.from, range.to);
+
+  // Manager filter (debounced).
+  const [mq, setMq] = useState("");
+  const [mqDebounced, setMqDebounced] = useState("");
+
+  // Expandable rows: one open at a time (accordion) + a client cache of fetched chart
+  // data per (page, range) so collapse/re-expand within a session never refetches.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const chartCacheRef = useRef<Map<string, RowChartsResp>>(new Map());
+
+  useEffect(() => {
+    const t = setTimeout(() => setMqDebounced(mq), 200);
+    return () => clearTimeout(t);
+  }, [mq]);
 
   useEffect(() => {
     try {
@@ -177,17 +206,46 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     }
   }, [range]);
 
+  const managerById = useMemo(() => new Map(managers.map((m) => [m.id, m])), [managers]);
+
+  // 1) Page-name filter (header search) — unchanged behavior.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return pages;
     return pages.filter((p) => p.pageName.toLowerCase().includes(q));
   }, [pages, query]);
 
-  const { page, setPage, pageCount, pageItems, total } = usePaged(filtered, PER_PAGE);
+  // 2) Manager filter — when active, narrow to Pages whose assigned manager's name
+  // matches, and prepare per-manager groups for a grouped render.
+  const mqv = mqDebounced.trim().toLowerCase();
+  const managerActive = mqv !== "";
+  const matchingManagerIds = useMemo(
+    () => (managerActive ? new Set(managers.filter((m) => m.name.toLowerCase().includes(mqv)).map((m) => m.id)) : null),
+    [managerActive, managers, mqv],
+  );
+  const managerFiltered = useMemo(() => {
+    if (!managerActive || !matchingManagerIds) return filtered;
+    return filtered.filter((p) => {
+      const id = assignments[p.id];
+      return id != null && matchingManagerIds.has(id);
+    });
+  }, [filtered, managerActive, matchingManagerIds, assignments]);
+
+  const { page, setPage, pageCount, pageItems, total } = usePaged(managerFiltered, PER_PAGE);
+
+  // In manager-search mode we render every match grouped (no pagination); otherwise the
+  // normal paginated slice. Quick stats load for whichever rows are actually visible.
+  const visibleRows = managerActive ? managerFiltered : pageItems;
+  const groups = useMemo(() => {
+    if (!managerActive || !matchingManagerIds) return [];
+    return managers
+      .filter((m) => matchingManagerIds.has(m.id))
+      .map((m) => ({ manager: m, items: managerFiltered.filter((p) => assignments[p.id] === m.id) }))
+      .filter((g) => g.items.length > 0);
+  }, [managerActive, matchingManagerIds, managers, managerFiltered, assignments]);
 
   // Stats + the "requested" set are keyed by `${rangeKey}|${id}`, so each range has
-  // its own cached view — switching ranges refetches only the not-yet-seen combos,
-  // and switching back is instant.
+  // its own cached view — switching ranges refetches only the not-yet-seen combos.
   const fetchBatch = useCallback(async (ids: string[], from: string, to: string, key: string) => {
     setStatsMap((prev) => {
       const next = { ...prev };
@@ -220,10 +278,10 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     }
   }, []);
 
-  // Fetch quick stats for the visible rows only (lazy), in small sequential batches
-  // so we never burst Graph for the whole list. Re-runs when the visible set
-  // (pagination / search) OR the selected range changes.
-  const idsKey = pageItems.map((p) => p.id).join(",");
+  // Fetch quick stats for the visible rows only (lazy), in small sequential batches so
+  // we never burst Graph for the whole list. Re-runs when the visible set (pagination /
+  // page-search / manager-search) OR the selected range changes.
+  const idsKey = visibleRows.map((p) => p.id).join(",");
   useEffect(() => {
     const visible = idsKey ? idsKey.split(",") : [];
     const todo = visible.filter((id) => !requestedRef.current.has(`${rk}|${id}`));
@@ -252,6 +310,53 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
     </button>
   );
 
+  // One monitored-page row (reused in the flat list + the grouped manager view). The
+  // compact row is UNCHANGED (avatar, name, manager badge, followers, pills, sparkline)
+  // — tapping it toggles an inline charts panel below (expand in place, not navigate).
+  // "Open page →" inside the panel keeps the full-dashboard action.
+  function renderRow(p: MonitoredRow) {
+    const m = assignments[p.id] ? managerById.get(assignments[p.id]!) ?? null : null;
+    const isOpen = expanded === p.id;
+    return (
+      <div key={p.id} className={`adm-pc-rowwrap ${isOpen ? "on" : ""}`}>
+        <div
+          className="adm-card adm-pc-row"
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          aria-label={`${p.pageName} — ${isOpen ? "collapse" : "expand"} charts`}
+          onClick={() => setExpanded(isOpen ? null : p.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setExpanded(isOpen ? null : p.id);
+            }
+          }}
+        >
+          <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
+          <div className="adm-pc-rowbody" style={{ minWidth: 0, flex: 1 }}>
+            <div className="adm-pc-row-top">
+              <div className="adm-pc-row-name">{p.pageName}</div>
+              {m && (
+                <span className="adm-pc-rowmgr" title={`Manager: ${m.name}`}>
+                  <ManagerAvatar name={m.name} photo={m.photo} size={22} />
+                  <span className="adm-pc-rowmgr-name">{m.name}</span>
+                </span>
+              )}
+            </div>
+            <div className="adm-card-sub" style={{ marginTop: 1 }}>
+              Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
+            </div>
+            <RowStats entry={statsMap[`${rk}|${p.id}`]} />
+          </div>
+          {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
+          <span className={`adm-pc-caret ${isOpen ? "on" : ""}`} aria-hidden>⌄</span>
+        </div>
+        {isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} />}
+      </div>
+    );
+  }
+
   return (
     <div>
       {pages.length === 0 ? (
@@ -274,33 +379,56 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
             {connectBtn}
           </div>
 
+          {/* Manager-search — filters the list to the Pages a matching person manages. */}
+          <label className="adm-mgr-search adm-pc-mgrsearch">
+            <SearchIcon className="h-4 w-4" />
+            <input
+              className="adm-input"
+              value={mq}
+              onChange={(e) => setMq(e.target.value)}
+              placeholder="Search by manager…"
+              aria-label="Search Pages by manager"
+            />
+            {mq && (
+              <button type="button" className="adm-mgr-search-clear" aria-label="Clear manager search" onClick={() => setMq("")}>
+                ×
+              </button>
+            )}
+          </label>
+
           <div className="adm-pc-listrange">
             <RangeControl range={range} onChange={setRange} />
           </div>
 
-          <div className="adm-pc-list">
-            {pageItems.map((p) => (
-              <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
-                <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="adm-pc-row-name">{p.pageName}</div>
-                  <div className="adm-card-sub" style={{ marginTop: 1 }}>
-                    Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
+          {managerActive ? (
+            groups.length === 0 ? (
+              <p className="adm-card-sub" style={{ marginTop: 8 }}>No Pages are managed by someone matching “{mqDebounced.trim()}”.</p>
+            ) : (
+              <div className="adm-pc-list">
+                {groups.map((g) => (
+                  <div key={g.manager.id} className="adm-pc-group">
+                    <div className="adm-pc-group-head">
+                      <ManagerAvatar name={g.manager.name} photo={g.manager.photo} size={22} />
+                      <span className="adm-pc-group-name">{g.manager.name}</span>
+                      <span className="adm-pc-group-count">· {g.items.length} {g.items.length === 1 ? "page" : "pages"}</span>
+                    </div>
+                    {g.items.map(renderRow)}
                   </div>
-                  <RowStats entry={statsMap[`${rk}|${p.id}`]} />
-                </div>
-                {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
-                <span className="adm-pc-chev" aria-hidden>›</span>
-              </Link>
-            ))}
-          </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <>
+              <div className="adm-pc-list">{pageItems.map(renderRow)}</div>
 
-          {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
+              {filtered.length === 0 && <p className="adm-card-sub" style={{ marginTop: 12 }}>No Pages match “{query}”.</p>}
 
-          <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
-            <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
-          </div>
+              <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span className="adm-fb-sub">Stats: {formatRange(range.from, range.to)}{range.to === ppToday() ? " · today partial" : ""}</span>
+                <AdminPager page={page} pageCount={pageCount} onPage={setPage} />
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -311,6 +439,108 @@ export function PageControlList({ pages, appConfigured }: { pages: MonitoredRow[
           onConnected={onConnected}
           onError={error}
         />
+      )}
+    </div>
+  );
+}
+
+// Lazy chart payload for one expanded row (matches /api/admin/page-control/row-charts).
+type RowChartsResp = {
+  ok: boolean;
+  reach: { date: string; value: number }[];
+  posts: { date: string; video: number; image: number }[];
+  typeMix: { video: number; image: number };
+  capped: boolean;
+  status: "ok" | "reconnect";
+};
+
+/**
+ * The inline panel under an expanded row: three charts (reach trend, posts/day
+ * video·image, type mix) for the SELECTED range. Fetched LAZILY only when the row is
+ * expanded, from the existing per-page caches, and memoised per (page, range) in the
+ * list's `cache` ref so collapse/re-expand (or returning to a range) never refetches.
+ */
+function ExpandedRowCharts({
+  pageId,
+  from,
+  to,
+  rk,
+  cache,
+}: {
+  pageId: string;
+  from: string;
+  to: string;
+  rk: string;
+  cache: React.MutableRefObject<Map<string, RowChartsResp>>;
+}) {
+  const [state, setState] = useState<RowChartsResp | "loading" | "error">(() => cache.current.get(`${pageId}|${rk}`) ?? "loading");
+
+  useEffect(() => {
+    const key = `${pageId}|${rk}`;
+    const hit = cache.current.get(key);
+    if (hit) {
+      setState(hit);
+      return;
+    }
+    let cancelled = false;
+    setState("loading");
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/page-control/row-charts?id=${encodeURIComponent(pageId)}&from=${from}&to=${to}`);
+        const json = (await res.json()) as RowChartsResp;
+        if (cancelled) return;
+        if (json.ok) {
+          cache.current.set(key, json);
+          setState(json);
+        } else {
+          setState("error");
+        }
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId, rk, from, to, cache]);
+
+  return (
+    <div className="adm-pc-expand">
+      <div className="adm-pc-expand-head">
+        <span className="adm-fb-sub">Charts · {formatRange(from, to)}</span>
+        <Link href={`/admin/page-control/${pageId}`} className="adm-pc-openlink">Open page →</Link>
+      </div>
+
+      {state === "loading" ? (
+        <div className="adm-pc-expand-body">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="adm-pc-expand-skel adm-pc-skel" />
+          ))}
+        </div>
+      ) : state === "error" ? (
+        <p className="adm-card-sub" style={{ margin: "8px 2px" }}>Couldn’t load charts — collapse and try again.</p>
+      ) : state.status === "reconnect" ? (
+        <p className="adm-card-sub" style={{ margin: "8px 2px" }}>Reconnect this Page to see its charts.</p>
+      ) : (
+        <div className="adm-pc-expand-body">
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Reach trend</div>
+            <AnimatedAreaChart current={state.reach} color="var(--section-accent)" formatValue={(v) => compact(Math.round(v))} />
+          </section>
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Posts per day</div>
+            <AnimatedStackedBars data={state.posts} />
+            <div className="adm-pc-barlegend">
+              <span><i className="adm-pc-sw v" />🎥 Video</span>
+              <span><i className="adm-pc-sw i" />🖼 Image</span>
+              {state.capped && <span className="adm-fb-sub">· first 100 posts</span>}
+            </div>
+          </section>
+          <section className="adm-pc-expand-sec">
+            <div className="adm-pc-expand-h">Type mix</div>
+            <TypeMixBar video={state.typeMix.video} image={state.typeMix.image} />
+          </section>
+        </div>
       )}
     </div>
   );

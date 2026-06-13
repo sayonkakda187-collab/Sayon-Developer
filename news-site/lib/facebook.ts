@@ -590,6 +590,44 @@ export async function getPagePostsInRange(
   return { total: video + image, video, image, capped: Boolean(data.paging?.next) };
 }
 
+/**
+ * Like getPagePostsInRange, but returns each in-range post's created_time + whether
+ * it's a video, so callers can bucket posts PER DAY (video vs image) for the row
+ * charts. Same single, capped, range-bounded /published_posts call — never the
+ * page's whole history.
+ */
+export async function getPagePostsDailyInRange(
+  pageId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+  cap = 100,
+): Promise<{ items: { createdTime: string; video: boolean }[]; capped: boolean }> {
+  const limit = Math.min(100, Math.max(1, Math.round(cap)));
+  const params = new URLSearchParams();
+  params.set("fields", "created_time,attachments{media_type,type}");
+  params.set("since", String(since));
+  params.set("until", String(until));
+  params.set("limit", String(limit));
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}/published_posts?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{
+    data?: { created_time?: string; attachments?: { data?: { media_type?: string; type?: string }[] } }[];
+    paging?: { next?: string };
+  }>(res, "Could not load this Page's posts for the range");
+
+  const items: { createdTime: string; video: boolean }[] = [];
+  for (const p of data.data ?? []) {
+    if (!p.created_time) continue;
+    const a = p.attachments?.data?.[0];
+    const mt = (a?.media_type || "").toLowerCase();
+    const ty = (a?.type || "").toLowerCase();
+    items.push({ createdTime: p.created_time, video: mt === "video" || ty.includes("video") });
+  }
+  return { items, capped: Boolean(data.paging?.next) };
+}
+
 // ── Page Insights (Pages performance overview + trends) ──────────────────────
 //
 // Meta has retired many Page metrics (e.g. page_impressions* / page_fans were
