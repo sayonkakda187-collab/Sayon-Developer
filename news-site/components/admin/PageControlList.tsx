@@ -12,7 +12,6 @@ import { usePageControlSearch } from "@/components/admin/pageControlSearchStore"
 import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
 import { AnimatedSparkline, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
-import { ManagerPicker } from "@/components/admin/ManagerPicker";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { presetRange, rangeKey, formatRange, ppToday } from "@/lib/fbInsightsRange";
 
@@ -157,24 +156,21 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
  * Page Control landing — shows ONLY the pages connected INSIDE this tab
  * (MonitoredPage store), with its own "Connect Page" flow. Each row carries
  * range-aware quick stats (Reach · Engaged · Follows + Δ%) fetched lazily in small
- * batches with a per-row shimmer and cached ~6h server-side, plus a small manager
- * chip (assign / change the team member who owns the Page). A "Search by manager…"
- * box filters the list to the Pages a matching person manages, grouped per manager.
+ * batches with a per-row shimmer and cached ~6h server-side, plus a small read-only
+ * badge in the top-right showing the assigned manager (none if unassigned). All
+ * assigning happens in the Managers tab. A "Search by manager…" box filters the list
+ * to the Pages a matching person manages, grouped per manager.
  */
 export function PageControlList({
   pages,
   appConfigured,
   managers,
   assignments,
-  onAssign,
-  onCreate,
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
   managers: Manager[];
   assignments: Record<string, string | null>;
-  onAssign: (pageId: string, managerId: string | null) => Promise<boolean>;
-  onCreate: (input: { name: string; photo: string | null }) => Promise<Manager | null>;
 }) {
   const { success, error } = useToast();
   const router = useRouter();
@@ -188,10 +184,9 @@ export function PageControlList({
   const [range, setRange] = useState<Range>(initialRange);
   const rk = rangeKey(range.from, range.to);
 
-  // Manager filter (debounced) + the per-row picker target.
+  // Manager filter (debounced).
   const [mq, setMq] = useState("");
   const [mqDebounced, setMqDebounced] = useState("");
-  const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setMqDebounced(mq), 200);
@@ -311,49 +306,26 @@ export function PageControlList({
   );
 
   // One monitored-page row (reused in the flat list + the grouped manager view). The
-  // row stays EXACTLY as before — we only ADD the small manager chip. The chip is a
-  // span (valid inside the row's <a>) that opens the picker instead of navigating.
+  // row stays EXACTLY as before — we only ADD a small read-only manager badge in the
+  // top-right (opposite the page name); nothing shows there when unassigned. There is
+  // no assign control on the row — all linking happens in the Managers tab.
   function renderRow(p: MonitoredRow) {
     const m = assignments[p.id] ? managerById.get(assignments[p.id]!) ?? null : null;
     return (
       <Link key={p.id} href={`/admin/page-control/${p.id}`} className="adm-card adm-pc-row">
         <FacebookPageAvatar dbId={p.id} name={p.pageName} avatarUrl={p.avatarUrl} size={44} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="adm-pc-row-name">{p.pageName}</div>
+        <div className="adm-pc-rowbody" style={{ minWidth: 0, flex: 1 }}>
+          <div className="adm-pc-row-top">
+            <div className="adm-pc-row-name">{p.pageName}</div>
+            {m && (
+              <span className="adm-pc-rowmgr" title={`Manager: ${m.name}`}>
+                <ManagerAvatar name={m.name} photo={m.photo} size={22} />
+                <span className="adm-pc-rowmgr-name">{m.name}</span>
+              </span>
+            )}
+          </div>
           <div className="adm-card-sub" style={{ marginTop: 1 }}>
             Watch-only{p.followers != null ? ` · ${formatNumber(p.followers)} followers` : ""}
-          </div>
-          <div className="adm-pc-mgrline">
-            <span
-              className={`adm-pc-mgrchip ${m ? "on" : ""}`}
-              role="button"
-              tabIndex={0}
-              aria-label={m ? `Manager: ${m.name}. Change manager.` : `Assign a manager to ${p.pageName}`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setPickerFor(p.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setPickerFor(p.id);
-                }
-              }}
-            >
-              {m ? (
-                <>
-                  <ManagerAvatar name={m.name} photo={m.photo} size={22} />
-                  <span className="adm-pc-mgrchip-name">{m.name}</span>
-                </>
-              ) : (
-                <>
-                  <span className="adm-pc-mgrchip-add" aria-hidden>+</span>
-                  <span className="adm-pc-mgrchip-name">Assign manager</span>
-                </>
-              )}
-            </span>
           </div>
           <RowStats entry={statsMap[`${rk}|${p.id}`]} />
         </div>
@@ -362,8 +334,6 @@ export function PageControlList({
       </Link>
     );
   }
-
-  const pickerPage = pickerFor ? pages.find((p) => p.id === pickerFor) ?? null : null;
 
   return (
     <div>
@@ -445,18 +415,6 @@ export function PageControlList({
           appConfigured={appConfigured}
           onClose={() => setShowConnect(false)}
           onConnected={onConnected}
-          onError={error}
-        />
-      )}
-
-      {pickerPage && (
-        <ManagerPicker
-          pageName={pickerPage.pageName}
-          currentId={assignments[pickerPage.id] ?? null}
-          managers={managers}
-          onAssign={(managerId) => onAssign(pickerPage.id, managerId)}
-          onCreate={onCreate}
-          onClose={() => setPickerFor(null)}
           onError={error}
         />
       )}

@@ -1285,12 +1285,14 @@ Facebook account**. It **reuses the dashboard UI + the low-level Graph client**,
   URL is stored on `PageManager.photo`. No photo → deterministic coloured-initials circle
   (`ManagerAvatar`, reuses `avatarColor`). UI: (1) **Managers tab** (`ManagersScreen`) lists
   managers (avatar + "manages N pages"), Add/Edit (`ManagerDialog` + `ManagerPhotoInput`),
-  Delete (confirm), expand → add/remove that manager's pages; (2) **per-row chip** on the Pages
-  list (`ManagerPicker`) — assign existing / quick-create+assign / unassign, instant
-  (optimistic); (3) **"Search by manager…"** box atop the list filters to the pages a matching
-  person manages, **grouped** per manager ("Dara · 3 pages"); the header "Search Pages" stays
-  the page-search. `PageControlTabs` is the single state owner (optimistic + `router.refresh()`)
-  so chips, counts and both tabs stay in sync. Touches only Page Control + the manager store.
+  Delete (confirm), expand → add/remove that manager's pages — **the single place assignments
+  happen**; (2) each Pages-list row shows its assigned manager as a small **read-only badge**
+  (avatar + name) in the **top-right corner** opposite the page name (nothing when unassigned);
+  rows have **no assign control**; (3) **"Search by manager…"** box atop the list filters to the
+  pages a matching person manages, **grouped** per manager ("Dara · 3 pages"); the header
+  "Search Pages" stays the page-search. `PageControlTabs` is the single state owner (optimistic
+  + `router.refresh()`) so the row badges, counts and both tabs stay in sync. Touches only Page
+  Control + the manager store.
 - **Migration:** additive `MonitoredPage` + `MonitoredPagePostsCache`
   (`20260613030000_monitored_page`) + `MonitoredPageDailyCache`
   (`20260613050000_monitored_page_daily_cache`) + `MonitoredPage.totalPosts*`

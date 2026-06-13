@@ -119,9 +119,9 @@ export function PageControlTabs({
 
       {tab === "pages" ? (
         <div className="adm-pc-twobox">
-          {/* LEFT box — the existing monitored-pages list (+ the new per-row manager chip). */}
+          {/* LEFT box — the existing monitored-pages list (+ a read-only top-right manager badge). */}
           <div className="adm-pc-box">
-            <PageControlList pages={pages} appConfigured={appConfigured} managers={managers} assignments={assignments} onAssign={onAssign} onCreate={onCreate} />
+            <PageControlList pages={pages} appConfigured={appConfigured} managers={managers} assignments={assignments} />
           </div>
           {/* RIGHT box — the network dashboard (unchanged). */}
           <div className="adm-pc-box">
