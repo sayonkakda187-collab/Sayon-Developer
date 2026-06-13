@@ -276,3 +276,58 @@ export function AnimatedAreaChart({
     </div>
   );
 }
+
+const GAUGE_R = 49;
+const GAUGE_L = Math.PI * GAUGE_R; // arc length of the top semicircle
+
+/**
+ * Semicircular "gauge card" matching the dashboard's StatGauge style (reuses its
+ * `.adm-gauge/.adm-gfill/.adm-gnum` CSS) + the emerald accent. The arc sweeps 0→value
+ * and the number counts up ONCE on scroll-into-view (the `.adm-gfill` CSS transition
+ * + `CountUp`); `prefers-reduced-motion` → final state instantly. `max` is the arc's
+ * full point (a "nice" ceiling of the value); `suffix` (e.g. "+") marks a
+ * capped/approximate count.
+ */
+export function AnimatedGauge({ value, max, label, sub, suffix = "" }: { value: number; max: number; label: string; sub: string; suffix?: string }) {
+  const reduced = useReducedMotion();
+  const [ref, inView] = useRevealOnce<HTMLDivElement>();
+  const gid = useId();
+  const frac = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const draw = reduced || inView;
+  const offset = draw ? GAUGE_L * (1 - frac) : GAUGE_L;
+  const len = Math.round(value).toLocaleString("en-US").replace(/,/g, "").length + (suffix ? 1 : 0);
+  const fontSize = len <= 3 ? 24 : len <= 5 ? 20 : 16;
+
+  return (
+    <div className="adm-stat" ref={ref}>
+      <div className="adm-gauge">
+        <svg viewBox="0 0 120 64">
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="var(--section-accent)" />
+              <stop offset="1" stopColor="var(--section-accent-bright)" />
+            </linearGradient>
+          </defs>
+          <path d="M 11 56 A 49 49 0 0 1 109 56" fill="none" stroke="rgba(120,130,150,.16)" strokeWidth="8" strokeLinecap="round" />
+          <path
+            className="adm-gfill"
+            d="M 11 56 A 49 49 0 0 1 109 56"
+            fill="none"
+            stroke={`url(#${gid})`}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={`${GAUGE_L} ${GAUGE_L}`}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <div className="adm-gnum" style={{ fontSize }} aria-label={`${label}: ${value.toLocaleString("en-US")}${suffix}`}>
+          <CountUp value={value} format={(n) => `${n.toLocaleString("en-US")}${suffix}`} />
+        </div>
+      </div>
+      <div className="adm-stat-meta">
+        <div className="adm-glabel">{label}</div>
+        <div className="adm-gsub">{sub}</div>
+      </div>
+    </div>
+  );
+}
