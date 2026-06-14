@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
-import { CalendarIcon, CheckIcon } from "@/components/admin/icons";
+import { CalendarIcon, CheckIcon, ChevronDownIcon } from "@/components/admin/icons";
 import { useToast } from "@/components/admin/Toast";
 import { ppToday, addDays, formatDay } from "@/lib/fbInsightsRange";
 import type { ManagedPage } from "@/components/admin/ManagersScreen";
@@ -47,6 +47,7 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
   const [saved, setSaved] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<Record<string, SaveStatus>>({});
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({}); // boxes collapsed by default
 
   // (Re)load the saved earnings whenever the day changes.
   useEffect(() => {
@@ -127,14 +128,19 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
   const dayCount = useMemo(() => Object.keys(saved).length, [saved]);
   const sortedManagers = useMemo(() => [...managers].sort((a, b) => a.name.localeCompare(b.name)), [managers]);
   const unassigned = useMemo(() => pages.filter((p) => !assignments[p.id]), [pages, assignments]);
+  const allKeys = useMemo(() => [...sortedManagers.map((m) => m.id), ...(unassigned.length ? ["_unassigned"] : [])], [sortedManagers, unassigned]);
+  const anyOpen = Object.values(expanded).some(Boolean);
+  const toggleBox = (key: string) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
+  const setAll = (open: boolean) => setExpanded(open ? Object.fromEntries(allKeys.map((k) => [k, true])) : {});
 
   const boxTotal = (boxPages: ManagedPage[]) => boxPages.reduce((s, p) => s + (saved[p.id] ?? 0), 0);
+  const boxFilled = (boxPages: ManagedPage[]) => boxPages.filter((p) => saved[p.id] !== undefined).length;
 
   function renderRow(p: ManagedPage) {
     const st = status[p.id];
     return (
       <div className="adm-pce-row" key={p.id}>
-        <FacebookPageAvatar dbId={p.id} name={p.name} avatarUrl={p.avatarUrl} size={26} />
+        <FacebookPageAvatar dbId={p.id} name={p.name} avatarUrl={p.avatarUrl} size={22} />
         <span className="adm-pce-pname">{p.name}</span>
         <span className={`adm-pce-field ${st === "err" ? "err" : ""}`}>
           <span className="adm-pce-cur">$</span>
@@ -160,24 +166,26 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
   }
 
   function renderBox(key: string, head: ReactNode, boxPages: ManagedPage[]) {
+    const open = !!expanded[key];
+    const has = boxPages.length > 0;
     return (
-      <section className="adm-card adm-pce-box" key={key}>
+      <section className={`adm-card adm-pce-box ${open ? "on" : ""}`} key={key}>
         <div className="adm-pce-boxhead">
-          {head}
-          <span className="adm-pce-boxsum">
-            {boxPages.length} {boxPages.length === 1 ? "page" : "pages"} · <strong>{money(boxTotal(boxPages))}</strong>
-          </span>
-          {boxPages.length > 0 && (
-            <button type="button" className="adm-btn-ghost adm-pce-saveall" disabled={loading} onClick={() => boxPages.forEach((p) => void commit(p.id))}>
+          <button type="button" className="adm-pce-boxtoggle" aria-expanded={open} onClick={() => toggleBox(key)}>
+            {head}
+            <span className="adm-pce-boxsum">
+              <strong>{money(boxTotal(boxPages))}</strong>
+              <span className="adm-pce-boxsub">{boxPages.length} {boxPages.length === 1 ? "page" : "pages"}{has ? ` · ${boxFilled(boxPages)}/${boxPages.length} filled` : ""}</span>
+            </span>
+            <ChevronDownIcon className={`adm-pce-boxchev ${open ? "on" : ""}`} />
+          </button>
+          {has && (
+            <button type="button" className="adm-btn-ghost adm-pce-saveall" disabled={loading} onClick={(e) => { e.stopPropagation(); boxPages.forEach((p) => void commit(p.id)); }}>
               Save all
             </button>
           )}
         </div>
-        {boxPages.length === 0 ? (
-          <p className="adm-card-sub" style={{ margin: "2px 2px 0" }}>No pages assigned.</p>
-        ) : (
-          <div className="adm-pce-rows">{boxPages.map(renderRow)}</div>
-        )}
+        {open && (has ? <div className="adm-pce-rows">{boxPages.map(renderRow)}</div> : <p className="adm-card-sub adm-pce-empty">No pages assigned.</p>)}
       </section>
     );
   }
@@ -223,27 +231,38 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
           <p className="adm-card-sub" style={{ marginTop: 6 }}>Connect Pages in the Pages tab, then enter their daily earnings here.</p>
         </div>
       ) : (
-        <div className="adm-pce-boxes">
-          {sortedManagers.map((m) =>
-            renderBox(
-              m.id,
-              <span className="adm-pce-boxmgr">
-                <ManagerAvatar name={m.name} photo={m.photo} size={30} />
-                <span className="adm-pce-boxname">{m.name}</span>
-              </span>,
-              pages.filter((p) => assignments[p.id] === m.id),
-            ),
-          )}
-          {unassigned.length > 0 &&
-            renderBox(
-              "_unassigned",
-              <span className="adm-pce-boxmgr">
-                <span className="adm-pce-boxavatar-none" aria-hidden>?</span>
-                <span className="adm-pce-boxname">Unassigned</span>
-              </span>,
-              unassigned,
+        <>
+          <div className="adm-pce-toolbar">
+            <span className="adm-card-sub">
+              {sortedManagers.length} {sortedManagers.length === 1 ? "manager" : "managers"}
+              {unassigned.length > 0 ? " · unassigned" : ""}
+            </span>
+            <button type="button" className="adm-btn-ghost adm-pce-expandall" onClick={() => setAll(!anyOpen)}>
+              {anyOpen ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
+          <div className="adm-pce-boxes">
+            {sortedManagers.map((m) =>
+              renderBox(
+                m.id,
+                <span className="adm-pce-boxmgr">
+                  <ManagerAvatar name={m.name} photo={m.photo} size={26} />
+                  <span className="adm-pce-boxname">{m.name}</span>
+                </span>,
+                pages.filter((p) => assignments[p.id] === m.id),
+              ),
             )}
-        </div>
+            {unassigned.length > 0 &&
+              renderBox(
+                "_unassigned",
+                <span className="adm-pce-boxmgr">
+                  <span className="adm-pce-boxavatar-none" aria-hidden>?</span>
+                  <span className="adm-pce-boxname">Unassigned</span>
+                </span>,
+                unassigned,
+              )}
+          </div>
+        </>
       )}
     </div>
   );
