@@ -3030,3 +3030,103 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-botsetup-meta { order: 3; flex: 1 1 100%; }
   .adm-botsetup-actions { margin-left: auto; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE CONTROL — MOBILE/APP REDESIGN (<1024px only; desktop untouched).
+   DESIGN-DIRECTION CHECKPOINT: a refined "Aurora" indigo palette + one redesigned
+   page-row card (uniform metric grid) + premium chart cards. After approval the
+   same system extends to the network dashboard, KPIs and managers screen.
+   Palette (hex): indigo #6366F1 / link #4338CA (light) · #818CF8 / #A5B4FC (dark);
+   tints = indigo @ 10–24%. Charts read var(--section-accent), so they recolor too.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+  /* ── Palette: re-theme Page Control's accent to indigo on mobile only. ── */
+  .admin-shell[data-section="page-control"] {
+    --sa: 99 102 241;
+    --section-accent: #6366f1;
+    --section-link: #4338ca;
+    --section-accent-bright: #818cf8;
+    --section-tint: rgba(99, 102, 241, 0.10);
+    --section-tint-2: rgba(99, 102, 241, 0.16);
+  }
+  [data-adm-theme="dark"] .admin-shell[data-section="page-control"] {
+    --sa: 129 140 248;
+    --section-accent: #818cf8;
+    --section-link: #a5b4fc;
+    --section-accent-bright: #a5b4fc;
+    --section-tint: rgba(129, 140, 248, 0.16);
+    --section-tint-2: rgba(129, 140, 248, 0.24);
+  }
+
+  /* ── Page-row card: tighter, top-aligned; the cluttered pills become a clean,
+     uniform metric grid (label over value), earnings highlighted across the foot. ── */
+  .adm-pc-row { align-items: flex-start; gap: 11px; padding: 13px; min-height: 0; border-radius: 16px; }
+  .adm-pc-row-name { font-size: 15px; letter-spacing: -0.01em; }
+
+  .adm-pc-statsrow { display: block; margin-top: 12px; }
+  .adm-pc-statsrow .adm-pc-stats { margin: 0; }
+  .adm-pc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 12px; }
+  .adm-pc-stat {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    background: none; border-radius: 0; padding: 0; white-space: normal;
+  }
+  .adm-pc-stat-k { font-size: 9.5px; opacity: .5; letter-spacing: .04em; }
+  .adm-pc-stat-v { font-size: 15.5px; font-weight: 700; }
+  .adm-pc-stat-posts .adm-pc-stat-v { color: var(--section-link); }
+  /* earnings = full-width accented footer row */
+  .adm-pc-stat-earn { grid-column: 1 / -1; padding-top: 11px; border-top: 1px solid var(--adm-bd); }
+  .adm-pc-stat-earn .adm-pc-stat-v { color: var(--section-link); font-size: 17px; }
+  /* declutter: drop the video/image split, the % deltas and the inline sparkline */
+  .adm-pc-stat-video, .adm-pc-stat-image, .adm-pc-stat-d, .adm-pc-sparkwrap { display: none; }
+  /* loading skeleton → tidy bars sized to the grid */
+  .adm-pc-stats .adm-pc-stat-skel { width: auto; height: 30px; border-radius: 8px; padding: 0; }
+
+  /* ── Expanded chart cards: each chart in its own premium card with a soft indigo
+     gradient wash; the area chart's fill/line pick up the indigo accent. ── */
+  .adm-pc-expand { padding: 12px; border-radius: 0 0 16px 16px; }
+  .adm-pc-expand-body { gap: 12px; }
+  .adm-pc-expand-sec {
+    background: linear-gradient(180deg, var(--section-tint) 0%, transparent 58%), var(--adm-card);
+    border: 1px solid var(--adm-bd); border-radius: 14px; padding: 12px 12px 14px;
+  }
+  .adm-pc-expand-h { margin-bottom: 9px; font-size: 11px; letter-spacing: .04em; opacity: .55; }
+  .adm-pc-expand-sec .adm-pc-chart { margin-top: 8px; }
+}
+
+/* ── Page Control mobile redesign, PART 2 (<1024px): extend the indigo card system to
+   the Network dashboard, leaderboard/movers, health, and the Managers screen so the
+   whole mobile view reads as one design. Desktop untouched. ── */
+@media (max-width: 1023px) {
+  /* KPI cards + top-post cards get the same soft indigo gradient wash as the charts. */
+  .adm-pc-kpis { gap: 10px; margin-top: 14px; }
+  .adm-pc-kpi {
+    border-radius: 16px; padding: 13px 14px; border-color: var(--adm-bd);
+    background: linear-gradient(180deg, var(--section-tint) 0%, transparent 62%), var(--adm-card);
+  }
+  .adm-pc-netpost {
+    border-radius: 16px; padding: 12px;
+    background: linear-gradient(180deg, var(--section-tint) 0%, transparent 60%), var(--adm-card);
+  }
+
+  /* Leaderboard + risers/fallers: calmer rhythm, indigo value/rank accents. */
+  .adm-pc-lead { gap: 3px; margin-top: 10px; }
+  .adm-pc-lead-row { padding: 8px 10px; border-radius: 12px; }
+  .adm-pc-lead-val { color: var(--section-link); }
+  .adm-pc-movers { gap: 3px; }
+  .adm-pc-mover { padding: 8px 10px; border-radius: 12px; }
+
+  /* Page-health bar a touch taller + rounded to match. */
+  .adm-pc-health-bar { height: 16px; }
+  .adm-pc-health-legend { gap: 12px 16px; }
+
+  /* Managers screen: consistent 16px-radius cards, calmer spacing. */
+  .adm-mgr-list { gap: 10px; }
+  .adm-mgr-card { border-radius: 16px; }
+  .adm-mgr-row { padding: 9px 11px; }
+  .adm-mgr-name { font-size: 15px; letter-spacing: -0.01em; }
+  .adm-botsetup { border-radius: 16px; padding: 13px 14px; margin-bottom: 14px; }
+
+  /* Segmented date-range / metric toggles inherit the indigo accent already; keep the
+     pill rhythm aligned with the new cards. */
+  .adm-pc-dash .adm-seg, .adm-pc-box .adm-seg { border-radius: 12px; }
+}
