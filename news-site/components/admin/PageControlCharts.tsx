@@ -491,3 +491,111 @@ export function TypeMixBar({
     </div>
   );
 }
+
+/**
+ * Single-series animated bar chart that scales to the container width — one bar per
+ * point, growing up from the baseline once on reveal, with a tap/hover tooltip (date +
+ * `formatValue`). Mirrors `AnimatedStackedBars`' look/motion but for one value series
+ * (e.g. daily earnings). Zero-filled empty points keep the range continuous.
+ * Reduced-motion → final state instantly.
+ */
+export function AnimatedBars({
+  data,
+  color = "#3b82f6",
+  height = 116,
+  formatValue,
+}: {
+  data: SeriesPoint[];
+  color?: string;
+  height?: number;
+  formatValue?: (n: number) => string;
+}) {
+  const reduced = useReducedMotion();
+  const [ref, inView] = useRevealOnce<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+
+  const n = data.length;
+  const hasData = data.some((d) => d.value > 0);
+  if (n === 0 || !hasData) {
+    return (
+      <div ref={ref}>
+        <p className="adm-fb-sub" style={{ marginTop: 8 }}>No data in this range yet.</p>
+      </div>
+    );
+  }
+
+  const W = 600;
+  const H = height;
+  const padTop = 8;
+  const padBot = 4;
+  const usableH = H - padTop - padBot;
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const groupW = W / n;
+  const barW = Math.max(2, Math.min(groupW * 0.72, 26));
+  const scale = (v: number) => (v / max) * usableH;
+  const draw = reduced || inView;
+
+  function pick(clientX: number, el: HTMLElement) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const rel = (clientX - rect.left) / rect.width;
+    setHover(Math.max(0, Math.min(n - 1, Math.floor(rel * n))));
+  }
+
+  const hd = hover != null ? data[hover] : null;
+  const hoverLeftPct = hover != null ? (((hover + 0.5) * groupW) / W) * 100 : 0;
+
+  return (
+    <div
+      ref={ref}
+      className="adm-pc-chart"
+      onMouseMove={(e) => pick(e.clientX, e.currentTarget)}
+      onMouseLeave={() => setHover(null)}
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        pick(e.touches[0].clientX, e.currentTarget);
+      }}
+      onTouchMove={(e) => {
+        e.stopPropagation();
+        pick(e.touches[0].clientX, e.currentTarget);
+      }}
+      onTouchEnd={() => setHover(null)}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }} aria-hidden>
+        <line x1={0} y1={H - padBot} x2={W} y2={H - padBot} stroke="var(--adm-bd)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {data.map((d, i) => {
+          const x = i * groupW + (groupW - barW) / 2;
+          const bH = scale(d.value);
+          const y = H - padBot - bH;
+          const dim = hover != null && hover !== i;
+          return (
+            <g
+              key={d.date}
+              style={{
+                transformBox: "fill-box",
+                transformOrigin: "bottom",
+                transform: draw ? "scaleY(1)" : "scaleY(0)",
+                transition: reduced ? "none" : `transform 480ms ease-out ${Math.min(i * 10, 220)}ms`,
+                opacity: dim ? 0.5 : 1,
+              }}
+            >
+              {d.value > 0 && <rect x={x} y={y} width={barW} height={bH} fill={color} rx={1.5} />}
+            </g>
+          );
+        })}
+      </svg>
+
+      {hd && (
+        <div className="adm-pc-chart-tip" style={{ left: `${hoverLeftPct}%` }}>
+          <span className="adm-pc-chart-tip-v">{formatValue ? formatValue(hd.value) : String(hd.value)}</span>
+          <span className="adm-pc-chart-tip-d">{formatDay(hd.date)}</span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <span className="adm-fb-sub" style={{ fontSize: 10.5 }}>{formatDay(data[0].date)}</span>
+        <span className="adm-fb-sub" style={{ fontSize: 10.5 }}>{formatDay(data[n - 1].date)}</span>
+      </div>
+    </div>
+  );
+}

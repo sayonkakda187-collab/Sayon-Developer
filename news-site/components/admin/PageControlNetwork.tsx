@@ -7,9 +7,9 @@ import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
 import { ManagerAvatar } from "@/components/admin/ManagerAvatar";
 import { ExternalLinkIcon } from "@/components/admin/icons";
 import { formatNumber, formatDate } from "@/lib/site";
-import { presetRange, ppToday, formatRange } from "@/lib/fbInsightsRange";
+import { presetRange, ppToday, formatRange, eachDate } from "@/lib/fbInsightsRange";
 import { RangeControl, type Range } from "@/components/admin/FacebookPageInsights";
-import { CountUp, AnimatedSparkline, AnimatedAreaChart, useReducedMotion, useRevealOnce, type SeriesPoint } from "@/components/admin/PageControlCharts";
+import { CountUp, AnimatedSparkline, AnimatedAreaChart, AnimatedBars, useReducedMotion, useRevealOnce, type SeriesPoint } from "@/components/admin/PageControlCharts";
 import type { DayPoint } from "@/lib/facebookInsights";
 import type { NetworkRollup, LeaderRow, NetPost, MoverRow } from "@/lib/pageControlNetwork";
 
@@ -221,12 +221,20 @@ function Health({ health }: { health: { growing: number; flat: number; shrinking
   );
 }
 
-function NetTrend({ days, daysPrev }: { days: DayPoint[]; daysPrev: DayPoint[] }) {
+// Earnings line+bars share this blue (matches the existing blue bars).
+const EARN_BLUE = "#3b82f6";
+
+function NetTrend({ days, daysPrev, earningsDays, from, to }: { days: DayPoint[]; daysPrev: DayPoint[]; earningsDays: number[]; from: string; to: string }) {
   const [metric, setMetric] = useState<Metric>("reach");
   const [comparePrev, setComparePrev] = useState(false);
   const info = METRICS.find((m) => m.key === metric) ?? METRICS[0];
+  // Daily earnings series for the range (0-filled), built from the rollup's earningsDays
+  // (already summed across the manager-filtered pages). Same series drives the line + bars.
+  const earnSeries = useMemo(() => eachDate(from, to).map((date, i) => ({ date, value: earningsDays[i] ?? 0 })), [earningsDays, from, to]);
+  const earnTotal = earnSeries.reduce((s, p) => s + p.value, 0);
   return (
     <div>
+      {/* Reach/Engagement/Followers toggle + chart — unchanged, at the TOP. */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", marginTop: 8 }}>
         <div className="adm-seg" role="tablist" aria-label="Trend metric">
           {METRICS.map((m) => (
@@ -239,6 +247,24 @@ function NetTrend({ days, daysPrev }: { days: DayPoint[]; daysPrev: DayPoint[] }
         </label>
       </div>
       <AnimatedAreaChart current={seriesPoints(days, metric)} previous={seriesPoints(daysPrev, metric)} color={info.color} showPrev={comparePrev} formatValue={formatNumber} />
+
+      {/* Same card → divider → Earnings over time (blue line + blue bars, same series). */}
+      <div className="adm-pc-earnblock">
+        <div className="adm-pc-earnhd">
+          <div className="adm-card-title" style={{ fontSize: 13 }}>Earnings over time</div>
+          <div className="adm-fb-sub">TOTAL · {formatRange(from, to)}: <strong style={{ color: EARN_BLUE }}>{fmtMoney(earnTotal)}</strong></div>
+        </div>
+        {earnTotal === 0 ? (
+          <p className="adm-card-sub" style={{ marginTop: 8 }}>No earnings entered for this range.</p>
+        ) : (
+          <>
+            <div className="adm-pc-earn-sub">Line</div>
+            <AnimatedAreaChart current={earnSeries} color={EARN_BLUE} formatValue={fmtMoney} />
+            <div className="adm-pc-earn-sub" style={{ marginTop: 12 }}>Bars</div>
+            <AnimatedBars data={earnSeries} color={EARN_BLUE} formatValue={fmtMoney} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -384,9 +410,9 @@ export function PageControlNetwork({ apiBase = "/api/admin/page-control" }: { ap
             <Kpi label="Total posts" value={t!.totalPosts} prev={null} values={[]} color="var(--chart-6)" snapshot />
           </div>
 
-          {/* 2) Network trend */}
+          {/* 2) Network trend (reach/engagement toggle) + earnings line+bars in the SAME card */}
           <SectionTitle>Reach &amp; engagement over time</SectionTitle>
-          <NetTrend days={data.trendDays} daysPrev={data.trendDaysPrev} />
+          <NetTrend days={data.trendDays} daysPrev={data.trendDaysPrev} earningsDays={data.earningsDays} from={range.from} to={range.to} />
 
           {/* 3) Top pages leaderboard */}
           <SectionTitle>Top pages</SectionTitle>
