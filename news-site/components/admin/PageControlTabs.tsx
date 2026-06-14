@@ -22,11 +22,13 @@ const byName = (a: Manager, b: Manager) => a.name.localeCompare(b.name);
 export function PageControlTabs({
   pages,
   appConfigured,
+  tokenExpiresAt,
   managers: initialManagers,
   description,
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
+  tokenExpiresAt?: string | null;
   managers: Manager[];
   description?: string;
 }) {
@@ -183,7 +185,7 @@ export function PageControlTabs({
         <div className="adm-pc-twobox" data-mtab={tab}>
           {/* LEFT box — the existing monitored-pages list (+ a read-only top-right manager badge). */}
           <div className="adm-pc-box adm-pc-box-list">
-            <PageControlList pages={pages} appConfigured={appConfigured} managers={managers} assignments={assignments} />
+            <PageControlList pages={pages} appConfigured={appConfigured} tokenExpiresAt={tokenExpiresAt} managers={managers} assignments={assignments} />
           </div>
           {/* RIGHT box — the network dashboard. */}
           <div className="adm-pc-box adm-pc-box-net">

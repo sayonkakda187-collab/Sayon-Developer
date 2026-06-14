@@ -2679,6 +2679,10 @@ button.adm-pc-back { background: none; border: 0; padding: 0; margin: 0; font: i
 .adm-pc-pick:hover { background: var(--section-tint); }
 .adm-pc-pick.is-added { opacity: .6; cursor: default; }
 .adm-pc-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--adm-ink); }
+/* Connect dialog: current connection's token-expiry status (valid until / renew soon / expired). */
+.adm-pc-connstat { font-size: 12.5px; color: var(--adm-muted); margin: 0 0 12px; line-height: 1.45; }
+.adm-pc-connstat.warn { color: #b45309; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9px; padding: 8px 11px; font-weight: 600; }
+[data-adm-theme="dark"] .admin-shell .adm-pc-connstat.warn { color: #fbbf24; }
 
 /* Swipeable sub-tab row (Summary · Content · Analytics) */
 .adm-pc-subtabs {

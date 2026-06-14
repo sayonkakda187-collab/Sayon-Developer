@@ -3,8 +3,44 @@
 import { useState } from "react";
 import { pageControlFetchPages, pageControlConnectPages } from "@/app/admin/page-control-actions";
 import { CloseIcon } from "@/components/admin/icons";
+import { formatDate } from "@/lib/site";
 
 type FetchedPage = { id: string; name: string; alreadyAdded: boolean };
+
+/**
+ * Current connection's user-token expiry, mirroring the posting farm's "Connection
+ * valid until …". The long-lived user token lasts ~60 days; Page tokens stay active,
+ * but you must re-paste a fresh user token to keep REFRESHING Pages. Warns amber when
+ * it's within a week of expiry (or already expired). Renders nothing on a first connect.
+ */
+function ConnectionStatus({ expiresAt }: { expiresAt?: string | null }) {
+  if (!expiresAt) return null;
+  const t = Date.parse(expiresAt);
+  if (Number.isNaN(t)) return null;
+  const now = Date.now();
+  if (t <= now) {
+    return (
+      <p className="adm-pc-connstat warn" role="status">
+        Connection expired {formatDate(expiresAt)} — paste a fresh user token below to reconnect.
+      </p>
+    );
+  }
+  const days = Math.ceil((t - now) / 86_400_000);
+  if (days <= 7) {
+    return (
+      <p className="adm-pc-connstat warn" role="status">
+        ⚠ Connection renews soon — valid until {formatDate(expiresAt)} ({days} day{days === 1 ? "" : "s"} left). Paste a
+        fresh user token below to renew; your Page tokens stay active either way.
+      </p>
+    );
+  }
+  return (
+    <p className="adm-pc-connstat" role="status">
+      ✓ Connection valid until {formatDate(expiresAt)} · Page tokens stay active — re-paste a token after this to keep
+      refreshing Pages.
+    </p>
+  );
+}
 
 /**
  * Page Control's own "Connect Page" modal — the SAME proven mechanism as the
@@ -19,11 +55,13 @@ export function PageControlConnectModal({
   onConnected,
   onError,
   appConfigured,
+  tokenExpiresAt,
 }: {
   onClose: () => void;
   onConnected: (added: number) => void;
   onError: (m: string) => void;
   appConfigured: boolean;
+  tokenExpiresAt?: string | null;
 }) {
   const [appId, setAppId] = useState("");
   const [appSecret, setAppSecret] = useState("");
@@ -85,6 +123,7 @@ export function PageControlConnectModal({
                 scopes needed). We exchange it for a long-lived token, stored encrypted server-side. This is{" "}
                 <strong>separate</strong> from the Facebook posting tab — you can monitor a <strong>different account</strong>.
               </p>
+              <ConnectionStatus expiresAt={tokenExpiresAt} />
               <label className="adm-field">
                 <span>App ID {appConfigured && <em className="adm-field-hint">(saved — leave blank to reuse)</em>}</span>
                 <input className="adm-input" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder={appConfigured ? "Using saved App ID" : "e.g. 1234567890"} required={!appConfigured} autoFocus />

@@ -49,7 +49,7 @@ export default async function PageControlPage() {
         <p className="adm-pc-desc-d">{PC_DESC}</p>
       </div>
       <ToastProvider>
-        <PageControlTabs pages={rows} appConfigured={connect.appConfigured} managers={managers} description={PC_DESC} />
+        <PageControlTabs pages={rows} appConfigured={connect.appConfigured} tokenExpiresAt={connect.userTokenExpiresAt} managers={managers} description={PC_DESC} />
       </ToastProvider>
     </div>
   );
