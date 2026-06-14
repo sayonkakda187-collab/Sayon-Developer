@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ToastProvider, useToast } from "@/components/admin/Toast";
+import dynamic from "next/dynamic";
+import { ToastProvider } from "@/components/admin/Toast";
 import { FacebookPageAvatar } from "@/components/admin/FacebookPageAvatar";
-import { ExternalLinkIcon, RefreshIcon, TrashIcon } from "@/components/admin/icons";
+import { ExternalLinkIcon } from "@/components/admin/icons";
 import { formatNumber } from "@/lib/site";
 import { presetRange, formatRange, eachDate } from "@/lib/fbInsightsRange";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
@@ -13,51 +13,10 @@ import { AnimatedAreaChart } from "@/components/admin/PageControlCharts";
 import { MonitoredDashboard } from "@/components/admin/MonitoredDashboard";
 import { PageControlSummary } from "@/components/admin/PageControlSummary";
 import { PageControlContent } from "@/components/admin/PageControlContent";
-import { pageControlReconnectPage, removeMonitoredPage } from "@/app/admin/page-control-actions";
 
-const DETAIL_API = "/api/admin/page-control/insights";
-
-/** Reconnect / Remove for a monitored page (lives inside ToastProvider). */
-function HeaderActions({ id, status }: { id: string; status: string }) {
-  const { success, error } = useToast();
-  const router = useRouter();
-  const [busy, setBusy] = useState<null | "reconnect" | "remove">(null);
-
-  async function onReconnect() {
-    setBusy("reconnect");
-    const res = await pageControlReconnectPage(id);
-    setBusy(null);
-    if (res.ok) {
-      success("Reconnected — token refreshed.");
-      router.refresh();
-    } else {
-      error(res.error);
-    }
-  }
-  async function onRemove() {
-    if (!window.confirm("Stop monitoring this page? This only affects Page Control — the posting farm is untouched.")) return;
-    setBusy("remove");
-    const res = await removeMonitoredPage(id);
-    if (res.ok) router.push("/admin/page-control");
-    else {
-      setBusy(null);
-      error(res.error);
-    }
-  }
-
-  return (
-    <>
-      <button type="button" className="adm-btn-ghost" onClick={onReconnect} disabled={busy !== null} title="Refresh this page's token">
-        {busy === "reconnect" ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
-        {status === "Connected" ? "Refresh token" : "Reconnect"}
-      </button>
-      <button type="button" className="adm-btn-ghost" onClick={onRemove} disabled={busy !== null} title="Stop monitoring this page">
-        {busy === "remove" ? <span className="adm-spinner" aria-hidden /> : <TrashIcon className="h-4 w-4" />}
-        Remove
-      </button>
-    </>
-  );
-}
+// Admin-only Reconnect/Remove actions — dynamically imported so they're NOT bundled into
+// the read-only Manager Portal (which renders this dashboard with `hideActions`).
+const HeaderActions = dynamic(() => import("@/components/admin/PageControlHeaderActions").then((m) => m.HeaderActions), { ssr: false });
 
 type Tab = "summary" | "content" | "analytics";
 const TABS: { key: Tab; label: string }[] = [
@@ -94,13 +53,13 @@ function earnSeries(from: string, to: string, daily: DailyEarning[]): { date: st
 
 /** Page-detail earnings: the page's manager-entered daily earnings over the shared
  *  range (same row-charts endpoint) — a total + a small area chart. */
-function PageEarningsCard({ pageDbId, range }: { pageDbId: string; range: Range }) {
+function PageEarningsCard({ pageDbId, range, apiBase }: { pageDbId: string; range: Range; apiBase: string }) {
   const [state, setState] = useState<{ daily: DailyEarning[] } | "loading" | "error">("loading");
 
   useEffect(() => {
     let cancelled = false;
     setState("loading");
-    fetch(`/api/admin/page-control/row-charts?id=${encodeURIComponent(pageDbId)}&from=${range.from}&to=${range.to}`)
+    fetch(`${apiBase}/row-charts?id=${encodeURIComponent(pageDbId)}&from=${range.from}&to=${range.to}`)
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
@@ -110,7 +69,7 @@ function PageEarningsCard({ pageDbId, range }: { pageDbId: string; range: Range 
     return () => {
       cancelled = true;
     };
-  }, [pageDbId, range.from, range.to]);
+  }, [pageDbId, range.from, range.to, apiBase]);
 
   return (
     <section className="adm-card adm-card-pad" style={{ marginTop: 14 }}>
@@ -143,7 +102,22 @@ function PageEarningsCard({ pageDbId, range }: { pageDbId: string; range: Range 
  * + a shared range control (Summary & Analytics) sit above; only the active
  * sub-tab mounts, so a Page's live content/insights are fetched lazily on open.
  */
-export function PageControlDashboard({ page, followers }: { page: InsightsPageRow; followers: number | null }) {
+export function PageControlDashboard({
+  page,
+  followers,
+  apiBase = "/api/admin/page-control",
+  hideActions = false,
+  onBack,
+}: {
+  page: InsightsPageRow;
+  followers: number | null;
+  // Manager Portal: point the detail data at the portal endpoints, hide the admin
+  // action buttons, and use a callback (not the admin route) for the back link.
+  apiBase?: string;
+  hideActions?: boolean;
+  onBack?: () => void;
+}) {
+  const DETAIL_API = `${apiBase}/insights`;
   const [tab, setTab] = useState<Tab>("summary");
   const [range, setRange] = useState<Range>(initialRange);
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -180,7 +154,11 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
   return (
     <ToastProvider>
       <div className="adm-pc-top">
-        <Link href="/admin/page-control" className="adm-link adm-pc-back">← Monitored pages</Link>
+        {onBack ? (
+          <button type="button" onClick={onBack} className="adm-link adm-pc-back">← Pages</button>
+        ) : (
+          <Link href="/admin/page-control" className="adm-link adm-pc-back">← Monitored pages</Link>
+        )}
         <div className="adm-pc-id">
           <FacebookPageAvatar dbId={page.id} name={page.pageName} avatarUrl={page.avatarUrl} size={40} />
           <div style={{ minWidth: 0 }}>
@@ -194,17 +172,19 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
             </div>
           </div>
         </div>
-        <div className="adm-pc-actions">
-          <HeaderActions id={page.id} status={page.status} />
-          <a
-            href={`https://www.facebook.com/${encodeURIComponent(page.pageId)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="adm-btn-ghost adm-pc-open"
-          >
-            Open Page <ExternalLinkIcon className="h-4 w-4" />
-          </a>
-        </div>
+        {!hideActions && (
+          <div className="adm-pc-actions">
+            <HeaderActions id={page.id} status={page.status} />
+            <a
+              href={`https://www.facebook.com/${encodeURIComponent(page.pageId)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="adm-btn-ghost adm-pc-open"
+            >
+              Open Page <ExternalLinkIcon className="h-4 w-4" />
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="adm-pc-subtabs" role="tablist" aria-label="Page sections">
@@ -231,11 +211,11 @@ export function PageControlDashboard({ page, followers }: { page: InsightsPageRo
       <div className="adm-pc-panel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {tab === "summary" && (
           <>
-            <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} />
-            <PageEarningsCard pageDbId={page.id} range={range} />
+            <PageControlSummary page={page} range={range} onSeeAllPosts={() => setTab("content")} apiBase={apiBase} />
+            <PageEarningsCard pageDbId={page.id} range={range} apiBase={apiBase} />
           </>
         )}
-        {tab === "content" && <PageControlContent pageDbId={page.id} />}
+        {tab === "content" && <PageControlContent pageDbId={page.id} apiBase={apiBase} />}
         {tab === "analytics" && <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} showDayTable />}
       </div>
     </ToastProvider>

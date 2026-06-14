@@ -7,25 +7,25 @@ import { PagePostCard } from "@/components/admin/PageControlContent";
 import { TotalPostsGauge } from "@/components/admin/TotalPostsGauge";
 import type { PagePost } from "@/lib/facebook";
 
-// Page Control's OWN endpoints (MonitoredPage store), independent from the farm.
-const DETAIL_API = "/api/admin/page-control/insights";
-const POSTS_API = "/api/admin/page-control/posts";
-
 /**
  * Page Control → Summary (a Page's "home"): the animated KPI cards + trend chart
  * for the selected range (`MonitoredDashboard`) and the 3 most recent real posts
  * (from Content). The identity header (avatar · name · followers · link to the
  * Page) lives in the dashboard shell above. Both data sources are server-cached.
+ * `apiBase` lets the read-only Manager Portal point this at the portal endpoints.
  */
 export function PageControlSummary({
   page,
   range,
   onSeeAllPosts,
+  apiBase = "/api/admin/page-control",
 }: {
   page: InsightsPageRow;
   range: Range;
   onSeeAllPosts: () => void;
+  apiBase?: string;
 }) {
+  const POSTS_API = `${apiBase}/posts`;
   const [recent, setRecent] = useState<PagePost[] | null>(null);
 
   // 3 most recent real posts (cached server-side; shared with the Content tab).
@@ -41,15 +41,15 @@ export function PageControlSummary({
     return () => {
       cancelled = true;
     };
-  }, [page.id]);
+  }, [page.id, POSTS_API]);
 
   return (
     <div>
       {/* All-time post count gauge */}
-      <TotalPostsGauge pageDbId={page.id} />
+      <TotalPostsGauge pageDbId={page.id} apiBase={apiBase} />
 
       {/* Animated KPI cards + mini trend chart */}
-      <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} />
+      <MonitoredDashboard pageDbId={page.id} range={range} detailApi={`${apiBase}/insights`} />
 
       {/* 3 most recent real posts */}
       <div className="adm-list-head" style={{ marginTop: 22, alignItems: "baseline" }}>
