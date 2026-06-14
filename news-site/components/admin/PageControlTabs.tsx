@@ -6,6 +6,7 @@ import { useToast } from "@/components/admin/Toast";
 import { PageControlList, type MonitoredRow } from "@/components/admin/PageControlList";
 import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { ManagersScreen, type ManagedPage } from "@/components/admin/ManagersScreen";
+import { PageControlEarnings } from "@/components/admin/PageControlEarnings";
 import type { Manager } from "@/components/admin/ManagerAvatar";
 import { createManager, updateManager, deleteManager, assignManager, regenerateManagerLinkCode } from "@/app/admin/page-manager-actions";
 
@@ -31,7 +32,7 @@ export function PageControlTabs({
 }) {
   const router = useRouter();
   const { success, error } = useToast();
-  const [tab, setTab] = useState<"pages" | "network" | "managers">("pages");
+  const [tab, setTab] = useState<"pages" | "network" | "managers" | "earnings">("pages");
   const [managers, setManagers] = useState<Manager[]>(initialManagers);
   const [assignments, setAssignments] = useState<Record<string, string | null>>(() =>
     Object.fromEntries(pages.map((p) => [p.id, p.managerId ?? null])),
@@ -131,6 +132,9 @@ export function PageControlTabs({
         <button type="button" role="tab" aria-selected={tab === "managers"} className={`adm-pc-subtab ${tab === "managers" ? "on" : ""}`} onClick={() => setTab("managers")}>
           Managers
         </button>
+        <button type="button" role="tab" aria-selected={tab === "earnings"} className={`adm-pc-subtab ${tab === "earnings" ? "on" : ""}`} onClick={() => setTab("earnings")}>
+          Earnings
+        </button>
       </div>
 
       {description && <p className="adm-pc-desc-m">{description}</p>}
@@ -147,6 +151,8 @@ export function PageControlTabs({
           onRegenerateCode={onRegenerateCode}
           onError={error}
         />
+      ) : tab === "earnings" ? (
+        <PageControlEarnings pages={managedPages} managers={managers} assignments={assignments} />
       ) : (
         // Pages + Network share the two-box: desktop shows both side by side (unchanged);
         // on mobile `data-mtab` reveals just the one the active pill selects.
