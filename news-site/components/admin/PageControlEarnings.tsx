@@ -126,7 +126,16 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
 
   const dayTotal = useMemo(() => Object.values(saved).reduce((s, n) => s + n, 0), [saved]);
   const dayCount = useMemo(() => Object.keys(saved).length, [saved]);
-  const sortedManagers = useMemo(() => [...managers].sort((a, b) => a.name.localeCompare(b.name)), [managers]);
+  // Manager boxes ordered by assigned-page count (most first), tie-break by name A–Z.
+  // ("Unassigned" is rendered separately and always stays last.)
+  const sortedManagers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of pages) {
+      const mid = assignments[p.id];
+      if (mid) counts.set(mid, (counts.get(mid) ?? 0) + 1);
+    }
+    return [...managers].sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0) || a.name.localeCompare(b.name));
+  }, [managers, pages, assignments]);
   const unassigned = useMemo(() => pages.filter((p) => !assignments[p.id]), [pages, assignments]);
   const allKeys = useMemo(() => [...sortedManagers.map((m) => m.id), ...(unassigned.length ? ["_unassigned"] : [])], [sortedManagers, unassigned]);
   const anyOpen = Object.values(expanded).some(Boolean);
