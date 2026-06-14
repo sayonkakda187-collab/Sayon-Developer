@@ -183,6 +183,7 @@ function RowStats({ entry }: { entry: StatEntry | undefined }) {
 export function PageControlList({
   pages,
   appConfigured,
+  tokenExpiresAt,
   managers,
   assignments,
   apiBase = "/api/admin/page-control",
@@ -191,6 +192,8 @@ export function PageControlList({
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
+  // The Page Control user-token expiry (ISO) for the Connect dialog's status line.
+  tokenExpiresAt?: string | null;
   managers: Manager[];
   assignments: Record<string, string | null>;
   apiBase?: string;
@@ -432,6 +435,7 @@ export function PageControlList({
       {!readOnly && showConnect && (
         <PageControlConnectModal
           appConfigured={appConfigured}
+          tokenExpiresAt={tokenExpiresAt}
           onClose={() => setShowConnect(false)}
           onConnected={onConnected}
           onError={error}
