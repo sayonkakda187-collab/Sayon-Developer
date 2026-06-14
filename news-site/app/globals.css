@@ -3200,19 +3200,21 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pce-boxchev.on { transform: rotate(180deg); }
 .adm-pce-saveall { flex: none; align-self: center; margin: 0 9px; padding: 4px 10px; min-height: 30px; font-size: 12px; }
 .adm-pce-empty { padding: 10px 12px 12px; margin: 0; }
-.adm-pce-rows { display: flex; flex-direction: column; }
-.adm-pce-row { display: flex; align-items: center; gap: 8px; padding: 6px 11px; min-height: 38px; }
-.adm-pce-row + .adm-pce-row { border-top: 1px solid var(--adm-bd); }
+/* Page rows lay out as a responsive multi-column GRID so all of a manager's pages fit
+   on screen without long scrolling: 1 column on narrow → 2 → 3–4 on wide (auto-fill,
+   even cell widths). Each cell is one compact row — avatar · page name · "$" input. */
+.adm-pce-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 7px; padding: 8px 10px 11px; }
+.adm-pce-row { display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 3px 6px 3px 9px; border: 1px solid var(--adm-bd); border-radius: 9px; }
 .adm-pce-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--adm-ink); font-size: 13px; }
 .adm-pce-field {
-  flex: none; display: inline-flex; align-items: center; border: 1px solid var(--adm-bd); border-radius: 8px;
+  flex: none; display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--adm-bd); border-radius: 8px;
   background: color-mix(in srgb, var(--adm-ink) 4%, transparent); overflow: hidden;
 }
 .adm-pce-field:focus-within { border-color: var(--section-accent); box-shadow: 0 0 0 2px var(--section-tint); }
 .adm-pce-field.err { border-color: #dc2626; }
-.adm-pce-cur { padding: 0 1px 0 9px; color: var(--adm-ink); opacity: .55; font-weight: 600; font-size: 13px; }
-.adm-pce-input { width: 78px; border: none; background: none; outline: none; padding: 5px 5px 5px 3px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--adm-ink); text-align: right; font-variant-numeric: tabular-nums; }
-.adm-pce-status { flex: none; width: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--adm-green); padding-right: 5px; }
+.adm-pce-cur { padding: 0 1px 0 8px; color: var(--adm-ink); opacity: .55; font-weight: 600; font-size: 13px; }
+.adm-pce-input { width: 72px; border: none; background: none; outline: none; padding: 8px 5px 8px 3px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--adm-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.adm-pce-status { flex: none; width: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--adm-green); padding-right: 4px; }
 .adm-pce-field.err .adm-pce-status { color: #dc2626; font-weight: 800; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err { border-color: #f87171; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err .adm-pce-status { color: #f87171; }
