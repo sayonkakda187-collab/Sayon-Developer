@@ -1,3 +1,6 @@
 node_modules/
 tmp-download-test/
 npm-debug.log*
+
+# Next.js build output (app lives in news-site/, but a stray build can drop a root .next/)
+.next/
