@@ -21,9 +21,22 @@ import {
   PlusIcon,
 } from "@/components/admin/icons";
 import { toLocalInput, nowLocalInput, localInputToUtcISO, formatSchedule } from "@/lib/fbSchedule";
+import { formatDay } from "@/lib/fbInsightsRange";
 
 type ToolLogEntry = { tool: string; summary: string; isError?: boolean };
-type AgentAction = { id: string; type: string; status: string; summary: string; detail?: string; createdAt: string; result?: string; error?: string; params?: { scheduledAt?: string } };
+type EarnRow = { pageName: string; date: string; amount: number; previousAmount?: number | null };
+type EarnSkip = { inputPageName: string; inputDate?: string; inputAmount?: string; status: string; reason?: string; candidates?: { pageName: string }[] };
+type AgentAction = {
+  id: string;
+  type: string;
+  status: string;
+  summary: string;
+  detail?: string;
+  createdAt: string;
+  result?: string;
+  error?: string;
+  params?: { scheduledAt?: string; rows?: EarnRow[]; skipped?: EarnSkip[] };
+};
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string; at: string; toolLog?: ToolLogEntry[]; actions?: AgentAction[]; error?: boolean };
 type DecideState = { status: string; busy?: boolean; result?: string; error?: string };
 type Ctx = { drafts: number; scheduledToday: number; nextRun: string | null };
@@ -41,8 +54,61 @@ const TYPE_LABEL: Record<string, string> = {
   publish_article: "Publish",
   update_published_article: "Edit live article",
   share_to_facebook: "Share to Facebook",
+  set_page_earnings: "Set page earnings",
   cron_ping: "Auto-Pilot ping",
 };
+
+/** Approval-card preview for the set_page_earnings tool: the exact rows that will be
+ *  written (Page · Date · Amount, overwrites flagged) + any rows that need clarification. */
+function EarningsPreview({ rows, skipped }: { rows: EarnRow[]; skipped?: EarnSkip[] }) {
+  const shown = rows.slice(0, 60);
+  return (
+    <div className="adm-agent-earn">
+      <table className="adm-agent-earn-tbl">
+        <thead>
+          <tr>
+            <th>Page</th>
+            <th>Date</th>
+            <th className="r">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((r, i) => (
+            <tr key={i}>
+              <td className="adm-agent-earn-pg" title={r.pageName}>{r.pageName}</td>
+              <td>{formatDay(r.date)}</td>
+              <td className="r">
+                ${r.amount.toFixed(2)}
+                {r.previousAmount != null && (
+                  <span className="adm-agent-earn-ovw" title={`Overwrites $${r.previousAmount.toFixed(2)}`}>was ${r.previousAmount.toFixed(2)}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > shown.length && <div className="adm-agent-earn-more">+{rows.length - shown.length} more row(s)…</div>}
+      {skipped && skipped.length > 0 && (
+        <div className="adm-agent-earn-skip">
+          <div className="adm-agent-earn-skip-h">⚠ Not saved — needs your input:</div>
+          <ul>
+            {skipped.slice(0, 12).map((s, i) => (
+              <li key={i}>
+                <strong>{s.inputPageName || "(no name)"}</strong>
+                {s.candidates && s.candidates.length > 0
+                  ? ` — pick: ${s.candidates.map((x) => x.pageName).join(", ")}`
+                  : s.reason
+                    ? ` — ${s.reason}`
+                    : ""}
+              </li>
+            ))}
+            {skipped.length > 12 && <li>+{skipped.length - 12} more…</li>}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const SendIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -457,6 +523,9 @@ export function AgentChat({ aiConfigured, context }: { aiConfigured: boolean; co
                             </div>
                             <div className="adm-agent-card-summary">{a.summary}</div>
                             {a.detail && <div className="adm-agent-card-detail">{a.detail}</div>}
+                            {a.type === "set_page_earnings" && a.params?.rows && a.params.rows.length > 0 && (
+                              <EarningsPreview rows={a.params.rows} skipped={a.params.skipped} />
+                            )}
                             {st.status === "pending" ? (
                               <>
                                 {a.type === "publish_article" && (() => {

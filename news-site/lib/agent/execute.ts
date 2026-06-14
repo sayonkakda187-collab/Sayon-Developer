@@ -7,6 +7,7 @@ import { permalinkForPost } from "@/lib/facebook";
 import { publishArticleNow } from "@/app/admin/facebook-actions";
 import { publishScheduledArticleById, scheduleArticle } from "@/lib/publish";
 import { formatSchedule } from "@/lib/fbSchedule";
+import { applyStoredEarnings, type StoredEarningRow } from "@/lib/pageEarningsImport";
 import type { AgentActionRecord } from "./store";
 
 export type ExecResult = { ok: boolean; result?: string; error?: string };
@@ -25,6 +26,8 @@ export async function executeAgentAction(action: AgentActionRecord): Promise<Exe
         return await doUpdatePublished(action.params);
       case "share_to_facebook":
         return await doShare(action.params);
+      case "set_page_earnings":
+        return await doSetEarnings(action.params);
       default:
         return { ok: false, error: "Unknown action type." };
     }
@@ -77,6 +80,21 @@ async function doUpdatePublished(params: Record<string, unknown>): Promise<ExecR
   if (data.slug && data.slug !== a.slug) revalidatePath(`/news/${a.slug}`);
   revalidatePath("/admin/articles");
   return { ok: true, result: `Updated the live article “${data.title ?? a.title}”.` };
+}
+
+async function doSetEarnings(params: Record<string, unknown>): Promise<ExecResult> {
+  const rows = Array.isArray(params.rows) ? (params.rows as StoredEarningRow[]) : [];
+  if (rows.length === 0) return { ok: false, error: "No earnings rows to save." };
+  const res = await applyStoredEarnings(rows);
+  if (res.saved + res.overwritten === 0) {
+    return { ok: false, error: res.skipped ? `Couldn't save — ${res.skipped} row(s) were skipped (pages may have been removed).` : "Nothing was saved." };
+  }
+  // Refresh the Page Control views that read earnings (list pill + Earnings tab).
+  revalidatePath("/admin/page-control");
+  const parts = [`Saved ${res.saved} new`];
+  if (res.overwritten) parts.push(`${res.overwritten} overwritten`);
+  if (res.skipped) parts.push(`${res.skipped} skipped`);
+  return { ok: true, result: `${parts.join(", ")} earnings value${res.saved + res.overwritten === 1 ? "" : "s"}.` };
 }
 
 async function doShare(params: Record<string, unknown>): Promise<ExecResult> {

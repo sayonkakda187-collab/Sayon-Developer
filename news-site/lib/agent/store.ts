@@ -45,7 +45,7 @@ export type AutopilotSettings = {
 };
 
 export type AgentSettings = {
-  capabilities: { newsSearch: boolean; drafting: boolean; editing: boolean; publishing: boolean; sharing: boolean };
+  capabilities: { newsSearch: boolean; drafting: boolean; editing: boolean; publishing: boolean; sharing: boolean; pageEarnings: boolean };
   requireApproval: { editLive: boolean; publishing: boolean; sharing: boolean };
   customInstructions: string;
   model: string | null;
@@ -69,7 +69,7 @@ export const AUTOPILOT_DEFAULTS: AutopilotSettings = {
 };
 
 export const AGENT_DEFAULTS: AgentSettings = {
-  capabilities: { newsSearch: true, drafting: true, editing: true, publishing: true, sharing: true },
+  capabilities: { newsSearch: true, drafting: true, editing: true, publishing: true, sharing: true, pageEarnings: true },
   // publishing + sharing ship REQUIRED and are hard-enforced server-side regardless.
   requireApproval: { editLive: true, publishing: true, sharing: true },
   customInstructions: "",
@@ -126,6 +126,7 @@ export type AgentActionType =
   | "publish_article"
   | "update_published_article"
   | "share_to_facebook"
+  | "set_page_earnings"
   | "autopilot_run"
   | "publish_scheduled"
   | "cron_ping";

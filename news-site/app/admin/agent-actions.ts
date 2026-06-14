@@ -19,6 +19,7 @@ export async function updateAgentSettings(input: AgentSettings): Promise<{ ok: b
       editing: !!c.editing,
       publishing: !!c.publishing,
       sharing: !!c.sharing,
+      pageEarnings: c.pageEarnings !== false,
     },
     requireApproval: {
       editLive: r.editLive !== false,

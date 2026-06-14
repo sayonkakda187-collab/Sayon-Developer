@@ -9,6 +9,7 @@ import { generateAiAssist } from "@/lib/aiAssist";
 import { pickFeaturedImage } from "@/lib/imageSearch";
 import { permalinkForPost } from "@/lib/facebook";
 import { localInputToUtcISO, formatSchedule } from "@/lib/fbSchedule";
+import { buildEarningsPreview, toStoredRows, MAX_EARNINGS_BATCH, type EarningEntryInput } from "@/lib/pageEarningsImport";
 import type { AnthropicTool } from "./anthropic";
 import { addAction, updateAction, type AgentSettings, type AgentActionRecord, type AgentActionType } from "./store";
 import { executeAgentAction } from "./execute";
@@ -76,6 +77,30 @@ const T_stats: AnthropicTool = {
   description: "Read recent Facebook share stats (counts of posted/failed/pending + a few recent posts). Read-only — no approval needed.",
   input_schema: { type: "object", properties: {} },
 };
+const T_setEarnings: AnthropicTool = {
+  name: "set_page_earnings",
+  description:
+    "Propose recording daily EARNINGS for monitored Facebook Pages (Page Control). GATED — it returns a pending action with a PREVIEW the owner must Approve; it does NOT save anything until then. Resolve the owner's pasted / natural-language numbers into one entry per (page, day, amount). Call this ONCE with all the entries. The tool fuzzy-matches each page name and flags overwrites of existing values; if some names don't match it lists them — relay that and ask the owner to clarify, never invent a page or guess silently.",
+  input_schema: {
+    type: "object",
+    properties: {
+      entries: {
+        type: "array",
+        description: "One object per page + day + amount.",
+        items: {
+          type: "object",
+          properties: {
+            pageName: { type: "string", description: "The page name as the owner wrote it (it is fuzzy-matched to a monitored page)." },
+            date: { type: "string", description: "The day — prefer YYYY-MM-DD in Asia/Phnom_Penh. 'Jun 1' / 'June 1' / '6/1' / '2026-06-01' / a bare day (= current month) are also accepted." },
+            amount: { type: "number", description: "Earnings for that page on that day in USD (a number ≥ 0, up to 2 decimals). Strip any $ or commas." },
+          },
+          required: ["pageName", "date", "amount"],
+        },
+      },
+    },
+    required: ["entries"],
+  },
+};
 
 /** The tools exposed to the model for this turn, filtered by enabled capabilities. */
 export function buildTools(s: AgentSettings): AnthropicTool[] {
@@ -85,6 +110,7 @@ export function buildTools(s: AgentSettings): AnthropicTool[] {
   if (s.capabilities.editing) tools.push(T_updateDraft, T_updatePublished);
   if (s.capabilities.publishing) tools.push(T_publish);
   if (s.capabilities.sharing) tools.push(T_share, T_stats);
+  if (s.capabilities.pageEarnings) tools.push(T_setEarnings);
   return tools;
 }
 
@@ -99,6 +125,7 @@ export async function executeTool(name: string, input: Record<string, unknown>, 
     case "update_published_article": return proposeUpdatePublished(input, ctx.settings);
     case "share_to_facebook": return proposeShare(input, ctx.settings);
     case "get_share_stats": return shareStats();
+    case "set_page_earnings": return proposeSetEarnings(input, ctx.settings);
     default: return { content: `Unknown tool: ${name}`, summary: `Unknown tool ${name}`, isError: true };
   }
 }
@@ -287,6 +314,60 @@ async function proposeShare(input: Record<string, unknown>, settings: AgentSetti
   if (!page) return { content: `No connected Page matches “${pageArg}”.`, summary: "share_to_facebook: page not found", isError: true };
   const note = page.status !== "Connected" ? " (page token may be expired)" : "";
   return gate("share_to_facebook", `Share to ${page.pageName}: ${a.title}`, `Article → Facebook Page${note}`, { articleId: a.id, pageDbId: page.id }, settings);
+}
+
+async function proposeSetEarnings(input: Record<string, unknown>, settings: AgentSettings): Promise<ToolResult> {
+  const entries = Array.isArray(input.entries) ? (input.entries as EarningEntryInput[]) : [];
+  if (entries.length === 0) {
+    return { content: "No earnings entries were provided. Ask the owner for the page name(s), date(s), and amount(s).", summary: "set_page_earnings (no entries)", isError: true };
+  }
+
+  const preview = await buildEarningsPreview(entries);
+  const stored = toStoredRows(preview.rows);
+  const c = preview.counts;
+
+  // Rows that need the owner to clarify (NEVER silently guessed).
+  const needsInput = preview.rows.filter((r) => r.status === "unmatched" || r.status === "ambiguous" || r.status === "invalid");
+  const needLines = needsInput.slice(0, 20).map((r) => {
+    if (r.status === "ambiguous") return `• “${r.inputPageName}” — could be: ${(r.candidates ?? []).map((x) => x.pageName).join(", ")}`;
+    if (r.status === "unmatched") return `• “${r.inputPageName}” — no monitored page matched`;
+    return `• “${r.inputPageName}” ${r.inputDate} — ${r.reason ?? "couldn't read this row"}`;
+  });
+
+  if (stored.length === 0) {
+    return {
+      content: `Nothing could be matched, so no save is proposed. These rows need the owner's input — ask them to clarify or pick a page (do NOT guess):\n${needLines.join("\n")}`,
+      summary: `set_page_earnings: ${needsInput.length} row(s) need clarification`,
+      isError: true,
+    };
+  }
+
+  const pageCount = new Set(stored.map((r) => r.monitoredPageId)).size;
+  const summary = `Set earnings: ${stored.length} value${stored.length === 1 ? "" : "s"} · ${pageCount} page${pageCount === 1 ? "" : "s"}`;
+  const detailBits = [`${c.save} new${c.overwrite ? ` · ${c.overwrite} overwrite${c.overwrite === 1 ? "" : "s"}` : ""}`];
+  if (needsInput.length) detailBits.push(`${needsInput.length} need${needsInput.length === 1 ? "s" : ""} your input`);
+  if (preview.truncated) detailBits.push(`capped to ${MAX_EARNINGS_BATCH} rows`);
+  const detail = detailBits.join(" · ");
+
+  // Compact skipped list for the approval card to render (+ the model to relay).
+  const skipped = needsInput.slice(0, 40).map((r) => ({
+    inputPageName: r.inputPageName,
+    inputDate: r.inputDate,
+    inputAmount: r.inputAmount,
+    status: r.status,
+    reason: r.reason,
+    candidates: r.candidates?.map((x) => ({ pageName: x.pageName })),
+  }));
+
+  const params = { rows: stored, skipped, counts: c, truncated: preview.truncated };
+  const res = await gate("set_page_earnings", summary, detail, params, settings);
+  if (res.proposedAction) {
+    const note = needsInput.length
+      ? `\n\nNOT included (need the owner's input — ask them to clarify or pick, don't guess):\n${needLines.join("\n")}`
+      : "";
+    res.content = `Proposed an earnings update for the owner to approve: ${stored.length} value(s) (${c.save} new${c.overwrite ? `, ${c.overwrite} overwrite` : ""}), across ${pageCount} page(s). It is NOT saved yet — it writes only when the owner clicks Approve on the preview. Do NOT claim it's saved.${note}`;
+  }
+  return res;
 }
 
 async function shareStats(): Promise<ToolResult> {

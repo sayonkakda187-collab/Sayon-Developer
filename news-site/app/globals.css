@@ -2341,6 +2341,22 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 .adm-agent-card-type { color: var(--section-link); }
 .adm-agent-card-summary { font-weight: 700; color: var(--adm-ink); margin-top: 5px; font-size: 14.5px; }
 .adm-agent-card-detail { font-size: 12.5px; color: var(--adm-muted); margin-top: 3px; }
+/* set_page_earnings approval preview: the exact rows to be written + clarification list. */
+.adm-agent-earn { margin-top: 10px; }
+.adm-agent-earn-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.adm-agent-earn-tbl th { text-align: left; font-weight: 700; color: var(--adm-muted); padding: 3px 8px; border-bottom: 1px solid var(--adm-bd); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.adm-agent-earn-tbl th.r, .adm-agent-earn-tbl td.r { text-align: right; }
+.adm-agent-earn-tbl td { padding: 4px 8px; border-bottom: 1px solid var(--adm-bd); color: var(--adm-ink); vertical-align: top; }
+.adm-agent-earn-tbl tr:last-child td { border-bottom: none; }
+.adm-agent-earn-pg { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-agent-earn-tbl td.r { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.adm-agent-earn-ovw { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.14); border-radius: 5px; padding: 1px 5px; vertical-align: middle; }
+[data-adm-theme="dark"] .admin-shell .adm-agent-earn-ovw { color: #fbbf24; background: rgba(245, 158, 11, 0.16); }
+.adm-agent-earn-more { font-size: 11.5px; color: var(--adm-muted); margin-top: 5px; }
+.adm-agent-earn-skip { margin-top: 9px; padding: 8px 10px; border-radius: 9px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.28); }
+.adm-agent-earn-skip-h { font-size: 12px; font-weight: 700; color: #b45309; margin-bottom: 3px; }
+[data-adm-theme="dark"] .admin-shell .adm-agent-earn-skip-h { color: #fbbf24; }
+.adm-agent-earn-skip ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--adm-ink); display: flex; flex-direction: column; gap: 2px; }
 .adm-agent-card-acts { display: flex; gap: 9px; margin-top: 12px; flex-wrap: wrap; }
 .adm-agent-approve { min-height: 44px; }
 .adm-agent-reject { min-height: 44px; }

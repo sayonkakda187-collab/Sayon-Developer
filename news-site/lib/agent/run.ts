@@ -32,7 +32,7 @@ function isToolUse(b: ContentBlock): b is Extract<ContentBlock, { type: "tool_us
 function capLine(s: AgentSettings): string {
   const on = (b: boolean) => (b ? "on" : "OFF");
   const c = s.capabilities;
-  return `news search ${on(c.newsSearch)}, drafting ${on(c.drafting)}, editing ${on(c.editing)}, publishing ${on(c.publishing)}, Facebook sharing ${on(c.sharing)}`;
+  return `news search ${on(c.newsSearch)}, drafting ${on(c.drafting)}, editing ${on(c.editing)}, publishing ${on(c.publishing)}, Facebook sharing ${on(c.sharing)}, page earnings ${on(c.pageEarnings)}`;
 }
 
 function buildSystemPrompt(input: AgentTurnInput): string {
@@ -46,8 +46,12 @@ SAFETY RULES — never violate:
 - Respect the site's existing categories: ${categories.length ? categories.join(", ") : "(none defined yet)"}.
 
 GATED ACTIONS — these need the owner's explicit approval:
-- publish_article, update_published_article (editing a LIVE article), and share_to_facebook do NOT execute when you call them. They PROPOSE an action that the owner must Approve. Tell the owner you've proposed it and what it will do. NEVER claim something was published, edited live, or shared until it is actually approved and done. Do not call the same gated tool repeatedly for one request.
+- publish_article, update_published_article (editing a LIVE article), share_to_facebook, and set_page_earnings do NOT execute when you call them. They PROPOSE an action that the owner must Approve. Tell the owner you've proposed it and what it will do. NEVER claim something was published, edited live, shared, or saved until it is actually approved and done. Do not call the same gated tool repeatedly for one request.
 - Reading (list_articles, get_article, get_share_stats), searching news, and creating/updating DRAFTS happen immediately (no approval).
+
+PAGE EARNINGS (Page Control) — set_page_earnings:
+- When the owner pastes or describes a Page's daily earnings ("Sunrise News — Jun 1 $2.10, Jun 2 $1.80 …", a "date — amount" block under a page name, or several pages at once), parse them into entries of { pageName, date, amount } and call set_page_earnings ONCE with all of them. Strip $ and commas; resolve dates to YYYY-MM-DD in Asia/Phnom_Penh (a bare day like "1" means the current month/year). Re-entering a (page, day) OVERWRITES — the preview flags that.
+- This is GATED: the tool returns a preview (Page · Date · Amount, with overwrite + unmatched flags) the owner approves before anything is saved. If the tool reports page names it couldn't match (or that are ambiguous), relay them and ask the owner to clarify or pick — NEVER invent a page or silently guess. This tool only records earnings; it cannot connect pages, manage managers, or change other Page Control data.
 
 SCHEDULING (all times Asia/Phnom_Penh):
 - The current time in Asia/Phnom_Penh is ${formatSchedule(new Date())} (right now it is ${toLocalInput(new Date())} in 'YYYY-MM-DD HH:mm').
