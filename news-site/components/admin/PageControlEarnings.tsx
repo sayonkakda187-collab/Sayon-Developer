@@ -46,7 +46,15 @@ export function PageControlEarnings({ pages, managers, assignments, apiBase = "/
   const [saved, setSaved] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<Record<string, SaveStatus>>({});
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({}); // boxes collapsed by default
+  // Boxes are collapsed by default — EXCEPT when there's exactly one box (e.g. the
+  // portal's single manager), which opens on load so the earnings grid shows without a tap.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    const hasUnassigned = pages.some((p) => !assignments[p.id]);
+    const boxCount = managers.length + (hasUnassigned ? 1 : 0);
+    if (boxCount !== 1) return {};
+    const onlyKey = managers.length === 1 ? managers[0].id : "_unassigned";
+    return { [onlyKey]: true };
+  });
 
   // (Re)load the saved earnings whenever the day changes.
   useEffect(() => {
