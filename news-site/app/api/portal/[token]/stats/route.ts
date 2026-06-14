@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getMonitoredRowStats } from "@/lib/pageControlInsights";
 import { getMonitoredRangePosts } from "@/lib/pageControlRangePosts";
 import { ppToday, addDays } from "@/lib/fbInsightsRange";
-import { managerForPortalToken } from "@/lib/managerPortal";
+import { requirePortalManager, NO_STORE } from "@/lib/portalAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +38,10 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 
 /** Portal mirror of the row-stats batch (READ-ONLY; authorized by the path token). */
 export async function POST(req: Request, { params }: { params: { token: string } }) {
-  const mgr = await managerForPortalToken(params.token);
-  if (!mgr) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  // Read-only stats for any requested monitored page (the portal shows ALL pages'
+  // results); the token only needs to resolve to an enabled manager.
+  const auth = await requirePortalManager(req, params.token);
+  if (auth instanceof NextResponse) return auth;
 
   let body: unknown;
   try {
@@ -49,7 +51,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   }
   const { ids, from, to, refresh } = (body ?? {}) as { ids?: unknown; from?: unknown; to?: unknown; refresh?: unknown };
   const list = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string").slice(0, MAX_BATCH) : [];
-  if (list.length === 0) return NextResponse.json({ ok: true, rows: [] });
+  if (list.length === 0) return NextResponse.json({ ok: true, rows: [] }, { headers: NO_STORE });
   const range = parseRange(from, to);
 
   const pages = await prisma.monitoredPage.findMany({ where: { id: { in: list } }, select: { id: true, pageId: true, accessToken: true } });
@@ -60,5 +62,5 @@ export async function POST(req: Request, { params }: { params: { token: string }
     const [stats, posts] = await Promise.all([getMonitoredRowStats(p, range, refresh === true), getMonitoredRangePosts(p, range, refresh === true)]);
     return { id: p.id, ...stats, rangePosts: { total: posts.total, video: posts.video, image: posts.image, capped: posts.capped }, earnings: earnByPage.get(p.id) ?? null };
   });
-  return NextResponse.json({ ok: true, rows });
+  return NextResponse.json({ ok: true, rows }, { headers: NO_STORE });
 }

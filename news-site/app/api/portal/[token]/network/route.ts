@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getNetworkRollup } from "@/lib/pageControlNetwork";
 import { ppToday, addDays } from "@/lib/fbInsightsRange";
-import { managerForPortalToken } from "@/lib/managerPortal";
+import { requirePortalManager, NO_STORE } from "@/lib/portalAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +22,8 @@ function parseRange(from: string | null, to: string | null): { from: string; to:
 
 /** Portal mirror of the network rollup (READ-ONLY; authorized by the path token). */
 export async function GET(req: Request, { params }: { params: { token: string } }) {
-  const mgr = await managerForPortalToken(params.token);
-  if (!mgr) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const auth = await requirePortalManager(req, params.token);
+  if (auth instanceof NextResponse) return auth;
 
   const { searchParams } = new URL(req.url);
   const range = parseRange(searchParams.get("from"), searchParams.get("to"));
@@ -31,8 +31,8 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   const managerId = managerParam && managerParam.trim() ? managerParam.trim() : null;
   try {
     const rollup = await getNetworkRollup(range, managerId, false);
-    return NextResponse.json({ ok: true, from: range.from, to: range.to, rollup });
+    return NextResponse.json({ ok: true, from: range.from, to: range.to, rollup }, { headers: NO_STORE });
   } catch {
-    return NextResponse.json({ ok: false, error: "Couldn’t build the network dashboard." });
+    return NextResponse.json({ ok: false, error: "Couldn’t build the network dashboard." }, { headers: NO_STORE });
   }
 }

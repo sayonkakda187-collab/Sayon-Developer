@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
@@ -11,7 +12,12 @@ import { formatNumber } from "@/lib/site";
 import { usePageControlSearch } from "@/components/admin/pageControlSearchStore";
 import { usePageControlManagerFilter } from "@/components/admin/pageControlManagerFilterStore";
 import { usePageControlConnectSignal } from "@/components/admin/pageControlConnectStore";
-import { PageControlConnectModal } from "@/components/admin/PageControlConnectModal";
+// Loaded on demand (admin only). Keeping it out of the static graph means the admin
+// Connect flow + its server actions are NOT bundled into the read-only Manager Portal.
+const PageControlConnectModal = dynamic(
+  () => import("@/components/admin/PageControlConnectModal").then((m) => m.PageControlConnectModal),
+  { ssr: false },
+);
 import { AnimatedSparkline, AnimatedAreaChart, AnimatedStackedBars, TypeMixBar, CountUp } from "@/components/admin/PageControlCharts";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";

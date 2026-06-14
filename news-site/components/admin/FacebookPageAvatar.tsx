@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 
 const AVATAR_COLORS = ["#1877f2", "#16a34a", "#7c3aed", "#f59e0b", "#ef4444", "#0ea5e9"];
+
+/**
+ * Whether the admin-only picture proxy may be used as an avatar fallback. The Manager
+ * Portal wraps its subtree in `<AvatarProxyContext.Provider value={false}>` so portal
+ * avatars never call an admin endpoint — they fall straight from the cached CDN url to
+ * initials. Defaults to `true` (admin), so nothing else changes.
+ */
+export const AvatarProxyContext = createContext(true);
 
 /** Deterministic accent colour for a Page's initial fallback (stable per seed). */
 export function avatarColor(seed: string): string {
@@ -37,10 +45,12 @@ export function FacebookPageAvatar({
   avatarUrl?: string | null;
   size?: number;
 }) {
+  const allowProxy = useContext(AvatarProxyContext);
   const proxy = `/api/admin/facebook/${encodeURIComponent(dbId)}/picture?size=${size * 2}`;
-  // 0 = stored CDN url, 1 = server proxy, 2 = initials only.
-  const [step, setStep] = useState<0 | 1 | 2>(avatarUrl ? 0 : 1);
-  const src = step === 0 ? avatarUrl || proxy : step === 1 ? proxy : null;
+  // 0 = stored CDN url, 1 = server proxy, 2 = initials only. The Manager Portal disables
+  // the proxy step (admin-only), so it goes straight from the CDN url to initials.
+  const [step, setStep] = useState<0 | 1 | 2>(avatarUrl ? 0 : allowProxy ? 1 : 2);
+  const src = step === 0 ? avatarUrl ?? (allowProxy ? proxy : null) : step === 1 ? proxy : null;
   const initial = (name.trim()[0] ?? "?").toUpperCase();
 
   return (
@@ -67,7 +77,7 @@ export function FacebookPageAvatar({
           alt=""
           loading="lazy"
           decoding="async"
-          onError={() => setStep((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : 2))}
+          onError={() => setStep((s) => (s === 0 ? (allowProxy ? 1 : 2) : 2))}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
         />
       )}

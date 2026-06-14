@@ -3268,3 +3268,17 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-portal-expired h1 { font-family: var(--font-newsreader), Georgia, serif; font-size: 21px; font-weight: 700; color: var(--adm-ink-strong); margin: 14px 0 6px; }
 .adm-portal-expired p { font-size: 14px; color: var(--adm-muted); line-height: 1.5; margin: 0 auto; max-width: 320px; }
 .adm-portal-expired-brand { margin-top: 18px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--adm-ink); opacity: .5; }
+
+/* Portal — phone polish (the portal is `.admin-shell`, so the admin ≥44px tap-target /
+   no-overflow hardening already applies; these just tighten the header/footer chrome). */
+@media (max-width: 600px) {
+  .adm-portal-top { padding: 10px 13px; }
+  .adm-portal-id { gap: 9px; }
+  .adm-portal-id-name { font-size: 15.5px; max-width: 46vw; }
+  .adm-portal-id-eyebrow { font-size: 9px; letter-spacing: .09em; }
+  .adm-portal-top-right { gap: 7px; }
+  .adm-portal-ro { padding: 3px 8px; font-size: 10.5px; }
+  .adm-portal-body { padding: 13px 11px 30px; }
+  .adm-portal-tabs { max-width: none; }
+  .adm-portal-foot { padding: 14px 12px; font-size: 11.5px; }
+}
