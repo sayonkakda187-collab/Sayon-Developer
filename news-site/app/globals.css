@@ -3182,6 +3182,12 @@ a.dl-breaking-text:hover { text-decoration:none; }
    collapsed boxes are header-only so they're all the same height. */
 .adm-pce-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; align-items: start; }
 .adm-pce-box { padding: 0; overflow: hidden; }
+/* The page grid inside only tiles into multiple columns when its box is wide enough, but
+   the boxes grid caps each box at one ~290px track. So an EXPANDED manager box (and a lone
+   box — e.g. the portal's single manager) spans ALL columns → full width, letting its pages
+   tile 2–4 across. Collapsed boxes still tile side-by-side for a compact overview. */
+.adm-pce-box.on,
+.adm-pce-box:only-child { grid-column: 1 / -1; }
 .adm-pce-boxhead { display: flex; align-items: stretch; }
 .adm-pce-box.on .adm-pce-boxhead { border-bottom: 1px solid var(--adm-bd); }
 .adm-pce-boxtoggle {
