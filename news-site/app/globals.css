@@ -2666,6 +2666,9 @@ a.dl-breaking-text:hover { text-decoration:none; }
 /* Dashboard header (back · identity · open) */
 .adm-pc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .adm-pc-back { flex-basis: 100%; font-size: 13px; }
+/* The Manager Portal renders the back affordance as a <button> (client back, not a route);
+   reset the UA button chrome so it matches the admin's link styling. */
+button.adm-pc-back { background: none; border: 0; padding: 0; margin: 0; font: inherit; cursor: pointer; text-align: left; }
 .adm-pc-id { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 60%; }
 .adm-pc-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .adm-pc-open { flex: none; }

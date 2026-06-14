@@ -6,9 +6,6 @@ import { RefreshIcon, ExternalLinkIcon } from "@/components/admin/icons";
 import { formatDate, formatNumber } from "@/lib/site";
 import type { PagePost } from "@/lib/facebook";
 
-// Page Control's OWN posts endpoint (MonitoredPage store), independent from the farm.
-const API = "/api/admin/page-control/posts";
-
 type Sort = "recent" | "engagement";
 
 function engagementOf(p: PagePost): number {
@@ -86,7 +83,8 @@ function Skeletons() {
  * when this sub-tab mounts. A token without the needed scope shows the same
  * "Needs reconnect" state as Insights.
  */
-export function PageControlContent({ pageDbId }: { pageDbId: string }) {
+export function PageControlContent({ pageDbId, apiBase = "/api/admin/page-control" }: { pageDbId: string; apiBase?: string }) {
+  const API = `${apiBase}/posts`;
   const { error } = useToast();
   const [posts, setPosts] = useState<PagePost[]>([]);
   const [after, setAfter] = useState<string | null>(null);
@@ -112,7 +110,7 @@ export function PageControlContent({ pageDbId }: { pageDbId: string }) {
         .catch(() => error("Couldn’t load this Page’s posts."))
         .finally(() => setLoading(false));
     },
-    [pageDbId, error],
+    [pageDbId, error, API],
   );
 
   useEffect(() => {

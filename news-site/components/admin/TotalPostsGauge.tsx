@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { AnimatedGauge } from "@/components/admin/PageControlCharts";
 
-const API = "/api/admin/page-control/total-posts";
-
 type State = { count: number | null; capped: boolean; status: string };
 
 /** Smallest "nice" ceiling (1/2/5 × 10ⁿ) ≥ n, for the gauge's full-arc point. */
@@ -22,7 +20,8 @@ function niceCeil(n: number): number {
  * count is exact when Graph returns a summary total; otherwise it's a capped floor
  * shown as "N+".
  */
-export function TotalPostsGauge({ pageDbId }: { pageDbId: string }) {
+export function TotalPostsGauge({ pageDbId, apiBase = "/api/admin/page-control" }: { pageDbId: string; apiBase?: string }) {
+  const API = `${apiBase}/total-posts`;
   const [state, setState] = useState<State | null>(null);
 
   useEffect(() => {
@@ -37,7 +36,7 @@ export function TotalPostsGauge({ pageDbId }: { pageDbId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [pageDbId]);
+  }, [pageDbId, API]);
 
   if (state === null) {
     return (

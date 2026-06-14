@@ -187,6 +187,7 @@ export function PageControlList({
   assignments,
   apiBase = "/api/admin/page-control",
   readOnly = false,
+  onOpenPage,
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
@@ -197,6 +198,9 @@ export function PageControlList({
   // affordances (the empty-state CTA + the connect modal) — the stats/charts are
   // already read-only.
   readOnly?: boolean;
+  // Manager Portal: when set, clicking a row opens that page's full detail (handled by
+  // the portal client) instead of expanding the inline charts accordion.
+  onOpenPage?: (pageId: string) => void;
 }) {
   const STATS_API = useMemo(() => `${apiBase}/stats`, [apiBase]);
   const { success, error } = useToast();
@@ -330,19 +334,20 @@ export function PageControlList({
   function renderRow(p: MonitoredRow) {
     const m = assignments[p.id] ? managerById.get(assignments[p.id]!) ?? null : null;
     const isOpen = expanded === p.id;
+    const activate = () => (onOpenPage ? onOpenPage(p.id) : setExpanded(isOpen ? null : p.id));
     return (
       <div key={p.id} className={`adm-pc-rowwrap ${isOpen ? "on" : ""}`}>
         <div
           className="adm-card adm-pc-row"
           role="button"
           tabIndex={0}
-          aria-expanded={isOpen}
-          aria-label={`${p.pageName} — ${isOpen ? "collapse" : "expand"} charts`}
-          onClick={() => setExpanded(isOpen ? null : p.id)}
+          aria-expanded={onOpenPage ? undefined : isOpen}
+          aria-label={onOpenPage ? `${p.pageName} — open page detail` : `${p.pageName} — ${isOpen ? "collapse" : "expand"} charts`}
+          onClick={activate}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              setExpanded(isOpen ? null : p.id);
+              activate();
             }
           }}
         >
@@ -363,9 +368,9 @@ export function PageControlList({
             <RowStats entry={statsMap[`${rk}|${p.id}`]} />
           </div>
           {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
-          <span className={`adm-pc-caret ${isOpen ? "on" : ""}`} aria-hidden>⌄</span>
+          <span className={`adm-pc-caret ${isOpen ? "on" : ""}`} aria-hidden>{onOpenPage ? "›" : "⌄"}</span>
         </div>
-        {isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} apiBase={apiBase} />}
+        {!onOpenPage && isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} apiBase={apiBase} />}
       </div>
     );
   }
