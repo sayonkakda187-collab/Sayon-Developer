@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateUniqueLinkCode } from "@/lib/earningsLinkCode";
+import { generatePortalToken, hashPortalToken, encryptPortalToken } from "@/lib/managerPortal";
 
 // Page-manager (team member) CRUD + page assignment. Managers are LOCAL app data
 // (name + optional uploaded photo) — never mixed with Facebook tokens. All actions
@@ -42,6 +43,34 @@ export async function regenerateManagerLinkCode(id: string): Promise<ActionResul
     return { ok: true, data: { linkCode } };
   } catch {
     return fail("Couldn’t regenerate the link code.");
+  }
+}
+
+/** Issue a fresh Manager Portal token (revokes any old link) and enable it. Returns the
+ *  RAW token — shown once for the admin to copy; only its hash is stored. */
+export async function regenerateManagerPortal(id: string): Promise<ActionResult<{ token: string }>> {
+  await requireAdmin();
+  try {
+    const existing = await prisma.pageManager.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return fail("Manager not found.");
+    const token = generatePortalToken();
+    await prisma.pageManager.update({ where: { id }, data: { portalTokenHash: hashPortalToken(token), portalToken: encryptPortalToken(token), portalEnabled: true } });
+    revalidatePath("/admin/page-control");
+    return { ok: true, data: { token } };
+  } catch {
+    return fail("Couldn’t generate the portal link.");
+  }
+}
+
+/** Enable/disable a manager's portal link (keeps the token; disabled links are rejected). */
+export async function setManagerPortalEnabled(id: string, enabled: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  try {
+    await prisma.pageManager.update({ where: { id }, data: { portalEnabled: enabled } });
+    revalidatePath("/admin/page-control");
+    return { ok: true, data: undefined };
+  } catch {
+    return fail("Couldn’t update the portal link.");
   }
 }
 

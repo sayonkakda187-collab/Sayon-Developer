@@ -13,7 +13,6 @@ import { CountUp, AnimatedSparkline, AnimatedAreaChart, useReducedMotion, useRev
 import type { DayPoint } from "@/lib/facebookInsights";
 import type { NetworkRollup, LeaderRow, NetPost, MoverRow } from "@/lib/pageControlNetwork";
 
-const NET_API = "/api/admin/page-control/network";
 const SS_DASH = "pageControl.dashRange";
 const SS_DASH_MGR = "pageControl.dashManager";
 
@@ -251,7 +250,8 @@ function NetTrend({ days, daysPrev }: { days: DayPoint[]; daysPrev: DayPoint[] }
  * (independent of the list's). Animations are once-on-scroll-in + reduced-motion
  * safe (reused from the chart lib). Coverage ("N of M pages") is shown up top.
  */
-export function PageControlNetwork() {
+export function PageControlNetwork({ apiBase = "/api/admin/page-control" }: { apiBase?: string } = {}) {
+  const NET_API = useMemo(() => `${apiBase}/network`, [apiBase]);
   const { error } = useToast();
   // The dashboard has its OWN manager filter (chips inline with the title), independent
   // of the list/header — its selection is remembered in sessionStorage. null = whole
@@ -268,7 +268,7 @@ export function PageControlNetwork() {
   // Load the manager chips once (local DB, no Graph).
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/page-control/managers", { cache: "no-store" })
+    fetch(`${apiBase}/managers`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!cancelled && j.ok) setChipManagers(j.managers as ChipManager[]);
@@ -277,7 +277,7 @@ export function PageControlNetwork() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [apiBase]);
 
   useEffect(() => {
     try {
@@ -310,7 +310,7 @@ export function PageControlNetwork() {
       .catch(() => !cancelled && error("Couldn’t load the network dashboard."))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [range.from, range.to, dashManagerId, error]);
+  }, [NET_API, range.from, range.to, dashManagerId, error]);
 
   const t = data?.totals;
   return (

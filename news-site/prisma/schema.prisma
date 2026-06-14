@@ -384,6 +384,12 @@ model PageManager {
   // is null until linked (then unique → one Telegram chat per manager).
   linkCode       String  @unique
   telegramChatId String? @unique
+  // Manager Portal: a long random token (stored HASHED; shown once on generate) for a
+  // shareable read-only magic link `/portal/<token>`. `portalEnabled` can disable the
+  // link without changing the token.
+  portalTokenHash String?  @unique // SHA-256, for O(1) portal lookup
+  portalToken     String?  // the raw token, ENCRYPTED at rest, so the admin can re-view/copy it
+  portalEnabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

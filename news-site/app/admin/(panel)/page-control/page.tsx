@@ -4,6 +4,7 @@ import { type MonitoredRow } from "@/components/admin/PageControlList";
 import { PageControlTabs } from "@/components/admin/PageControlTabs";
 import type { Manager } from "@/components/admin/ManagerAvatar";
 import { getPageControlConnectStatus } from "@/lib/pageControlSettings";
+import { decryptPortalToken } from "@/lib/managerPortal";
 
 // Live monitored-page/token state; never statically cache.
 export const dynamic = "force-dynamic";
@@ -31,7 +32,15 @@ export default async function PageControlPage() {
     managerId: p.managerId,
   }));
 
-  const managers: Manager[] = managerRecords.map((m) => ({ id: m.id, name: m.name, photo: m.photo, linkCode: m.linkCode, linked: m.telegramChatId != null }));
+  const managers: Manager[] = managerRecords.map((m) => ({
+    id: m.id,
+    name: m.name,
+    photo: m.photo,
+    linkCode: m.linkCode,
+    linked: m.telegramChatId != null,
+    portalToken: decryptPortalToken(m.portalToken),
+    portalEnabled: m.portalEnabled,
+  }));
 
   return (
     <div>
