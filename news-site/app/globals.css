@@ -2617,7 +2617,14 @@ a.dl-breaking-text:hover { text-decoration:none; }
 
 /* ── Two-box layout: monitored-pages list (left) + network dashboard (right) ── */
 .adm-pc-twobox { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 1024px) { .adm-pc-twobox { grid-template-columns: 45fr 55fr; align-items: start; } }
+@media (min-width: 1024px) {
+  /* Desktop: the two boxes fill the FULL page width (keeping the 45/55 list↔network
+     split), capped only on ultra-wide screens so charts don't stretch absurdly. */
+  .adm-pc-twobox { grid-template-columns: 45fr 55fr; align-items: start; max-width: 2100px; margin-inline: auto; }
+  /* Tighten the admin outer gutter on the Page Control route only, so the two-box uses
+     more of the width (every other admin route keeps its default padding). */
+  .admin-shell[data-section="page-control"] .adm-scroll { padding-left: 18px; padding-right: 18px; }
+}
 .adm-pc-box { min-width: 0; border: 1px solid var(--adm-bd); border-radius: 16px; padding: 12px; }
 .adm-pc-dash-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
 
@@ -3272,7 +3279,9 @@ a.dl-breaking-text:hover { text-decoration:none; }
 }
 
 /* Body: a constrained content column. */
-.adm-portal-body { width: 100%; max-width: 1180px; margin: 0 auto; padding: 16px clamp(14px, 4vw, 28px) 36px; flex: 1; min-width: 0; }
+/* Wide cap (was 1180) so the Results two-box + earnings use the full desktop width with
+   only a small side gutter; still capped on ultra-wide so charts don't stretch absurdly. */
+.adm-portal-body { width: 100%; max-width: 2100px; margin: 0 auto; padding: 16px clamp(14px, 4vw, 28px) 36px; flex: 1; min-width: 0; }
 .adm-portal-tabs { margin: 0 0 14px; max-width: 360px; }
 .adm-portal-earn { margin-top: 2px; }
 
