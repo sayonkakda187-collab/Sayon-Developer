@@ -38,7 +38,8 @@ export async function POST(req: Request) {
   const capOk =
     action.type === "publish_article" ? settings.capabilities.publishing
       : action.type === "share_to_facebook" ? settings.capabilities.sharing
-        : settings.capabilities.editing; // update_published_article
+        : action.type === "set_page_earnings" ? settings.capabilities.pageEarnings
+          : settings.capabilities.editing; // update_published_article
   if (!capOk) {
     const updated = await updateAction(id, { status: "failed", error: "That capability is turned off in Agent Settings.", decidedAt: new Date().toISOString() });
     return NextResponse.json({ ok: false, error: "That capability is turned off in Agent Settings.", action: updated }, { status: 403 });

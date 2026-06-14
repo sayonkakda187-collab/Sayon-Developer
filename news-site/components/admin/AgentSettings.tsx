@@ -164,6 +164,7 @@ export function AgentSettingsForm({
         <Toggle label="Editing" hint="Edit drafts (and propose edits to live articles)" checked={s.capabilities.editing} onChange={setCap("editing")} />
         <Toggle label="Publishing" hint="Propose making drafts public" checked={s.capabilities.publishing} onChange={setCap("publishing")} />
         <Toggle label="Facebook sharing" hint="Propose sharing to connected Pages" checked={s.capabilities.sharing} onChange={setCap("sharing")} />
+        <Toggle label="Page earnings" hint="Propose recording Page Control daily earnings (approval required)" checked={s.capabilities.pageEarnings} onChange={setCap("pageEarnings")} />
       </div>
 
       <div className="adm-card adm-card-pad" style={{ marginBottom: 16 }}>
