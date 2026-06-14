@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { managerForPortalToken } from "@/lib/managerPortal";
+import { portalPageRateLimited } from "@/lib/portalAuth";
 import { type MonitoredRow } from "@/components/admin/PageControlList";
 import type { Manager } from "@/components/admin/ManagerAvatar";
 import type { ManagedPage } from "@/components/admin/ManagersScreen";
@@ -19,6 +20,9 @@ export const dynamic = "force-dynamic";
  * API re-checks ownership on every write).
  */
 export default async function PortalPage({ params }: { params: { token: string } }) {
+  // Throttle full-page renders by IP (defence-in-depth against hammering the link).
+  if (portalPageRateLimited()) return <PortalExpired variant="rate" />;
+
   const manager = await managerForPortalToken(params.token);
   if (!manager) return <PortalExpired />;
 

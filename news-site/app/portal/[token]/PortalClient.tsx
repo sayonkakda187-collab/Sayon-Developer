@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ToastProvider } from "@/components/admin/Toast";
 import { ManagerAvatar, type Manager } from "@/components/admin/ManagerAvatar";
+import { AvatarProxyContext } from "@/components/admin/FacebookPageAvatar";
 import { PageControlList, type MonitoredRow } from "@/components/admin/PageControlList";
 import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { PageControlEarnings } from "@/components/admin/PageControlEarnings";
@@ -41,6 +42,9 @@ export function PortalClient({
   const ownCount = ownPages.length;
 
   return (
+    // Disable the admin-only avatar picture proxy for the whole portal subtree — portal
+    // avatars fall straight from the cached CDN url to initials, never hitting /api/admin.
+    <AvatarProxyContext.Provider value={false}>
     <ToastProvider>
       <div
         className="admin-shell adm-stage adm-portal"
@@ -123,5 +127,6 @@ export function PortalClient({
         </footer>
       </div>
     </ToastProvider>
+    </AvatarProxyContext.Provider>
   );
 }

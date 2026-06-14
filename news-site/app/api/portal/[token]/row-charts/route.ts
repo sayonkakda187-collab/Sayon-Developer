@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getMonitoredRowCharts } from "@/lib/pageControlRowCharts";
 import { ppToday, addDays } from "@/lib/fbInsightsRange";
-import { managerForPortalToken } from "@/lib/managerPortal";
+import { requirePortalManager, NO_STORE } from "@/lib/portalAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,19 +23,19 @@ function parseRange(from: string | null, to: string | null): { from: string; to:
 
 /** Portal mirror of one expanded row's charts (READ-ONLY; authorized by the path token). */
 export async function GET(req: Request, { params }: { params: { token: string } }) {
-  const mgr = await managerForPortalToken(params.token);
-  if (!mgr) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const auth = await requirePortalManager(req, params.token);
+  if (auth instanceof NextResponse) return auth;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ ok: false, error: "Missing page id" }, { status: 400 });
+  if (!id) return NextResponse.json({ ok: false, error: "Missing page id" }, { status: 400, headers: NO_STORE });
   const range = parseRange(searchParams.get("from"), searchParams.get("to"));
 
   const page = await prisma.monitoredPage.findUnique({ where: { id }, select: { id: true, pageId: true, accessToken: true } });
-  if (!page) return NextResponse.json({ ok: false, error: "Page not found" }, { status: 404 });
+  if (!page) return NextResponse.json({ ok: false, error: "Page not found" }, { status: 404, headers: NO_STORE });
 
   const charts = await getMonitoredRowCharts(page, range, false);
   const earnRows = await prisma.pageEarning.findMany({ where: { monitoredPageId: id, date: { gte: range.from, lte: range.to } }, select: { date: true, amount: true }, orderBy: { date: "asc" } });
   const earningsDaily = earnRows.map((e) => ({ date: e.date, amount: Number(e.amount) }));
-  return NextResponse.json({ ok: true, ...charts, earningsDaily });
+  return NextResponse.json({ ok: true, ...charts, earningsDaily }, { headers: NO_STORE });
 }

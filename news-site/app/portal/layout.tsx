@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   title: "Manager Portal · The Daily Ledger",
   // A magic-link page — keep it out of search engines.
   robots: { index: false, follow: false },
+  // The token lives in the URL: never send it in the Referer to any third party
+  // (e.g. Facebook CDN avatars when an image loads).
+  referrer: "no-referrer",
 };
 
 export const viewport: Viewport = {
