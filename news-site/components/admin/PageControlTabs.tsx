@@ -8,7 +8,7 @@ import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { ManagersScreen, type ManagedPage } from "@/components/admin/ManagersScreen";
 import { PageControlEarnings } from "@/components/admin/PageControlEarnings";
 import type { Manager } from "@/components/admin/ManagerAvatar";
-import { createManager, updateManager, deleteManager, assignManager, regenerateManagerLinkCode } from "@/app/admin/page-manager-actions";
+import { createManager, updateManager, deleteManager, assignManager, regenerateManagerLinkCode, regenerateManagerPortal, setManagerPortalEnabled } from "@/app/admin/page-manager-actions";
 
 const byName = (a: Manager, b: Manager) => a.name.localeCompare(b.name);
 
@@ -118,6 +118,28 @@ export function PageControlTabs({
     return res.data.linkCode;
   }
 
+  async function onPortalRegenerate(id: string): Promise<string | null> {
+    const res = await regenerateManagerPortal(id);
+    if (!res.ok) {
+      error(res.error);
+      return null;
+    }
+    setManagers((ms) => ms.map((m) => (m.id === id ? { ...m, portalSet: true, portalEnabled: true } : m)));
+    success("Portal link generated.");
+    return res.data.token;
+  }
+
+  async function onPortalToggle(id: string, enabled: boolean): Promise<boolean> {
+    const res = await setManagerPortalEnabled(id, enabled);
+    if (!res.ok) {
+      error(res.error);
+      return false;
+    }
+    setManagers((ms) => ms.map((m) => (m.id === id ? { ...m, portalEnabled: enabled } : m)));
+    success(enabled ? "Portal link enabled." : "Portal link disabled.");
+    return true;
+  }
+
   const managedPages: ManagedPage[] = pages.map((p) => ({ id: p.id, name: p.pageName, avatarUrl: p.avatarUrl }));
 
   return (
@@ -149,6 +171,8 @@ export function PageControlTabs({
           onDelete={onDelete}
           onAssign={onAssign}
           onRegenerateCode={onRegenerateCode}
+          onPortalRegenerate={onPortalRegenerate}
+          onPortalToggle={onPortalToggle}
           onError={error}
         />
       ) : tab === "earnings" ? (

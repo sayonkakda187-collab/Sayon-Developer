@@ -3200,3 +3200,9 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pce-field.err .adm-pce-status { color: #dc2626; font-weight: 800; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err { border-color: #f87171; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err .adm-pce-status { color: #f87171; }
+
+/* ── Managers tab: Manager Portal magic-link strip (reuses the .adm-mgr-link* styles). ── */
+.adm-mgr-linkstatus.off { background: color-mix(in srgb, #d14343 16%, transparent); color: #b42318; }
+[data-adm-theme="dark"] .admin-shell .adm-mgr-linkstatus.off { background: rgba(248, 113, 113, 0.18); color: #fca5a5; }
+.adm-mgr-portalcode { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-mgr-portalhint { font-size: 12px; color: var(--adm-ink); opacity: .55; }

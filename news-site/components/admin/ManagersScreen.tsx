@@ -25,6 +25,8 @@ export function ManagersScreen({
   onDelete,
   onAssign,
   onRegenerateCode,
+  onPortalRegenerate,
+  onPortalToggle,
   onError,
 }: {
   managers: Manager[];
@@ -35,6 +37,8 @@ export function ManagersScreen({
   onDelete: (id: string) => Promise<boolean>;
   onAssign: (pageId: string, managerId: string | null) => Promise<boolean>;
   onRegenerateCode: (id: string) => Promise<string | null>;
+  onPortalRegenerate: (id: string) => Promise<string | null>;
+  onPortalToggle: (id: string, enabled: boolean) => Promise<boolean>;
   onError: (m: string) => void;
 }) {
   const [dialog, setDialog] = useState<{ mode: "add" } | { mode: "edit"; manager: Manager } | null>(null);
@@ -94,6 +98,7 @@ export function ManagersScreen({
                   </div>
                 </div>
                 <LinkCodeStrip manager={m} onRegenerate={onRegenerateCode} onError={onError} />
+                <PortalLinkStrip manager={m} onRegenerate={onPortalRegenerate} onToggle={onPortalToggle} onError={onError} />
                 {isOpen && (
                   <ManagerPages manager={m} pages={pages} assignments={assignments} nameById={nameById} onAssign={onAssign} />
                 )}
@@ -278,6 +283,87 @@ function LinkCodeStrip({
         {busy ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
         <span>New code</span>
       </button>
+    </div>
+  );
+}
+
+/** The Manager Portal magic-link strip: status (Active / Disabled / Not generated), the
+ *  shareable /portal/<token> link (revealed once on Generate — tokens are stored hashed),
+ *  Copy, Generate/Regenerate (revokes the old link), and Enable/Disable. */
+function PortalLinkStrip({
+  manager,
+  onRegenerate,
+  onToggle,
+  onError,
+}: {
+  manager: Manager;
+  onRegenerate: (id: string) => Promise<string | null>;
+  onToggle: (id: string, enabled: boolean) => Promise<boolean>;
+  onError: (m: string) => void;
+}) {
+  const [token, setToken] = useState<string | null>(null); // raw token — only present right after generate
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = !!manager.portalSet;
+  const enabled = manager.portalEnabled !== false;
+  const link = token && typeof window !== "undefined" ? `${window.location.origin}/portal/${token}` : null;
+
+  async function regen() {
+    setBusy(true);
+    const t = await onRegenerate(manager.id);
+    setBusy(false);
+    if (!t) return;
+    setToken(t);
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/portal/${t}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* the Copy button is still available */
+    }
+  }
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      onError("Couldn’t copy — copy the link manually.");
+    }
+  }
+  async function toggle() {
+    setBusy(true);
+    await onToggle(manager.id, !enabled);
+    setBusy(false);
+  }
+
+  return (
+    <div className="adm-mgr-link adm-mgr-portal">
+      <span className="adm-mgr-link-label">Portal link</span>
+      <span className={`adm-mgr-linkstatus ${set && enabled ? "on" : ""} ${set && !enabled ? "off" : ""}`}>
+        {!set ? "Not generated" : enabled ? <><CheckIcon className="h-3.5 w-3.5" /> Active</> : "Disabled"}
+      </span>
+      {link ? (
+        <code className="adm-mgr-linkcode adm-mgr-portalcode" title="Copy now — the link isn’t shown again">{link}</code>
+      ) : (
+        <span className="adm-mgr-portalhint">{set ? "Regenerate to reveal a copyable link." : "Generate a shareable read-only link."}</span>
+      )}
+      {link && (
+        <button type="button" className="adm-mgr-linkbtn" onClick={copy} aria-label={`Copy ${manager.name}'s portal link`}>
+          {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
+          <span>{copied ? "Copied" : "Copy"}</span>
+        </button>
+      )}
+      <button type="button" className="adm-mgr-linkbtn" onClick={regen} disabled={busy} aria-label={`${set ? "Regenerate" : "Generate"} ${manager.name}'s portal link`}>
+        {busy ? <span className="adm-spinner" aria-hidden /> : <RefreshIcon className="h-4 w-4" />}
+        <span>{set ? "Regenerate" : "Generate"}</span>
+      </button>
+      {set && (
+        <button type="button" className="adm-mgr-linkbtn" onClick={toggle} disabled={busy} aria-label={`${enabled ? "Disable" : "Enable"} ${manager.name}'s portal link`}>
+          <span>{enabled ? "Disable" : "Enable"}</span>
+        </button>
+      )}
     </div>
   );
 }
