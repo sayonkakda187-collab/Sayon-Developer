@@ -3092,3 +3092,41 @@ a.dl-breaking-text:hover { text-decoration:none; }
   .adm-pc-expand-h { margin-bottom: 9px; font-size: 11px; letter-spacing: .04em; opacity: .55; }
   .adm-pc-expand-sec .adm-pc-chart { margin-top: 8px; }
 }
+
+/* ── Page Control mobile redesign, PART 2 (<1024px): extend the indigo card system to
+   the Network dashboard, leaderboard/movers, health, and the Managers screen so the
+   whole mobile view reads as one design. Desktop untouched. ── */
+@media (max-width: 1023px) {
+  /* KPI cards + top-post cards get the same soft indigo gradient wash as the charts. */
+  .adm-pc-kpis { gap: 10px; margin-top: 14px; }
+  .adm-pc-kpi {
+    border-radius: 16px; padding: 13px 14px; border-color: var(--adm-bd);
+    background: linear-gradient(180deg, var(--section-tint) 0%, transparent 62%), var(--adm-card);
+  }
+  .adm-pc-netpost {
+    border-radius: 16px; padding: 12px;
+    background: linear-gradient(180deg, var(--section-tint) 0%, transparent 60%), var(--adm-card);
+  }
+
+  /* Leaderboard + risers/fallers: calmer rhythm, indigo value/rank accents. */
+  .adm-pc-lead { gap: 3px; margin-top: 10px; }
+  .adm-pc-lead-row { padding: 8px 10px; border-radius: 12px; }
+  .adm-pc-lead-val { color: var(--section-link); }
+  .adm-pc-movers { gap: 3px; }
+  .adm-pc-mover { padding: 8px 10px; border-radius: 12px; }
+
+  /* Page-health bar a touch taller + rounded to match. */
+  .adm-pc-health-bar { height: 16px; }
+  .adm-pc-health-legend { gap: 12px 16px; }
+
+  /* Managers screen: consistent 16px-radius cards, calmer spacing. */
+  .adm-mgr-list { gap: 10px; }
+  .adm-mgr-card { border-radius: 16px; }
+  .adm-mgr-row { padding: 9px 11px; }
+  .adm-mgr-name { font-size: 15px; letter-spacing: -0.01em; }
+  .adm-botsetup { border-radius: 16px; padding: 13px 14px; margin-bottom: 14px; }
+
+  /* Segmented date-range / metric toggles inherit the indigo accent already; keep the
+     pill rhythm aligned with the new cards. */
+  .adm-pc-dash .adm-seg, .adm-pc-box .adm-seg { border-radius: 12px; }
+}
