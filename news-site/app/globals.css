@@ -3158,28 +3158,45 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .adm-pce-total strong { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--section-link); }
 .adm-pce-totalsub { opacity: .6; }
 
-.adm-pce-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; align-items: start; }
+/* Toolbar: manager count + Expand all / Collapse all. */
+.adm-pce-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.adm-pce-expandall { padding: 5px 12px; min-height: 32px; font-size: 12.5px; }
+
+/* Tidy, even grid of COLLAPSIBLE manager cards (3–4 cols on wide → fewer as it narrows);
+   collapsed boxes are header-only so they're all the same height. */
+.adm-pce-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; align-items: start; }
 .adm-pce-box { padding: 0; overflow: hidden; }
-.adm-pce-boxhead { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--adm-bd); }
-.adm-pce-boxmgr { display: inline-flex; align-items: center; gap: 9px; min-width: 0; flex: none; max-width: 52%; }
-.adm-pce-boxname { font-weight: 700; color: var(--adm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adm-pce-boxavatar-none { width: 30px; height: 30px; flex: none; border-radius: 999px; display: grid; place-items: center; background: var(--section-tint); color: var(--section-link); font-weight: 800; }
-.adm-pce-boxsum { font-size: 12.5px; color: var(--adm-ink); opacity: .65; margin-left: auto; white-space: nowrap; }
-.adm-pce-boxsum strong { color: var(--section-link); opacity: 1; font-variant-numeric: tabular-nums; }
-.adm-pce-saveall { flex: none; padding: 5px 11px; min-height: 32px; font-size: 12.5px; }
+.adm-pce-boxhead { display: flex; align-items: stretch; }
+.adm-pce-box.on .adm-pce-boxhead { border-bottom: 1px solid var(--adm-bd); }
+.adm-pce-boxtoggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; min-height: 52px; background: none; border: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: left; border-radius: 16px 16px 0 0;
+}
+.adm-pce-boxtoggle:hover { background: var(--section-tint); }
+.adm-pce-boxmgr { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.adm-pce-boxname { font-weight: 700; font-size: 13.5px; color: var(--adm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-pce-boxavatar-none { width: 26px; height: 26px; flex: none; border-radius: 999px; display: grid; place-items: center; background: var(--section-tint); color: var(--section-link); font-weight: 800; font-size: 13px; }
+.adm-pce-boxsum { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; line-height: 1.2; white-space: nowrap; }
+.adm-pce-boxsum strong { font-size: 14px; color: var(--section-link); font-variant-numeric: tabular-nums; }
+.adm-pce-boxsub { font-size: 10.5px; color: var(--adm-ink); opacity: .6; }
+.adm-pce-boxchev { flex: none; width: 16px; height: 16px; color: var(--adm-ink); opacity: .5; transition: transform .18s ease; }
+.adm-pce-boxchev.on { transform: rotate(180deg); }
+.adm-pce-saveall { flex: none; align-self: center; margin: 0 9px; padding: 4px 10px; min-height: 30px; font-size: 12px; }
+.adm-pce-empty { padding: 10px 12px 12px; margin: 0; }
 .adm-pce-rows { display: flex; flex-direction: column; }
-.adm-pce-row { display: flex; align-items: center; gap: 9px; padding: 8px 14px; min-height: 46px; }
+.adm-pce-row { display: flex; align-items: center; gap: 8px; padding: 6px 11px; min-height: 38px; }
 .adm-pce-row + .adm-pce-row { border-top: 1px solid var(--adm-bd); }
-.adm-pce-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--adm-ink); font-size: 13.5px; }
+.adm-pce-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--adm-ink); font-size: 13px; }
 .adm-pce-field {
-  flex: none; display: inline-flex; align-items: center; border: 1px solid var(--adm-bd); border-radius: 9px;
+  flex: none; display: inline-flex; align-items: center; border: 1px solid var(--adm-bd); border-radius: 8px;
   background: color-mix(in srgb, var(--adm-ink) 4%, transparent); overflow: hidden;
 }
 .adm-pce-field:focus-within { border-color: var(--section-accent); box-shadow: 0 0 0 2px var(--section-tint); }
 .adm-pce-field.err { border-color: #dc2626; }
-.adm-pce-cur { padding: 0 1px 0 10px; color: var(--adm-ink); opacity: .55; font-weight: 600; font-size: 13.5px; }
-.adm-pce-input { width: 90px; border: none; background: none; outline: none; padding: 7px 6px 7px 4px; font: inherit; font-size: 14px; font-weight: 600; color: var(--adm-ink); text-align: right; font-variant-numeric: tabular-nums; }
-.adm-pce-status { flex: none; width: 22px; display: inline-flex; align-items: center; justify-content: center; color: var(--adm-green); padding-right: 6px; }
+.adm-pce-cur { padding: 0 1px 0 9px; color: var(--adm-ink); opacity: .55; font-weight: 600; font-size: 13px; }
+.adm-pce-input { width: 78px; border: none; background: none; outline: none; padding: 5px 5px 5px 3px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--adm-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.adm-pce-status { flex: none; width: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--adm-green); padding-right: 5px; }
 .adm-pce-field.err .adm-pce-status { color: #dc2626; font-weight: 800; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err { border-color: #f87171; }
 [data-adm-theme="dark"] .admin-shell .adm-pce-field.err .adm-pce-status { color: #f87171; }
