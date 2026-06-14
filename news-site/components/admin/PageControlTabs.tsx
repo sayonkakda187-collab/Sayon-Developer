@@ -124,7 +124,7 @@ export function PageControlTabs({
       error(res.error);
       return null;
     }
-    setManagers((ms) => ms.map((m) => (m.id === id ? { ...m, portalSet: true, portalEnabled: true } : m)));
+    setManagers((ms) => ms.map((m) => (m.id === id ? { ...m, portalToken: res.data.token, portalEnabled: true } : m)));
     success("Portal link generated.");
     return res.data.token;
   }

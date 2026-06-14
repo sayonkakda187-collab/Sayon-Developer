@@ -8,8 +8,6 @@ import { useToast } from "@/components/admin/Toast";
 import { ppToday, addDays, formatDay } from "@/lib/fbInsightsRange";
 import type { ManagedPage } from "@/components/admin/ManagersScreen";
 
-const API = "/api/admin/page-control/earnings";
-
 type SaveStatus = "saving" | "ok" | "err";
 
 function money(n: number): string {
@@ -39,7 +37,8 @@ function clearStatus(s: Record<string, SaveStatus>, key: string): Record<string,
  * unassigned pages get a card at the bottom. Each input upserts on blur/Enter (re-entry
  * overwrites; clearing it removes the day's value). Desktop-first.
  */
-export function PageControlEarnings({ pages, managers, assignments }: { pages: ManagedPage[]; managers: Manager[]; assignments: Record<string, string | null> }) {
+export function PageControlEarnings({ pages, managers, assignments, apiBase = "/api/admin/page-control" }: { pages: ManagedPage[]; managers: Manager[]; assignments: Record<string, string | null>; apiBase?: string }) {
+  const API = useMemo(() => `${apiBase}/earnings`, [apiBase]);
   const { error } = useToast();
   const today = ppToday();
   const [date, setDate] = useState(today);
@@ -74,7 +73,7 @@ export function PageControlEarnings({ pages, managers, assignments }: { pages: M
     return () => {
       cancelled = true;
     };
-  }, [date, error]);
+  }, [API, date, error]);
 
   async function commit(pageId: string): Promise<void> {
     const raw = (values[pageId] ?? "").trim().replace(/[$,\s]/g, "");

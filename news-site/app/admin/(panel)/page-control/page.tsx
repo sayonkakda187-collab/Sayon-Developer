@@ -4,6 +4,7 @@ import { type MonitoredRow } from "@/components/admin/PageControlList";
 import { PageControlTabs } from "@/components/admin/PageControlTabs";
 import type { Manager } from "@/components/admin/ManagerAvatar";
 import { getPageControlConnectStatus } from "@/lib/pageControlSettings";
+import { decryptPortalToken } from "@/lib/managerPortal";
 
 // Live monitored-page/token state; never statically cache.
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function PageControlPage() {
     photo: m.photo,
     linkCode: m.linkCode,
     linked: m.telegramChatId != null,
-    portalSet: m.portalTokenHash != null,
+    portalToken: decryptPortalToken(m.portalToken),
     portalEnabled: m.portalEnabled,
   }));
 

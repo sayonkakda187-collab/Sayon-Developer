@@ -301,35 +301,33 @@ function PortalLinkStrip({
   onToggle: (id: string, enabled: boolean) => Promise<boolean>;
   onError: (m: string) => void;
 }) {
-  const [token, setToken] = useState<string | null>(null); // raw token — only present right after generate
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const set = !!manager.portalSet;
   const enabled = manager.portalEnabled !== false;
-  const link = token && typeof window !== "undefined" ? `${window.location.origin}/portal/${token}` : null;
+  const set = !!manager.portalToken;
+  const path = manager.portalToken ? `/portal/${manager.portalToken}` : null;
 
+  async function doCopy() {
+    if (!manager.portalToken) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/portal/${manager.portalToken}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      onError("Couldn’t copy — copy the link manually.");
+    }
+  }
   async function regen() {
     setBusy(true);
     const t = await onRegenerate(manager.id);
     setBusy(false);
     if (!t) return;
-    setToken(t);
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/portal/${t}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
       /* the Copy button is still available */
-    }
-  }
-  async function copy() {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
-    } catch {
-      onError("Couldn’t copy — copy the link manually.");
     }
   }
   async function toggle() {
@@ -344,13 +342,13 @@ function PortalLinkStrip({
       <span className={`adm-mgr-linkstatus ${set && enabled ? "on" : ""} ${set && !enabled ? "off" : ""}`}>
         {!set ? "Not generated" : enabled ? <><CheckIcon className="h-3.5 w-3.5" /> Active</> : "Disabled"}
       </span>
-      {link ? (
-        <code className="adm-mgr-linkcode adm-mgr-portalcode" title="Copy now — the link isn’t shown again">{link}</code>
+      {path ? (
+        <code className="adm-mgr-linkcode adm-mgr-portalcode" title="Manager portal link">{path}</code>
       ) : (
-        <span className="adm-mgr-portalhint">{set ? "Regenerate to reveal a copyable link." : "Generate a shareable read-only link."}</span>
+        <span className="adm-mgr-portalhint">Generate a shareable read-only link.</span>
       )}
-      {link && (
-        <button type="button" className="adm-mgr-linkbtn" onClick={copy} aria-label={`Copy ${manager.name}'s portal link`}>
+      {set && (
+        <button type="button" className="adm-mgr-linkbtn" onClick={doCopy} aria-label={`Copy ${manager.name}'s portal link`}>
           {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>

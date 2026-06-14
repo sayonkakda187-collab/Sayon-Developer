@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateUniqueLinkCode } from "@/lib/earningsLinkCode";
-import { generatePortalToken, hashPortalToken } from "@/lib/managerPortal";
+import { generatePortalToken, hashPortalToken, encryptPortalToken } from "@/lib/managerPortal";
 
 // Page-manager (team member) CRUD + page assignment. Managers are LOCAL app data
 // (name + optional uploaded photo) — never mixed with Facebook tokens. All actions
@@ -54,7 +54,7 @@ export async function regenerateManagerPortal(id: string): Promise<ActionResult<
     const existing = await prisma.pageManager.findUnique({ where: { id }, select: { id: true } });
     if (!existing) return fail("Manager not found.");
     const token = generatePortalToken();
-    await prisma.pageManager.update({ where: { id }, data: { portalTokenHash: hashPortalToken(token), portalEnabled: true } });
+    await prisma.pageManager.update({ where: { id }, data: { portalTokenHash: hashPortalToken(token), portalToken: encryptPortalToken(token), portalEnabled: true } });
     revalidatePath("/admin/page-control");
     return { ok: true, data: { token } };
   } catch {

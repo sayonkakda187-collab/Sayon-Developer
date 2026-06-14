@@ -18,7 +18,6 @@ import { RangeControl, type InsightsPageRow, type Range } from "@/components/adm
 import { presetRange, rangeKey, formatRange, ppToday, eachDate } from "@/lib/fbInsightsRange";
 
 const PER_PAGE = 24;
-const STATS_API = "/api/admin/page-control/stats";
 const BATCH = 8;
 const SS_RANGE = "pageControl.listRange";
 
@@ -180,12 +179,20 @@ export function PageControlList({
   appConfigured,
   managers,
   assignments,
+  apiBase = "/api/admin/page-control",
+  readOnly = false,
 }: {
   pages: MonitoredRow[];
   appConfigured: boolean;
   managers: Manager[];
   assignments: Record<string, string | null>;
+  apiBase?: string;
+  // Manager Portal: a shared read-only view. Hides the admin-only "Connect Page"
+  // affordances (the empty-state CTA + the connect modal) — the stats/charts are
+  // already read-only.
+  readOnly?: boolean;
 }) {
+  const STATS_API = useMemo(() => `${apiBase}/stats`, [apiBase]);
   const { success, error } = useToast();
   const router = useRouter();
   // The page-name filter comes from the header "Search Pages…" bar (shared store), so
@@ -213,9 +220,9 @@ export function PageControlList({
   useEffect(() => {
     if (connectSignal !== connectSeen.current) {
       connectSeen.current = connectSignal;
-      setShowConnect(true);
+      if (!readOnly) setShowConnect(true);
     }
-  }, [connectSignal]);
+  }, [connectSignal, readOnly]);
 
   useEffect(() => {
     try {
@@ -276,7 +283,7 @@ export function PageControlList({
         return next;
       });
     }
-  }, []);
+  }, [STATS_API]);
 
   // Fetch quick stats for the visible rows only (lazy), in small sequential batches so
   // we never burst Graph for the whole list. Re-runs when the visible set (pagination /
@@ -352,7 +359,7 @@ export function PageControlList({
           {p.status !== "Connected" && <span className="adm-pill amber" style={{ flex: "none" }}>Reconnect</span>}
           <span className={`adm-pc-caret ${isOpen ? "on" : ""}`} aria-hidden>⌄</span>
         </div>
-        {isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} />}
+        {isOpen && <ExpandedRowCharts pageId={p.id} from={range.from} to={range.to} rk={rk} cache={chartCacheRef} apiBase={apiBase} />}
       </div>
     );
   }
@@ -360,15 +367,24 @@ export function PageControlList({
   return (
     <div>
       {pages.length === 0 ? (
-        <div className="adm-card adm-card-pad" style={{ textAlign: "center", padding: "32px 18px" }}>
-          <div className="adm-card-title" style={{ fontSize: 18 }}>Monitor your first Page</div>
-          <p className="adm-card-sub" style={{ maxWidth: 460, margin: "8px auto 16px" }}>
-            Page Control is a <strong>watch-only</strong> dashboard with its own connection — separate from the Facebook
-            posting tab. Connect Pages here (even from a different Facebook account) to see each one’s Summary, real
-            published Content, and Analytics.
-          </p>
-          <div style={{ display: "flex", justifyContent: "center" }}>{connectBtn}</div>
-        </div>
+        readOnly ? (
+          <div className="adm-card adm-card-pad" style={{ textAlign: "center", padding: "32px 18px" }}>
+            <div className="adm-card-title" style={{ fontSize: 18 }}>No Pages yet</div>
+            <p className="adm-card-sub" style={{ maxWidth: 460, margin: "8px auto 0" }}>
+              There are no monitored Pages to show right now. Check back once your team adds Pages.
+            </p>
+          </div>
+        ) : (
+          <div className="adm-card adm-card-pad" style={{ textAlign: "center", padding: "32px 18px" }}>
+            <div className="adm-card-title" style={{ fontSize: 18 }}>Monitor your first Page</div>
+            <p className="adm-card-sub" style={{ maxWidth: 460, margin: "8px auto 16px" }}>
+              Page Control is a <strong>watch-only</strong> dashboard with its own connection — separate from the Facebook
+              posting tab. Connect Pages here (even from a different Facebook account) to see each one’s Summary, real
+              published Content, and Analytics.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center" }}>{connectBtn}</div>
+          </div>
+        )
       ) : (
         <>
           {/* Date-range chips sit at the TOP of the list box; "Search by manager" and
@@ -402,7 +418,7 @@ export function PageControlList({
         </>
       )}
 
-      {showConnect && (
+      {!readOnly && showConnect && (
         <PageControlConnectModal
           appConfigured={appConfigured}
           onClose={() => setShowConnect(false)}
@@ -443,12 +459,14 @@ function ExpandedRowCharts({
   to,
   rk,
   cache,
+  apiBase,
 }: {
   pageId: string;
   from: string;
   to: string;
   rk: string;
   cache: React.MutableRefObject<Map<string, RowChartsResp>>;
+  apiBase: string;
 }) {
   const [state, setState] = useState<RowChartsResp | "loading" | "error">(() => cache.current.get(`${pageId}|${rk}`) ?? "loading");
 
@@ -463,7 +481,7 @@ function ExpandedRowCharts({
     setState("loading");
     (async () => {
       try {
-        const res = await fetch(`/api/admin/page-control/row-charts?id=${encodeURIComponent(pageId)}&from=${from}&to=${to}`);
+        const res = await fetch(`${apiBase}/row-charts?id=${encodeURIComponent(pageId)}&from=${from}&to=${to}`);
         const json = (await res.json()) as RowChartsResp;
         if (cancelled) return;
         if (json.ok) {
@@ -479,7 +497,7 @@ function ExpandedRowCharts({
     return () => {
       cancelled = true;
     };
-  }, [pageId, rk, from, to, cache]);
+  }, [pageId, rk, from, to, cache, apiBase]);
 
   return (
     <div className="adm-pc-expand">

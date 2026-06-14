@@ -3206,3 +3206,65 @@ a.dl-breaking-text:hover { text-decoration:none; }
 [data-adm-theme="dark"] .admin-shell .adm-mgr-linkstatus.off { background: rgba(248, 113, 113, 0.18); color: #fca5a5; }
 .adm-mgr-portalcode { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-mgr-portalhint { font-size: 12px; color: var(--adm-ink); opacity: .55; }
+
+/* ── Manager Portal — the standalone magic-link surface (reuses Page Control styling).
+ *    Unlike the admin frame (fixed 100dvh, internal scroll) the portal IS the document
+ *    and scrolls naturally. The `.adm-portal` selector (3 classes) beats the desktop
+ *    `.admin-shell.adm-stage` frame rule. ── */
+.admin-shell.adm-stage.adm-portal {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  background: var(--adm-gradient);
+}
+
+/* Header: manager identity (left) · read-only badge + theme toggle (right). Sticky. */
+.adm-portal-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px clamp(14px, 4vw, 28px);
+  border-bottom: 1px solid var(--adm-bd);
+  background: color-mix(in srgb, var(--adm-card) 78%, transparent);
+  -webkit-backdrop-filter: saturate(1.2) blur(8px);
+  backdrop-filter: saturate(1.2) blur(8px);
+  position: sticky; top: 0; z-index: 20;
+}
+.adm-portal-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.adm-portal-id-txt { min-width: 0; }
+.adm-portal-id-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--section-link); }
+.adm-portal-id-name {
+  font-family: var(--font-newsreader), Georgia, serif; font-size: 18px; font-weight: 700;
+  color: var(--adm-ink-strong); line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adm-portal-top-right { display: flex; align-items: center; gap: 9px; flex: none; }
+.adm-portal-ro {
+  display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+  background: var(--section-tint); color: var(--section-link); border: 1px solid var(--section-accent);
+}
+
+/* Body: a constrained content column. */
+.adm-portal-body { width: 100%; max-width: 1180px; margin: 0 auto; padding: 16px clamp(14px, 4vw, 28px) 36px; flex: 1; min-width: 0; }
+.adm-portal-tabs { margin: 0 0 14px; max-width: 360px; }
+.adm-portal-earn { margin-top: 2px; }
+
+/* Footer: the "powered by" line. */
+.adm-portal-foot { text-align: center; padding: 16px; font-size: 12px; color: var(--adm-ink); opacity: .62; border-top: 1px solid var(--adm-bd); }
+.adm-portal-foot strong { font-weight: 700; color: var(--section-link); opacity: 1; }
+
+/* Expired / disabled link — a clean dead-end (never a login form). */
+.adm-portal-expired {
+  max-width: 420px; width: 100%; text-align: center; padding: 30px 26px; border-radius: 18px;
+  background: var(--adm-card); border: 1px solid var(--adm-bd); box-shadow: var(--adm-shadow);
+}
+.adm-portal-expired-ic {
+  display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px;
+  border-radius: 999px; background: var(--section-tint); color: var(--section-link);
+}
+.adm-portal-expired h1 { font-family: var(--font-newsreader), Georgia, serif; font-size: 21px; font-weight: 700; color: var(--adm-ink-strong); margin: 14px 0 6px; }
+.adm-portal-expired p { font-size: 14px; color: var(--adm-muted); line-height: 1.5; margin: 0 auto; max-width: 320px; }
+.adm-portal-expired-brand { margin-top: 18px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--adm-ink); opacity: .5; }

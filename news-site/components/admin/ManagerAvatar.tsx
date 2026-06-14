@@ -5,7 +5,7 @@ import { avatarColor } from "@/components/admin/FacebookPageAvatar";
 
 /** A page manager / team member — LOCAL app data (a name + optional uploaded photo).
  *  `linkCode` / `linked` are populated on the Managers tab (earnings-bot link state). */
-export type Manager = { id: string; name: string; photo: string | null; linkCode?: string; linked?: boolean; portalSet?: boolean; portalEnabled?: boolean };
+export type Manager = { id: string; name: string; photo: string | null; linkCode?: string; linked?: boolean; portalToken?: string | null; portalEnabled?: boolean };
 
 /**
  * Small round avatar for a page manager (team member). Mirrors FacebookPageAvatar's
