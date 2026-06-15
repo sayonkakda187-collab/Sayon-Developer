@@ -4,12 +4,56 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { RefreshIcon, ExternalLinkIcon } from "@/components/admin/icons";
 import { formatDate, formatNumber } from "@/lib/site";
-import type { PagePost } from "@/lib/facebook";
+import type { PagePost, PostReactions, ReactionKey } from "@/lib/facebook";
 
 type Sort = "recent" | "engagement";
 
 function engagementOf(p: PagePost): number {
   return (p.reactions ?? 0) + (p.comments ?? 0) + (p.shares ?? 0);
+}
+
+// Emoji + colour per reaction emotion (order matches the Graph breakdown). Emoji
+// keeps it asset-free + theme-safe; the colours tint the tiny proportion bar.
+const REACTION_META: { key: ReactionKey; emoji: string; label: string; color: string }[] = [
+  { key: "like", emoji: "👍", label: "Like", color: "#1877f2" },
+  { key: "love", emoji: "❤️", label: "Love", color: "#f3425f" },
+  { key: "haha", emoji: "😆", label: "Haha", color: "#f7b928" },
+  { key: "wow", emoji: "😮", label: "Wow", color: "#00b3a4" },
+  { key: "sad", emoji: "😢", label: "Sad", color: "#8a5cf6" },
+  { key: "angry", emoji: "😡", label: "Angry", color: "#e9710f" },
+];
+
+/**
+ * Compact per-emotion reaction breakdown: a tiny proportion bar + emoji/counts for
+ * the reactions present. Renders nothing when all counts are zero (the card's total
+ * "Reactions" stat still shows), so a missing/retired metric degrades silently.
+ */
+function ReactionBreakdown({ counts }: { counts: PostReactions }) {
+  const items = REACTION_META.map((m) => ({ ...m, n: counts[m.key] ?? 0 })).filter((m) => m.n > 0);
+  const total = items.reduce((s, m) => s + m.n, 0);
+  if (total === 0) return null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div
+        className="adm-bar-track"
+        style={{ height: 6, borderRadius: 4, overflow: "hidden", display: "flex" }}
+        role="img"
+        aria-label={`Reactions — ${items.map((m) => `${m.label}: ${m.n}`).join(", ")}`}
+      >
+        {items.map((m) => (
+          <div key={m.key} style={{ width: `${(m.n / total) * 100}%`, background: m.color, height: "100%" }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 7 }}>
+        {items.map((m) => (
+          <span key={m.key} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }} title={`${m.label}: ${formatNumber(m.n)}`}>
+            <span aria-hidden style={{ fontSize: 13.5, lineHeight: 1 }}>{m.emoji}</span>
+            <span style={{ fontWeight: 700, color: "var(--adm-ink)", fontVariantNumeric: "tabular-nums" }}>{formatNumber(m.n)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: number | null }) {
@@ -46,6 +90,11 @@ export function PagePostCard({ post }: { post: PagePost }) {
           <Stat label="Shares" value={post.shares} />
           <Stat label="Reach" value={post.reach} />
         </div>
+        {post.reactionsByType ? (
+          <ReactionBreakdown counts={post.reactionsByType} />
+        ) : (post.reactions ?? 0) > 0 ? (
+          <p className="adm-fb-sub" style={{ fontSize: 10.5, marginTop: 8 }}>Reaction breakdown not available.</p>
+        ) : null}
         <a
           href={post.permalink}
           target="_blank"

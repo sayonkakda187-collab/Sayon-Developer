@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
-import { getPagePosts, getPostReach, type PagePost } from "@/lib/facebook";
+import { getPagePosts, getPostReach, getPostReactionBreakdowns, type PagePost } from "@/lib/facebook";
 
 /**
  * Page Control → Content data source for a MONITORED page: its REAL published
@@ -50,6 +50,22 @@ async function enrichReach(posts: PagePost[], token: string): Promise<PagePost[]
 }
 
 /**
+ * Best-effort per-emotion reaction breakdown for the loaded posts in ONE batched
+ * Graph call. Isolated from the core posts fetch on purpose: if Facebook ever
+ * rejects a reaction field (deprecation/permission), we keep the posts and just
+ * drop the breakdown (`reactionsByType: null`) rather than failing the Content view.
+ */
+async function enrichReactionBreakdown(posts: PagePost[], token: string): Promise<PagePost[]> {
+  if (posts.length === 0) return posts;
+  try {
+    const byId = await getPostReactionBreakdowns(posts.map((p) => p.id), token);
+    return posts.map((p) => ({ ...p, reactionsByType: byId.get(p.id) ?? null }));
+  } catch {
+    return posts.map((p) => ({ ...p, reactionsByType: null }));
+  }
+}
+
+/**
  * Posts for one monitored page's Content view. Serves the cached first page when
  * fresh; a cursor (`after`) or `refresh` fetches live. Throws on token/permission
  * failures so the caller can show "needs reconnect".
@@ -70,7 +86,7 @@ export async function getMonitoredPagePostsForView(
 
   const token = decryptSecret(page.accessToken); // throws on corrupt token → caller maps to reconnect
   const { posts, after } = await getPagePosts(page.pageId, token, { after: opts.after, limit: PER_PAGE });
-  const enriched = await enrichReach(posts, token);
+  const enriched = await enrichReactionBreakdown(await enrichReach(posts, token), token);
 
   if (firstPage) {
     await prisma.monitoredPagePostsCache

@@ -419,7 +419,9 @@ export async function getPostReach(
 }
 
 /** One REAL published post on a Page (Page Control → Content). `reach` is filled
- *  best-effort from the insights edge (null when `read_insights` is unavailable). */
+ *  best-effort from the insights edge (null when `read_insights` is unavailable).
+ *  `reactionsByType` is a best-effort per-emotion breakdown (null = not loaded /
+ *  unavailable, so the UI degrades to just the total reaction count). */
 export type PagePost = {
   id: string; // "{page}_{post}"
   message: string | null;
@@ -430,6 +432,7 @@ export type PagePost = {
   comments: number | null;
   shares: number | null;
   reach: number | null;
+  reactionsByType?: PostReactions | null;
 };
 
 /** A page of real posts + the cursor for the next page (null = no more posts). */
@@ -494,6 +497,64 @@ export async function getPagePosts(
   // knows when to stop "Load more".
   const after = data.paging?.next ? data.paging?.cursors?.after ?? null : null;
   return { posts, after };
+}
+
+/** The reaction emotions we surface a per-post breakdown for, mapping our stable
+ *  key → the Graph `reactions.type(...)` enum. Facebook also has CARE/THANKFUL/
+ *  PRIDE, but its UI centres on these six; keeping the set small + fixed keeps the
+ *  request light and the bar readable. */
+export const REACTION_TYPES = [
+  { key: "like", type: "LIKE" },
+  { key: "love", type: "LOVE" },
+  { key: "haha", type: "HAHA" },
+  { key: "wow", type: "WOW" },
+  { key: "sad", type: "SAD" },
+  { key: "angry", type: "ANGRY" },
+] as const;
+export type ReactionKey = (typeof REACTION_TYPES)[number]["key"];
+export type PostReactions = Record<ReactionKey, number>;
+
+/**
+ * Best-effort per-emotion reaction counts for a batch of posts, via the STABLE
+ * `reactions.type(X).limit(0).summary(total_count)` field expansion — core
+ * engagement (`pages_read_engagement`), NOT one of the volatile `page_impressions_*`
+ * metrics Meta is retiring. One batched `?ids=` call covers the whole loaded page
+ * of posts, so the Content view costs a single extra request. Returns a map of post
+ * id → counts; a post absent from the response (or an emotion the API omits) simply
+ * reads 0, and a post with no per-type data at all is left out of the map (the
+ * caller shows "breakdown not available"). Token / permission / throttle errors
+ * propagate so the caller can fall back gracefully without breaking the posts list.
+ */
+export async function getPostReactionBreakdowns(postIds: string[], accessToken: string): Promise<Map<string, PostReactions>> {
+  const out = new Map<string, PostReactions>();
+  if (postIds.length === 0) return out;
+  const fields = REACTION_TYPES.map((r) => `reactions.type(${r.type}).limit(0).summary(total_count).as(${r.key})`).join(",");
+  const params = new URLSearchParams();
+  params.set("ids", postIds.join(","));
+  params.set("fields", fields);
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  type TypeField = { summary?: { total_count?: number } };
+  const data = await parseGraph<Record<string, (Partial<Record<ReactionKey, TypeField>> & { id?: string }) | undefined>>(
+    res,
+    "Could not load reaction breakdowns",
+  );
+  for (const id of postIds) {
+    const entry = data[id];
+    if (!entry) continue;
+    const counts = { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 } as PostReactions;
+    let any = false;
+    for (const r of REACTION_TYPES) {
+      const n = entry[r.key]?.summary?.total_count;
+      if (typeof n === "number") {
+        counts[r.key] = n;
+        any = true;
+      }
+    }
+    if (any) out.set(id, counts);
+  }
+  return out;
 }
 
 /**
