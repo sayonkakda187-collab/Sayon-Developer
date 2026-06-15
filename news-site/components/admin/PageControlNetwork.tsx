@@ -63,10 +63,12 @@ function delta(cur: number | null, prev: number | null): { txt: string; cls: "up
   const pct = ((cur - prev) / Math.abs(prev)) * 100;
   return { txt: `${pct > 0.5 ? "▲" : pct < -0.5 ? "▼" : "▬"} ${Math.abs(pct).toFixed(0)}%`, cls: pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat" };
 }
-function seriesValues(days: DayPoint[], key: Metric): number[] {
+// Keys whose per-day series we chart/sparkline — the toggle metrics plus paid reach.
+type SeriesKey = Metric | "paidReach";
+function seriesValues(days: DayPoint[], key: SeriesKey): number[] {
   return days.map((d) => d[key] ?? 0);
 }
-function seriesPoints(days: DayPoint[], key: Metric): SeriesPoint[] {
+function seriesPoints(days: DayPoint[], key: SeriesKey): SeriesPoint[] {
   return days.map((d) => ({ date: d.date, value: d[key] ?? 0 }));
 }
 function engagementOf(p: NetPost): number {
@@ -405,6 +407,7 @@ export function PageControlNetwork({ apiBase = "/api/admin/page-control" }: { ap
           <div className="adm-pc-kpis">
             <Kpi label="Total earnings" value={t!.earnings} prev={t!.earningsPrev} values={t!.earnings != null ? data.earningsDays : []} color="var(--section-accent)" format={fmtMoney} />
             <Kpi label="Reach" value={t!.reach} prev={t!.reachPrev} values={seriesValues(data.trendDays, "reach")} color="var(--section-accent)" />
+            <Kpi label="Paid reach" value={t!.paidReach} prev={t!.paidReachPrev} values={t!.paidReach != null ? seriesValues(data.trendDays, "paidReach") : []} color="var(--chart-1)" />
             <Kpi label="Engagement" value={t!.engagement} prev={t!.engagementPrev} values={seriesValues(data.trendDays, "engagement")} color="var(--chart-2)" />
             <Kpi label="Followers" value={t!.followers} prev={null} values={[]} color="var(--chart-3)" snapshot />
             <Kpi label="Total posts" value={t!.totalPosts} prev={null} values={[]} color="var(--chart-6)" snapshot />

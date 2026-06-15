@@ -28,7 +28,7 @@ function parseDays(data: string): DayPoint[] | null {
     if (Array.isArray(a)) {
       return a
         .filter((x) => x && typeof x.date === "string")
-        .map((x) => ({ date: x.date as string, reach: numOrNull(x.reach), engagement: numOrNull(x.engagement), follows: numOrNull(x.follows) }));
+        .map((x) => ({ date: x.date as string, reach: numOrNull(x.reach), engagement: numOrNull(x.engagement), follows: numOrNull(x.follows), paidReach: numOrNull(x.paidReach) }));
     }
   } catch {
     // fall through

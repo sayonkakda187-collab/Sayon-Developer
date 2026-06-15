@@ -27,6 +27,12 @@ const REACH_METRICS = ["page_impressions_unique", "page_views_total", "page_view
 const ENGAGEMENT_METRICS = ["page_post_engagements", "page_engaged_users"];
 // Daily follower growth, for the detail trend (several names across versions).
 const FOLLOW_METRICS = ["page_daily_follows_unique", "page_daily_follows", "page_fan_adds_unique", "page_fan_adds"];
+// Paid reach: prefer the UNIQUE paid-reach metric (apples-to-apples with
+// page_impressions_unique above), falling back to total paid impressions. Both
+// belong to the page_impressions_* family Meta is retiring through mid-2026, so
+// if neither resolves the caller just gets null paidReach (shown as "not
+// available") — total reach / engagement / follows are unaffected.
+const PAID_REACH_METRICS = ["page_impressions_paid_unique", "page_impressions_paid"];
 
 /** The newest value in a series (day series end on the most recent day). */
 function latestValue(values: InsightValue[] | undefined): number | null {
@@ -96,14 +102,19 @@ export async function getPageOverview(pageId: string, accessToken: string): Prom
   return { followers, reach28, engagement28, status };
 }
 
-/** One calendar day's metrics (null = no data for that day → shown as "—"). */
-export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
+/** One calendar day's metrics (null = no data for that day → shown as "—").
+ *  `paidReach` is the paid slice of reach; null when Meta no longer returns a
+ *  paid-reach metric for the Page, so the UI can show "not available" gracefully.
+ *  Optional/additive: only the Page Control path populates it, so the farm's own
+ *  insights aggregation (which omits it) stays valid without changes. */
+export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null; paidReach?: number | null };
 export type PageDaily = {
   days: DayPoint[];
   /** Which metric name actually backed each series (null = none available). */
   reachMetric: string | null;
   engagementMetric: string | null;
   followsMetric: string | null;
+  paidReachMetric: string | null;
 };
 
 /** First candidate metric that returned a non-empty day series. */
@@ -142,7 +153,7 @@ export async function getPageDaily(
   const series = await fetchPageInsights({
     pageId,
     accessToken,
-    metrics: [...REACH_METRICS, ...ENGAGEMENT_METRICS, ...FOLLOW_METRICS],
+    metrics: [...REACH_METRICS, ...ENGAGEMENT_METRICS, ...FOLLOW_METRICS, ...PAID_REACH_METRICS],
     period: "day",
     since,
     until,
@@ -150,15 +161,18 @@ export async function getPageDaily(
   const reachMetric = firstPresent(series, REACH_METRICS);
   const engagementMetric = firstPresent(series, ENGAGEMENT_METRICS);
   const followsMetric = firstPresent(series, FOLLOW_METRICS);
+  const paidReachMetric = firstPresent(series, PAID_REACH_METRICS);
   const reach = bucketByDay(reachMetric ? series[reachMetric] : undefined);
   const eng = bucketByDay(engagementMetric ? series[engagementMetric] : undefined);
   const fol = bucketByDay(followsMetric ? series[followsMetric] : undefined);
-  const dates = new Set<string>([...reach.keys(), ...eng.keys(), ...fol.keys()]);
+  const paid = bucketByDay(paidReachMetric ? series[paidReachMetric] : undefined);
+  const dates = new Set<string>([...reach.keys(), ...eng.keys(), ...fol.keys(), ...paid.keys()]);
   const days: DayPoint[] = [...dates].sort().map((date) => ({
     date,
     reach: reach.has(date) ? (reach.get(date) as number) : null,
     engagement: eng.has(date) ? (eng.get(date) as number) : null,
     follows: fol.has(date) ? (fol.get(date) as number) : null,
+    paidReach: paid.has(date) ? (paid.get(date) as number) : null,
   }));
-  return { days, reachMetric, engagementMetric, followsMetric };
+  return { days, reachMetric, engagementMetric, followsMetric, paidReachMetric };
 }

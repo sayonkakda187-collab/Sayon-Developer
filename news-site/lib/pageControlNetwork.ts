@@ -17,13 +17,16 @@ import type { PagePost } from "@/lib/facebook";
  */
 
 const ROLLUP_TTL_MS = 60 * 60 * 1000; // 1h
-const ROLLUP_PREFIX = "pc_network_rollup_v2_"; // v2: + earnings totals/series
+const ROLLUP_PREFIX = "pc_network_rollup_v3_"; // v3: + paid-reach totals/series
 
 export type NetTotals = {
   reach: number | null;
   reachPrev: number | null;
   engagement: number | null;
   engagementPrev: number | null;
+  /** Paid slice of reach across the filtered pages; null when no page reported it. */
+  paidReach: number | null;
+  paidReachPrev: number | null;
   followers: number | null;
   totalPosts: number | null;
   earnings: number | null;
@@ -54,7 +57,7 @@ function parseDays(data: string): DayPoint[] {
     if (Array.isArray(a)) {
       return a
         .filter((x) => x && typeof x.date === "string")
-        .map((x) => ({ date: x.date as string, reach: numOrNull(x.reach), engagement: numOrNull(x.engagement), follows: numOrNull(x.follows) }));
+        .map((x) => ({ date: x.date as string, reach: numOrNull(x.reach), engagement: numOrNull(x.engagement), follows: numOrNull(x.follows), paidReach: numOrNull(x.paidReach) }));
     }
   } catch {
     /* fall through */
@@ -74,17 +77,18 @@ function engagementOf(p: PagePost): number {
   return (p.reactions ?? 0) + (p.comments ?? 0) + (p.shares ?? 0);
 }
 
-type DaySum = Map<string, { reach: number; engagement: number; follows: number }>;
+type DaySum = Map<string, { reach: number; engagement: number; follows: number; paidReach: number }>;
 function addDaySum(acc: DaySum, d: DayPoint) {
-  const s = acc.get(d.date) ?? { reach: 0, engagement: 0, follows: 0 };
+  const s = acc.get(d.date) ?? { reach: 0, engagement: 0, follows: 0, paidReach: 0 };
   s.reach += d.reach ?? 0;
   s.engagement += d.engagement ?? 0;
   s.follows += d.follows ?? 0;
+  s.paidReach += d.paidReach ?? 0;
   acc.set(d.date, s);
 }
 function sumToDays(acc: DaySum): DayPoint[] {
   return [...acc.entries()]
-    .map(([date, v]) => ({ date, reach: v.reach, engagement: v.engagement, follows: v.follows }))
+    .map(([date, v]) => ({ date, reach: v.reach, engagement: v.engagement, follows: v.follows, paidReach: v.paidReach }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -129,6 +133,8 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
   let netReachPrev: number | null = null;
   let netEng: number | null = null;
   let netEngPrev: number | null = null;
+  let netPaid: number | null = null;
+  let netPaidPrev: number | null = null;
   const leaderboard: LeaderRow[] = [];
   const movers: MoverRow[] = [];
   let growing = 0;
@@ -143,19 +149,23 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
     let cReach: number | null = null;
     let cEng: number | null = null;
     let cFollows: number | null = null;
+    let cPaid: number | null = null;
     let pReach: number | null = null;
     let pEng: number | null = null;
+    let pPaid: number | null = null;
     const sparkReach: number[] = [];
     for (const d of days) {
       if (d.date >= range.from && d.date <= range.to) {
         if (d.reach != null) cReach = (cReach ?? 0) + d.reach;
         if (d.engagement != null) cEng = (cEng ?? 0) + d.engagement;
         if (d.follows != null) cFollows = (cFollows ?? 0) + d.follows;
+        if (d.paidReach != null) cPaid = (cPaid ?? 0) + d.paidReach;
         sparkReach.push(d.reach ?? 0);
         addDaySum(curSum, d);
       } else if (d.date >= prev.from && d.date <= prev.to) {
         if (d.reach != null) pReach = (pReach ?? 0) + d.reach;
         if (d.engagement != null) pEng = (pEng ?? 0) + d.engagement;
+        if (d.paidReach != null) pPaid = (pPaid ?? 0) + d.paidReach;
         addDaySum(prevSum, d);
       }
     }
@@ -163,6 +173,8 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
     if (pReach != null) netReachPrev = (netReachPrev ?? 0) + pReach;
     if (cEng != null) netEng = (netEng ?? 0) + cEng;
     if (pEng != null) netEngPrev = (netEngPrev ?? 0) + pEng;
+    if (cPaid != null) netPaid = (netPaid ?? 0) + cPaid;
+    if (pPaid != null) netPaidPrev = (netPaidPrev ?? 0) + pPaid;
     leaderboard.push({ id: p.id, pageId: p.pageId, name: p.pageName, avatarUrl: p.avatarUrl, reach: cReach ?? 0, engagement: cEng ?? 0, sparkReach });
     if (cReach != null && pReach != null && pReach > 0) {
       movers.push({ id: p.id, name: p.pageName, avatarUrl: p.avatarUrl, pct: ((cReach - pReach) / pReach) * 100, cur: cReach, prev: pReach });
@@ -219,7 +231,7 @@ export async function getNetworkRollup(range: { from: string; to: string }, mana
 
   const rollup: NetworkRollup = {
     coverage: { withData, total: pages.length },
-    totals: { reach: netReach, reachPrev: netReachPrev, engagement: netEng, engagementPrev: netEngPrev, followers, totalPosts, earnings, earningsPrev },
+    totals: { reach: netReach, reachPrev: netReachPrev, engagement: netEng, engagementPrev: netEngPrev, paidReach: netPaid, paidReachPrev: netPaidPrev, followers, totalPosts, earnings, earningsPrev },
     trendDays: sumToDays(curSum),
     trendDaysPrev: sumToDays(prevSum),
     leaderboard: leaderboard.slice(0, 15),

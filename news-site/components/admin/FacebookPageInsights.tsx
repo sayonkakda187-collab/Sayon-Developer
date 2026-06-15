@@ -29,7 +29,9 @@ type Overview = {
 };
 
 type SeriesPoint = { date: string; value: number };
-export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null };
+// `paidReach` is optional/additive: Page Control's monitored detail carries it, but
+// the farm's own insights never render it, so older callers/payloads stay valid.
+export type DayPoint = { date: string; reach: number | null; engagement: number | null; follows: number | null; paidReach?: number | null };
 export type DayRow = DayPoint & { shares: number; partial: boolean };
 export type Range = { preset: RangePreset; from: string; to: string };
 type Metric = "reach" | "engagement" | "follows";
@@ -125,6 +127,7 @@ export function buildDayRows(from: string, to: string, daily: Map<string, DayPoi
       reach: d?.reach ?? null,
       engagement: d?.engagement ?? null,
       follows: d?.follows ?? null,
+      paidReach: d?.paidReach ?? null,
       shares: shares[date] ?? 0,
       partial: date === today,
     };
