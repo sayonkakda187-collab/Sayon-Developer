@@ -102,6 +102,68 @@ export function normalizeEarningAmount(input: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
+// ── Pasted-list parsing (Manager Portal "paste daily earnings") ───────────────
+// Turn a free-text blob of "date amount" pairs (one per line OR a comma/semicolon
+// inline list, e.g. "Jun 1: $14.91, Jun 2: $12.30") into (date, amount) rows for a
+// SINGLE already-chosen page — no page-name matching here. Reuses the same date +
+// amount normalizers as the admin tool, so behaviour matches. Dates resolve in
+// Phnom-Penh; the year defaults to the current PP year when omitted.
+
+const MONTH_NAME = String.raw`[A-Za-z]{3,9}\.?`;
+// A date token in any of the forms normalizeEarningDate accepts.
+const DATE_TOKEN = [
+  String.raw`${MONTH_NAME}\s+\d{1,2}(?:\s*,?\s*\d{2,4})?`, // Jun 1 · June 1, 2026
+  String.raw`\d{1,2}\s+${MONTH_NAME}(?:\s*,?\s*\d{2,4})?`, // 1 Jun
+  String.raw`\d{4}-\d{1,2}-\d{1,2}`, // 2026-06-01
+  String.raw`\d{1,2}[/.]\d{1,2}(?:[/.]\d{2,4})?`, // 6/1 · 06/01/2026
+].join("|");
+// $ + number (optional thousands commas / 2dp). The trailing (?!\d) stops a day
+// being mis-eaten as part of the amount.
+const AMOUNT_TOKEN = String.raw`\$?\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?`;
+const ENTRY_SOURCE = String.raw`(${DATE_TOKEN})\s*[:=\-–—]?\s*(${AMOUNT_TOKEN})(?!\d)`;
+
+export type ParsedEarningRow = { date: string; amount: number };
+export type PastedEarnings = { rows: ParsedEarningRow[]; unparsed: string[]; truncated: boolean };
+
+/**
+ * Parse pasted daily earnings into normalized (date, amount) rows for ONE page.
+ * Tolerant of line-by-line and inline comma/semicolon lists; de-dupes by date
+ * (last value wins). Lines with text but no readable (date, amount) pair are
+ * returned in `unparsed` so the UI can flag them. Never throws.
+ */
+export function parsePastedEarnings(text: unknown, today: string = ppToday()): PastedEarnings {
+  const src = typeof text === "string" ? text : "";
+  const re = new RegExp(ENTRY_SOURCE, "gi");
+  const byDate = new Map<string, number>();
+  const lines = src.split(/\r?\n/);
+  const matchedLine = new Set<number>();
+
+  lines.forEach((line, i) => {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line))) {
+      if (m.index === re.lastIndex) re.lastIndex++; // guard against a zero-width match
+      const date = normalizeEarningDate(m[1], today);
+      const amount = normalizeEarningAmount(m[2]);
+      if (date && amount != null) {
+        byDate.set(date, amount); // last wins (a repeated day overwrites)
+        matchedLine.add(i);
+      }
+    }
+  });
+
+  const unparsed = lines
+    .map((l, i) => ({ l: l.trim(), i }))
+    .filter((x) => x.l.length > 0 && !matchedLine.has(x.i))
+    .map((x) => (x.l.length > 120 ? `${x.l.slice(0, 117)}…` : x.l))
+    .slice(0, 50);
+
+  let rows = [...byDate.entries()].map(([date, amount]) => ({ date, amount })).sort((a, b) => a.date.localeCompare(b.date));
+  const truncated = rows.length > MAX_EARNINGS_BATCH;
+  if (truncated) rows = rows.slice(0, MAX_EARNINGS_BATCH);
+  return { rows, unparsed, truncated };
+}
+
 // ── Page-name matching (case-insensitive, fuzzy/closest) ─────────────────────
 
 export type PageRef = { id: string; pageName: string; managerId: string | null };

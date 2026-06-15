@@ -10,6 +10,7 @@ import { PageControlNetwork } from "@/components/admin/PageControlNetwork";
 import { PageControlEarnings } from "@/components/admin/PageControlEarnings";
 import type { ManagedPage } from "@/components/admin/ManagersScreen";
 import { PortalThemeToggle } from "./PortalThemeToggle";
+import { PortalPasteEarnings } from "./PortalPasteEarnings";
 
 /**
  * The Manager Portal shell — a standalone (non-admin) surface wrapping the reused Page
@@ -42,6 +43,9 @@ export function PortalClient({
   // When a Results row is clicked, show that page's read-only full detail (Summary /
   // Content / Analytics) in place of the tabs — back returns to Results.
   const [detailPageId, setDetailPageId] = useState<string | null>(null);
+  // Bumped after a bulk paste-save so the day editor below remounts + re-fetches,
+  // reflecting the newly-saved values.
+  const [earnRefresh, setEarnRefresh] = useState(0);
   const apiBase = `/api/portal/${encodeURIComponent(token)}`;
   const ownCount = ownPages.length;
   const detailPage = detailPageId ? pages.find((p) => p.id === detailPageId) ?? null : null;
@@ -134,7 +138,10 @@ export function PortalClient({
                       </p>
                     </div>
                   ) : (
-                    <PageControlEarnings pages={ownPages} managers={[manager]} assignments={ownAssignments} apiBase={apiBase} />
+                    <>
+                      <PortalPasteEarnings pages={ownPages} apiBase={apiBase} onSaved={() => setEarnRefresh((n) => n + 1)} />
+                      <PageControlEarnings key={earnRefresh} pages={ownPages} managers={[manager]} assignments={ownAssignments} apiBase={apiBase} />
+                    </>
                   )}
                 </div>
               )}
