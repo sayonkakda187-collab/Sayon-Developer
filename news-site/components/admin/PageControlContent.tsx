@@ -95,6 +95,13 @@ export function PagePostCard({ post }: { post: PagePost }) {
         ) : (post.reactions ?? 0) > 0 ? (
           <p className="adm-fb-sub" style={{ fontSize: 10.5, marginTop: 8 }}>Reaction breakdown not available.</p>
         ) : null}
+        {post.videoAdImpressions != null && post.videoAdImpressions > 0 && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "3px 9px", borderRadius: 999, background: "rgba(37,99,235,.10)", color: "#2563eb", fontSize: 12, fontWeight: 700 }} title="Ad impressions served in this video's ad breaks — not earnings">
+            <span aria-hidden>▶</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatNumber(post.videoAdImpressions)}</span>
+            <span style={{ fontWeight: 600 }}>ad-break impressions</span>
+          </div>
+        )}
         <a
           href={post.permalink}
           target="_blank"

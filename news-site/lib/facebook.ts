@@ -433,6 +433,9 @@ export type PagePost = {
   shares: number | null;
   reach: number | null;
   reactionsByType?: PostReactions | null;
+  /** Lifetime VIDEO ad-break ad IMPRESSIONS (not earnings) — only present for video
+   *  posts on a monetized Page; null/absent otherwise. */
+  videoAdImpressions?: number | null;
 };
 
 /** A page of real posts + the cursor for the next page (null = no more posts). */
@@ -553,6 +556,85 @@ export async function getPostReactionBreakdowns(postIds: string[], accessToken: 
       }
     }
     if (any) out.set(id, counts);
+  }
+  return out;
+}
+
+// ── Video ad-break ad IMPRESSIONS (Page Control · Phase 3) ───────────────────
+//
+// These count ad impressions served in a Page's video ad breaks (in-stream ads) —
+// they are IMPRESSIONS, never $ earnings. They require the Page to be enrolled in
+// in-stream-ad monetization, so a missing-permission / unsupported / empty response
+// is normal and the caller maps it to a graceful "needs monetization access" / "not
+// available" state instead of breaking.
+
+const PAGE_VIDEO_ADBREAK_METRIC = "page_daily_video_ad_break_ad_impressions_by_crosspost_status";
+const POST_VIDEO_ADBREAK_METRIC = "post_video_ad_break_ad_impressions";
+
+/** Sum the numeric leaves of an insights `value`. These ad-break metrics return a
+ *  breakdown OBJECT (keyed by crosspost status); some variants return a plain
+ *  number — both collapse to a single daily/lifetime total here. */
+function sumInsightValue(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v && typeof v === "object") {
+    let s = 0;
+    for (const x of Object.values(v as Record<string, unknown>)) if (typeof x === "number" && Number.isFinite(x)) s += x;
+    return s;
+  }
+  return 0;
+}
+
+/**
+ * Page-level DAILY video ad-break ad IMPRESSIONS for a range (raw `end_time` +
+ * summed impressions per Facebook-reported day). The metric value is a breakdown by
+ * crosspost status, summed to a daily total. Throws FacebookApiError on token /
+ * permission / unsupported-metric errors so the caller can map it to a graceful
+ * status (monetization needed / not available / reconnect).
+ */
+export async function getPageVideoAdBreakSeries(
+  pageId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+): Promise<{ endTime: string; impressions: number }[]> {
+  const params = new URLSearchParams();
+  params.set("metric", PAGE_VIDEO_ADBREAK_METRIC);
+  params.set("period", "day");
+  params.set("since", String(since));
+  params.set("until", String(until));
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/${encodeURIComponent(pageId)}/insights?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  const data = await parseGraph<{ data?: { values?: { value?: unknown; end_time?: string }[] }[] }>(res, "Could not load video ad-break impressions");
+  const out: { endTime: string; impressions: number }[] = [];
+  for (const v of data.data?.[0]?.values ?? []) {
+    if (!v.end_time) continue;
+    out.push({ endTime: v.end_time, impressions: sumInsightValue(v.value) });
+  }
+  return out;
+}
+
+/**
+ * Best-effort per-post video ad-break ad IMPRESSIONS (lifetime) for a batch of posts
+ * in ONE `?ids=` call via `insights.metric(...)`. Only video posts on a monetized
+ * Page return a value; non-video / non-monetized posts are simply absent from the
+ * map. Throws on a hard error (e.g. a retired metric) so the caller can drop the
+ * whole breakdown gracefully rather than show wrong data.
+ */
+export async function getPostVideoAdBreakImpressions(postIds: string[], accessToken: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (postIds.length === 0) return out;
+  const params = new URLSearchParams();
+  params.set("ids", postIds.join(","));
+  params.set("fields", `insights.metric(${POST_VIDEO_ADBREAK_METRIC}).period(lifetime).as(adbreak)`);
+  params.set("access_token", accessToken);
+  const url = `${GRAPH_BASE}/?${params.toString()}`;
+  const res = await graphFetch(url, { method: "GET", cache: "no-store" });
+  type Entry = { adbreak?: { data?: { values?: { value?: unknown }[] }[] }; id?: string };
+  const data = await parseGraph<Record<string, Entry | undefined>>(res, "Could not load post ad-break impressions");
+  for (const id of postIds) {
+    const n = sumInsightValue(data[id]?.adbreak?.data?.[0]?.values?.[0]?.value);
+    if (n > 0) out.set(id, n);
   }
   return out;
 }

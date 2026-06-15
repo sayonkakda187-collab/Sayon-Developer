@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
-import { getPagePosts, getPostReach, getPostReactionBreakdowns, type PagePost } from "@/lib/facebook";
+import { getPagePosts, getPostReach, getPostReactionBreakdowns, getPostVideoAdBreakImpressions, type PagePost } from "@/lib/facebook";
 
 /**
  * Page Control → Content data source for a MONITORED page: its REAL published
@@ -66,6 +66,22 @@ async function enrichReactionBreakdown(posts: PagePost[], token: string): Promis
 }
 
 /**
+ * Best-effort per-post VIDEO ad-break ad IMPRESSIONS (not earnings) for the loaded
+ * posts in ONE batched call. Only video posts on a monetized Page return a value;
+ * everything else is left null. Isolated try/catch so a non-video batch / retired
+ * metric / missing monetization access never breaks the Content view.
+ */
+async function enrichVideoAdBreaks(posts: PagePost[], token: string): Promise<PagePost[]> {
+  if (posts.length === 0) return posts;
+  try {
+    const byId = await getPostVideoAdBreakImpressions(posts.map((p) => p.id), token);
+    return posts.map((p) => ({ ...p, videoAdImpressions: byId.get(p.id) ?? null }));
+  } catch {
+    return posts.map((p) => ({ ...p, videoAdImpressions: null }));
+  }
+}
+
+/**
  * Posts for one monitored page's Content view. Serves the cached first page when
  * fresh; a cursor (`after`) or `refresh` fetches live. Throws on token/permission
  * failures so the caller can show "needs reconnect".
@@ -86,7 +102,7 @@ export async function getMonitoredPagePostsForView(
 
   const token = decryptSecret(page.accessToken); // throws on corrupt token → caller maps to reconnect
   const { posts, after } = await getPagePosts(page.pageId, token, { after: opts.after, limit: PER_PAGE });
-  const enriched = await enrichReactionBreakdown(await enrichReach(posts, token), token);
+  const enriched = await enrichVideoAdBreaks(await enrichReactionBreakdown(await enrichReach(posts, token), token), token);
 
   if (firstPage) {
     await prisma.monitoredPagePostsCache

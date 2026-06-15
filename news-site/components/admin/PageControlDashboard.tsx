@@ -11,6 +11,7 @@ import { presetRange, formatRange, eachDate } from "@/lib/fbInsightsRange";
 import { RangeControl, type InsightsPageRow, type Range } from "@/components/admin/FacebookPageInsights";
 import { AnimatedAreaChart } from "@/components/admin/PageControlCharts";
 import { MonitoredDashboard } from "@/components/admin/MonitoredDashboard";
+import { VideoAdBreakChart } from "@/components/admin/VideoAdBreakChart";
 import { PageControlSummary } from "@/components/admin/PageControlSummary";
 import { PageControlContent } from "@/components/admin/PageControlContent";
 
@@ -216,7 +217,12 @@ export function PageControlDashboard({
           </>
         )}
         {tab === "content" && <PageControlContent pageDbId={page.id} apiBase={apiBase} />}
-        {tab === "analytics" && <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} showDayTable />}
+        {tab === "analytics" && (
+          <>
+            <MonitoredDashboard pageDbId={page.id} range={range} detailApi={DETAIL_API} showDayTable />
+            <VideoAdBreakChart pageDbId={page.id} range={range} apiBase={apiBase} />
+          </>
+        )}
       </div>
     </ToastProvider>
   );
