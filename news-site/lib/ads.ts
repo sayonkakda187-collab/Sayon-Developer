@@ -34,9 +34,10 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    may appear in only ONE container PER PAGE (across different pages it's fine).
 //    So the homepage HOME and the article IN_ARTICLE_TOP intentionally SHARE
 //    2030046 — they live on different pages (/ vs /news/[slug]), so each fills
-//    independently — while the article's TOP, MID and END units use different ids
-//    (2030046 / 2044273 / 2029928) since they share a page (a widget fills only
-//    one slot per page). All three article slots are now live.
+//    independently — while the article's TOP, two MID and END units use different
+//    ids (2030046 / 2044273 / 2044279 / 2029928) since they share a page (a widget
+//    fills only one slot per page). All four article slots are live; the second MID
+//    unit only appears on longer pieces (see buildArticleParts in the article page).
 export const ADS = {
   /** TOP-of-page article unit — rendered ABOVE the headline + cover (just under
    *  the site header) for maximum visibility. Uses 2030046 — the SAME Header
@@ -48,8 +49,12 @@ export const ADS = {
   IN_ARTICLE_TOP: "2030046",
   /** Optional in-article unit, injected between paragraphs AFTER the opening
    *  (~4th paragraph) on longer pieces. Uses 2044273 — distinct from the TOP and
-   *  END ids, so all three article slots fill independently on the same page. */
+   *  END ids, so all article slots fill independently on the same page. */
   IN_ARTICLE: "2044273",
+  /** Optional SECOND in-article unit, deeper in the body (~⅔ through) on longer
+   *  pieces (8+ paragraphs), kept well clear of IN_ARTICLE so two ads never crowd.
+   *  Uses 2044279 — a distinct id, so it fills alongside the other article slots. */
+  IN_ARTICLE_2: "2044279",
   /** End-of-article unit AFTER the story body. Uses 2029928 — distinct from the
    *  top slot's id, since a widget fills only ONE slot per page. Fills once that
    *  widget is Active/serving in AdsKeeper; until then the slot collapses cleanly

@@ -25,7 +25,7 @@ import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
-type ArticlePart = { type: "md"; content: string } | { type: "ad" } | { type: "adsense" };
+type ArticlePart = { type: "md"; content: string } | { type: "ad" } | { type: "ad2" } | { type: "adsense" };
 
 // Homepage (with required UTM for Unsplash) for the cover credit line's source link.
 const COVER_SOURCE_HOME: Record<string, string> = {
@@ -36,11 +36,13 @@ const COVER_SOURCE_HOME: Record<string, string> = {
 };
 
 /**
- * Split the article body so a single in-article ad can sit after the opening
- * (~4th paragraph) on long-enough pieces; short pieces (<4 paragraphs) get none.
- * The cut never lands inside a ``` code fence. The prominent top-of-page ad and
- * the end-of-article recommendation are rendered separately (above the headline
- * and after the body), not here.
+ * Split the article body to inject in-article ads between paragraphs:
+ *   • a first slot after the opening (~4th paragraph) on pieces with ≥4 paragraphs;
+ *   • a second slot deeper in the body (~⅔ through) only on longer pieces (≥8
+ *     paragraphs) and kept ≥3 paragraphs clear of the first, so two ads never crowd.
+ * Short pieces (<4 paragraphs) get none. A cut never lands inside a ``` code fence.
+ * The prominent top-of-page ad and the end-of-article recommendation are rendered
+ * separately (above the headline and after the body), not here.
  */
 function buildArticleParts(content: string): ArticlePart[] {
   const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
@@ -55,18 +57,37 @@ function buildArticleParts(content: string): ArticlePart[] {
     return i < n ? i : -1;
   };
 
-  // One mid-article slot after the opening, only when the body is long enough.
+  // First mid-article slot after the opening, only when the body is long enough.
   let cut = n >= 4 ? balancedCut(3) : -1;
   if (cut < 1 || cut >= n) cut = -1;
   if (cut === -1) return [{ type: "md", content }];
 
+  // Optional SECOND slot deeper in the body — only on longer pieces, ≥3 blocks
+  // past the first cut, and with ≥2 blocks of story still after it.
+  let cut2 = -1;
+  if (n >= 8) {
+    const b = balancedCut(Math.max(cut + 3, Math.round(n * 0.66)));
+    if (b > cut && b <= n - 2) cut2 = b;
+  }
+
+  // Reserved Google AdSense slot after the first cut (renders nothing unless
+  // AdSense slots are enabled — see lib/adsense.ts).
+  if (cut2 === -1) {
+    return [
+      { type: "md", content: blocks.slice(0, cut).join("\n\n") },
+      { type: "ad" },
+      { type: "adsense" },
+      { type: "md", content: blocks.slice(cut).join("\n\n") },
+    ];
+  }
+
   return [
     { type: "md", content: blocks.slice(0, cut).join("\n\n") },
     { type: "ad" },
-    // Reserved Google AdSense slot, after the ~3rd paragraph (renders nothing
-    // unless AdSense slots are enabled — see lib/adsense.ts).
     { type: "adsense" },
-    { type: "md", content: blocks.slice(cut).join("\n\n") },
+    { type: "md", content: blocks.slice(cut, cut2).join("\n\n") },
+    { type: "ad2" },
+    { type: "md", content: blocks.slice(cut2).join("\n\n") },
   ];
 }
 
@@ -282,15 +303,17 @@ export default async function ArticlePage({ params }: Props) {
 
           <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
-          {/* Body with an optional single in-article ad after the opening (only
-              on longer pieces; placeholder until you add an IN_ARTICLE widget id).
-              The story always renders first; the ad lazy-loads and collapses
-              cleanly when unfilled. */}
+          {/* Body with up to two in-article ads — one after the opening (~4th
+              paragraph) and, on longer pieces, a second deeper in the body. The
+              story always renders first; each ad lazy-loads and collapses cleanly
+              when unfilled. */}
           {parts.map((p, i) =>
             p.type === "md" ? (
               <Markdown key={i} content={p.content} />
             ) : p.type === "ad" ? (
               <AdSlot key={i} name="IN_ARTICLE" widgetId={ADS.IN_ARTICLE} />
+            ) : p.type === "ad2" ? (
+              <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ADS.IN_ARTICLE_2} />
             ) : (
               <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
             ),
