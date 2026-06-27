@@ -14,7 +14,15 @@ import { CommentForm } from "@/components/CommentForm";
 import { Reveal } from "@/components/Reveal";
 import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
-import { formatDate, formatNumber, siteConfig } from "@/lib/site";
+import {
+  absoluteUrl,
+  articleUrl,
+  defaultOgImageUrl,
+  formatDate,
+  formatNumber,
+  ogImageSize,
+  siteConfig,
+} from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
@@ -55,17 +63,40 @@ function splitForMidAd(content: string): [string, string] | null {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const article = await getArticleBySlug(params.slug);
   if (!article) return { title: "Article not found" };
+
+  const url = articleUrl(article.slug);
+  const imageUrl = article.coverImage
+    ? absoluteUrl(article.coverImage)
+    : defaultOgImageUrl;
+  const publishedTime = article.publishedAt?.toISOString();
+  const modifiedTime = article.updatedAt.toISOString();
+
   return {
     title: article.title,
     description: article.excerpt,
-    alternates: { canonical: `/news/${article.slug}` },
+    alternates: { canonical: url },
     openGraph: {
       title: article.title,
       description: article.excerpt,
       type: "article",
-      url: `/news/${article.slug}`,
-      publishedTime: article.publishedAt?.toISOString(),
-      images: article.coverImage ? [{ url: article.coverImage }] : undefined,
+      url,
+      siteName: siteConfig.name,
+      publishedTime,
+      modifiedTime,
+      images: [
+        {
+          url: imageUrl,
+          width: ogImageSize.width,
+          height: ogImageSize.height,
+          alt: article.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.title,
+      description: article.excerpt,
+      images: [imageUrl],
     },
   };
 }

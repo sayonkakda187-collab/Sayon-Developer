@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
-import { siteConfig } from "@/lib/site";
+import { defaultOgImageUrl, ogImageSize, siteConfig } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +30,21 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     url: siteConfig.url,
+    images: [
+      {
+        url: defaultOgImageUrl,
+        width: ogImageSize.width,
+        height: ogImageSize.height,
+        alt: siteConfig.name,
+      },
+    ],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: [defaultOgImageUrl],
+  },
 };
 
 // Runs before paint: sets the theme class (no flash) and marks `js` enabled so

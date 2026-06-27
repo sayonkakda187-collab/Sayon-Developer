@@ -25,7 +25,28 @@ export const siteConfig = {
   // (Production + Preview) to your domain; production falls back to the canonical
   // domain rather than localhost so share previews always resolve.
   url: resolveSiteUrl(),
+  defaultOgImage: "/og-default.png",
 };
+
+export const ogImageSize = {
+  width: 1200,
+  height: 630,
+} as const;
+
+export function absoluteUrl(pathOrUrl: string): string {
+  try {
+    return new URL(pathOrUrl).toString();
+  } catch {
+    const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+    return new URL(path, siteConfig.url).toString();
+  }
+}
+
+export function articleUrl(slug: string): string {
+  return absoluteUrl(`/news/${slug}`);
+}
+
+export const defaultOgImageUrl = absoluteUrl(siteConfig.defaultOgImage);
 
 
 export function formatDate(date: Date | string | null | undefined): string {

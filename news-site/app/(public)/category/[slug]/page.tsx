@@ -4,6 +4,12 @@ import { getCategoryArticles, getCategoryBySlug } from "@/lib/queries";
 import { NewsCard } from "@/components/NewsCard";
 import { Pagination } from "@/components/Pagination";
 import { Reveal } from "@/components/Reveal";
+import {
+  absoluteUrl,
+  defaultOgImageUrl,
+  ogImageSize,
+  siteConfig,
+} from "@/lib/site";
 
 type Props = {
   params: { slug: string };
@@ -13,9 +19,35 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = await getCategoryBySlug(params.slug);
   if (!category) return { title: "Category not found" };
+  const title = category.name;
+  const description = category.description ?? `Latest ${category.name} stories.`;
+  const url = absoluteUrl(`/category/${category.slug}`);
+
   return {
-    title: category.name,
-    description: category.description ?? `Latest ${category.name} stories.`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url,
+      siteName: siteConfig.name,
+      images: [
+        {
+          url: defaultOgImageUrl,
+          width: ogImageSize.width,
+          height: ogImageSize.height,
+          alt: siteConfig.name,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [defaultOgImageUrl],
+    },
   };
 }
 
