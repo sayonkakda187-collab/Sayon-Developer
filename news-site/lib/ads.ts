@@ -57,6 +57,10 @@ export const ADS = {
    *  pieces (8+ paragraphs), kept well clear of IN_ARTICLE so two ads never crowd.
    *  Uses 2019769 — a FEED in-content widget, distinct so it fills alongside the rest. */
   IN_ARTICLE_2: "2019769",
+  /** Optional THIRD in-article unit, ~85% through, only on VERY long pieces (12+
+   *  paragraphs). Uses 2044290 — an In-content/Feed widget (renders inline native
+   *  cards on mobile + desktop), distinct so it fills alongside the other slots. */
+  IN_ARTICLE_3: "2044290",
   /** End-of-article unit AFTER the story body. Uses 2029928 — distinct from the
    *  top slot's id, since a widget fills only ONE slot per page. Fills once that
    *  widget is Active/serving in AdsKeeper; until then the slot collapses cleanly
