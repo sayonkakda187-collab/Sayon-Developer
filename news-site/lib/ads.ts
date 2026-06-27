@@ -74,10 +74,16 @@ export const ADS = {
   /** Site-wide IN-SITE NOTIFICATION (AdsKeeper widget 2044288) — a FLOATING
    *  overlay AdsKeeper positions itself per its dashboard settings (Position: TOP,
    *  Frequency: 30 min). NOT an in-content slot: it's rendered once site-wide via
-   *  <AdNotification> in the public layout, so it can appear on EVERY public page
+   *  <AdOverlay> in the public layout, so it can appear on EVERY public page
    *  (home + every article). Only displays on a domain authorized in your AdsKeeper
    *  account (production); elsewhere AdsKeeper returns nothing. */
   NOTIFICATION: "2044288",
+  /** Site-wide INTERSTITIAL / "promoted content" pop-up (AdsKeeper widget 2044291) —
+   *  a self-triggering overlay shown after the reader's Nth click on internal links
+   *  (per its dashboard settings: after 2 interactions, once / 60 min). Works on
+   *  mobile + desktop (taps count as clicks). Rendered once site-wide via <AdOverlay>
+   *  in the public layout. Only displays on an authorized domain (production). */
+  INTERSTITIAL: "2044291",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
