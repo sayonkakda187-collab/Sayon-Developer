@@ -71,6 +71,16 @@ export const ADS = {
    *  4 cards on desktop, 2 on mobile). Fills once that widget is Active/serving
    *  in AdsKeeper; until then the slot collapses cleanly (no empty box). */
   HOME: "2030046",
+  /** Homepage IN-FEED unit — a native card band injected INTO the "Latest
+   *  Stories" grid (after the 6th card, and only when the feed is long enough to
+   *  keep stories on both sides of it). Sits well below the top HOME unit so the
+   *  two never crowd. Reuses 2019769 — the same FEED in-content widget as the
+   *  article IN_ARTICLE_2 slot; that's fine because a widget fills only ONE slot
+   *  PER PAGE and these live on DIFFERENT pages (/ vs /news/[slug]), exactly like
+   *  HOME and IN_ARTICLE_TOP already share 2030046. Want this unit's earnings
+   *  reported separately from IN_ARTICLE_2? Create a dedicated Feed widget in
+   *  AdsKeeper and paste its id here. */
+  HOME_FEED: "2019769",
   /** Site-wide IN-SITE NOTIFICATION (AdsKeeper widget 2044288) — a FLOATING
    *  overlay AdsKeeper positions itself per its dashboard settings (Position: TOP,
    *  Frequency: 30 min). NOT an in-content slot: it's rendered once site-wide via
