@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { getCategories, getTrending } from "@/lib/queries";
 import { deskClass } from "@/lib/ledger";
 import { AdsHead } from "@/components/AdsHead";
+import { AdNotification } from "@/components/AdNotification";
+import { ADS } from "@/lib/ads";
 import { BreakingBanner } from "@/components/BreakingBanner";
 import { Ticker } from "@/components/ledger/Ticker";
 import { MarketsTicker } from "@/components/ledger/MarketsTicker";
@@ -37,6 +39,10 @@ export default async function PublicLayout({
   return (
     <>
       <AdsHead />
+      {/* AdsKeeper in-site notification — a floating overlay, rendered once so it can
+          appear on every public page (home + articles); positions itself per its
+          dashboard settings and only fills on the authorized production domain. */}
+      <AdNotification widgetId={ADS.NOTIFICATION} />
       <BreakingBanner />
       <Ticker items={tickerItems} />
       <Masthead today={today} nav={nav} />

@@ -67,6 +67,13 @@ export const ADS = {
    *  4 cards on desktop, 2 on mobile). Fills once that widget is Active/serving
    *  in AdsKeeper; until then the slot collapses cleanly (no empty box). */
   HOME: "2030046",
+  /** Site-wide IN-SITE NOTIFICATION (AdsKeeper widget 2044288) — a FLOATING
+   *  overlay AdsKeeper positions itself per its dashboard settings (Position: TOP,
+   *  Frequency: 30 min). NOT an in-content slot: it's rendered once site-wide via
+   *  <AdNotification> in the public layout, so it can appear on EVERY public page
+   *  (home + every article). Only displays on a domain authorized in your AdsKeeper
+   *  account (production); elsewhere AdsKeeper returns nothing. */
+  NOTIFICATION: "2044288",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
