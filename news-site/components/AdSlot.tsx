@@ -19,10 +19,12 @@ type AdName = keyof typeof ADS;
  *
  * - Live (ADS_ENABLED + a real widget id): renders the AdsKeeper body container
  *   and triggers the loader when the slot nears the viewport (lazy, no layout
- *   shift — height is reserved via `minHeight`). If the network does NOT fill
- *   the slot within a short grace period, the whole unit collapses (renders
- *   nothing) so it never leaves an empty "Advertisement" box — important now
- *   that a slot can sit above the headline.
+ *   shift — height is reserved via `minHeight`). Once the ad fills, that
+ *   reserved height is released so the box hugs the ad — no empty space is
+ *   left under an ad shorter than the reservation. If the network does NOT
+ *   fill the slot within a short grace period, the whole unit collapses
+ *   (renders nothing) so it never leaves an empty "Advertisement" box —
+ *   important now that a slot can sit above the headline.
  * - Not live: a labeled dashed placeholder box where it's useful for review
  *   (local dev + Vercel *preview* deployments) so you can see where ads will go,
  *   and NOTHING on the real production site so visitors see a clean page.
@@ -55,6 +57,10 @@ export function AdSlot({
   const slotRef = useRef<HTMLDivElement>(null);
   // Flips true when the network returns no ad, collapsing the slot cleanly.
   const [unfilled, setUnfilled] = useState(false);
+  // Flips true once the ad actually fills the slot. We then release the
+  // reserved `minHeight` so the box shrinks to hug the ad — no empty space
+  // is left under an ad shorter than the loading reservation.
+  const [filled, setFilled] = useState(false);
 
   useEffect(() => {
     if (!live || !wrapRef.current) return;
@@ -62,16 +68,35 @@ export function AdSlot({
     let triggered = false;
     let timer: number | undefined;
     let io: IntersectionObserver | undefined;
+    let ro: ResizeObserver | undefined;
 
     const load = () => {
       window._mgq = window._mgq || [];
       window._mgq.push(["_mgc.load"]);
-      // Grace period for AdsKeeper to fill the slot. If the inner widget
-      // container is still effectively empty afterwards, collapse the unit so
-      // no orphan "Advertisement" box is left behind.
+
+      // Watch the inner container: the moment AdsKeeper injects the ad its
+      // height jumps, so we release the reserved height and let the box hug
+      // the ad (a short ad no longer leaves empty space below it).
+      if (typeof ResizeObserver !== "undefined" && slotRef.current) {
+        ro = new ResizeObserver(() => {
+          const el = slotRef.current;
+          if (el && el.offsetHeight >= 30) {
+            setFilled(true);
+            ro?.disconnect();
+          }
+        });
+        ro.observe(slotRef.current);
+      }
+
+      // Grace period for AdsKeeper to fill the slot. Afterwards either it has
+      // content (mark filled so the box hugs it — also a backstop for browsers
+      // without ResizeObserver) or it's still empty (collapse the unit so no
+      // orphan "Advertisement" box is left behind).
       timer = window.setTimeout(() => {
         const el = slotRef.current;
-        if (el && el.isConnected && el.offsetHeight < 30) setUnfilled(true);
+        if (!el || !el.isConnected) return;
+        if (el.offsetHeight >= 30) setFilled(true);
+        else setUnfilled(true);
       }, 8000);
     };
 
@@ -94,6 +119,7 @@ export function AdSlot({
 
     return () => {
       io?.disconnect();
+      ro?.disconnect();
       if (timer) window.clearTimeout(timer);
     };
   }, [live, widgetId]);
@@ -116,7 +142,7 @@ export function AdSlot({
         <div
           ref={wrapRef}
           className="overflow-hidden rounded-xl border border-border bg-surface"
-          style={{ minHeight }}
+          style={{ minHeight: filled ? 0 : minHeight }}
         >
           <div ref={slotRef} data-type="_mgwidget" data-widget-id={widgetId} />
         </div>
