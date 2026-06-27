@@ -3,6 +3,7 @@ import { getCategories, getTrending } from "@/lib/queries";
 import { deskClass } from "@/lib/ledger";
 import { AdsHead } from "@/components/AdsHead";
 import { AdOverlay } from "@/components/AdOverlay";
+import { AdStickyFooter } from "@/components/AdStickyFooter";
 import { ADS } from "@/lib/ads";
 import { BreakingBanner } from "@/components/BreakingBanner";
 import { Ticker } from "@/components/ledger/Ticker";
@@ -45,6 +46,10 @@ export default async function PublicLayout({
           dashboard settings and only fills on the authorized production domain. */}
       <AdOverlay widgetId={ADS.NOTIFICATION} />
       <AdOverlay widgetId={ADS.INTERSTITIAL} />
+      {/* Slim, dismissible sticky footer bar holding an IAB display banner —
+          rendered once so it rides along on every public page; reveals only once
+          the ad fills and only on the authorized production domain. */}
+      <AdStickyFooter widgetId={ADS.STICKY_FOOTER} />
       <BreakingBanner />
       <Ticker items={tickerItems} />
       <Masthead today={today} nav={nav} />

@@ -94,6 +94,15 @@ export const ADS = {
    *  mobile + desktop (taps count as clicks). Rendered once site-wide via <AdOverlay>
    *  in the public layout. Only displays on an authorized domain (production). */
   INTERSTITIAL: "2044291",
+  /** Site-wide STICKY FOOTER — a slim, dismissible bar pinned to the bottom of
+   *  the viewport (home + every article), rendered once via <AdStickyFooter> in
+   *  the public layout. Holds an AdsKeeper "IAB DISPLAY STANDARD AD UNIT" (a
+   *  fixed-size banner — a small anchor size like 320×50 / 728×90 fits best). It
+   *  reveals only once the ad fills, so there's never an empty bar, and a × lets
+   *  the reader dismiss it. PLACEHOLDER until you paste the widget id, so it
+   *  renders nothing for real visitors; create the IAB unit in AdsKeeper and
+   *  drop its id here to go live. */
+  STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
