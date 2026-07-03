@@ -4,12 +4,14 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import type { Gallery } from "@/lib/galleries";
+import { upload } from "@vercel/blob/client";
 import {
   createGalleryAction,
   deleteGalleryAction,
   renameGalleryAction,
   setGalleryEnabledAction,
   setGalleryImagesAction,
+  setGalleryVideosAction,
 } from "@/app/admin/gallery-actions";
 
 // Downscale a picked image before upload to stay well under Vercel's ~4.5 MB
@@ -44,6 +46,18 @@ async function uploadOne(file: File): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!res.ok || !data.url) throw new Error(data.error || "Upload failed.");
   return data.url;
+}
+
+// Videos are large, so they upload BROWSER → Vercel Blob directly (no ~4.5 MB
+// serverless body limit); /api/admin/blob-upload only mints the admin token.
+async function uploadVideo(file: File, onProgress?: (pct: number) => void): Promise<string> {
+  const blob = await upload(`gallery-videos/${file.name}`, file, {
+    access: "public",
+    handleUploadUrl: "/api/admin/blob-upload",
+    contentType: file.type || "video/mp4",
+    onUploadProgress: onProgress ? (e) => onProgress(Math.round(e.percentage)) : undefined,
+  });
+  return blob.url;
 }
 
 export function GalleriesManager({
@@ -109,9 +123,12 @@ function GalleryCard({ gallery, baseUrl }: { gallery: Gallery; baseUrl: string }
   const { success, error } = useToast();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [name, setName] = useState(gallery.title);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   const link = `${baseUrl.replace(/\/$/, "")}/g/${gallery.token}`;
 
@@ -145,6 +162,44 @@ function GalleryCard({ gallery, baseUrl }: { gallery: Gallery; baseUrl: string }
       const res = await setGalleryImagesAction(
         gallery.token,
         gallery.images.filter((_, i) => i !== idx),
+      );
+      if (res.ok) router.refresh();
+      else error(res.error);
+    });
+  }
+
+  async function onVideoFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setVideoBusy(true);
+    setVideoProgress(0);
+    try {
+      const urls: string[] = [];
+      for (const f of Array.from(files)) {
+        try {
+          urls.push(await uploadVideo(f, setVideoProgress));
+        } catch (e) {
+          error(e instanceof Error ? e.message : "Video upload failed.");
+        }
+      }
+      if (urls.length) {
+        const res = await setGalleryVideosAction(gallery.token, [...gallery.videos, ...urls]);
+        if (res.ok) {
+          success(`${urls.length} video${urls.length > 1 ? "s" : ""} added.`);
+          router.refresh();
+        } else error(res.error);
+      }
+    } finally {
+      setVideoBusy(false);
+      setVideoProgress(0);
+      if (videoRef.current) videoRef.current.value = "";
+    }
+  }
+
+  function removeVideo(idx: number) {
+    startTransition(async () => {
+      const res = await setGalleryVideosAction(
+        gallery.token,
+        gallery.videos.filter((_, i) => i !== idx),
       );
       if (res.ok) router.refresh();
       else error(res.error);
@@ -292,6 +347,48 @@ function GalleryCard({ gallery, baseUrl }: { gallery: Gallery; baseUrl: string }
                   disabled={pending}
                   aria-label="Remove image"
                   className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <span aria-hidden>×</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-fg-muted">
+            {gallery.videos.length} video{gallery.videos.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={() => videoRef.current?.click()}
+            disabled={videoBusy || pending}
+            className="rounded-lg bg-[rgb(var(--section-accent))] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {videoBusy ? `Uploading… ${videoProgress}%` : "Upload videos"}
+          </button>
+          <input
+            ref={videoRef}
+            type="file"
+            accept="video/*"
+            multiple
+            hidden
+            onChange={(e) => onVideoFiles(e.target.files)}
+          />
+        </div>
+        {gallery.videos.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {gallery.videos.map((src, i) => (
+              <div key={src + i} className="group relative overflow-hidden rounded-lg bg-black">
+                <video src={src} controls preload="metadata" className="aspect-video w-full" />
+                <button
+                  type="button"
+                  onClick={() => removeVideo(i)}
+                  disabled={pending}
+                  aria-label="Remove video"
+                  className="absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                 >
                   <span aria-hidden>×</span>
                 </button>

@@ -45,7 +45,7 @@ export default async function PrivateGalleryPage({
       <AdStickyFooter widgetId={ADS.STICKY_FOOTER} />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <GalleryView title={gallery.title} images={gallery.images} />
+        <GalleryView title={gallery.title} images={gallery.images} videos={gallery.videos} />
       </main>
     </div>
   );

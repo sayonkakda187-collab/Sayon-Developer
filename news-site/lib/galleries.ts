@@ -19,6 +19,7 @@ export type Gallery = {
   token: string;
   title: string;
   images: string[]; // uploaded image URLs, in display order
+  videos: string[]; // uploaded video URLs, in display order
   enabled: boolean;
   createdAt: string; // ISO
   updatedAt: string; // ISO
@@ -44,6 +45,9 @@ function parse(key: string, value: string): Gallery | null {
       images: Array.isArray(o.images)
         ? o.images.filter((s): s is string => typeof s === "string")
         : [],
+      videos: Array.isArray(o.videos)
+        ? o.videos.filter((s): s is string => typeof s === "string")
+        : [],
       enabled: o.enabled !== false, // default true
       createdAt: typeof o.createdAt === "string" ? o.createdAt : "",
       updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : "",
@@ -57,6 +61,7 @@ function serialize(g: Gallery): string {
   return JSON.stringify({
     title: g.title,
     images: g.images,
+    videos: g.videos,
     enabled: g.enabled,
     createdAt: g.createdAt,
     updatedAt: g.updatedAt,
@@ -98,6 +103,7 @@ export async function createGallery(title: string): Promise<Gallery> {
     token: newGalleryToken(),
     title: title.trim().slice(0, 120) || "Untitled gallery",
     images: [],
+    videos: [],
     enabled: true,
     createdAt: now,
     updatedAt: now,
@@ -106,7 +112,7 @@ export async function createGallery(title: string): Promise<Gallery> {
 
 export async function updateGallery(
   token: string,
-  patch: Partial<Pick<Gallery, "title" | "images" | "enabled">>,
+  patch: Partial<Pick<Gallery, "title" | "images" | "videos" | "enabled">>,
 ): Promise<Gallery | null> {
   const g = await getGallery(token);
   if (!g) return null;
@@ -117,6 +123,9 @@ export async function updateGallery(
       : {}),
     ...(patch.images !== undefined
       ? { images: patch.images.filter((s) => typeof s === "string").slice(0, 500) }
+      : {}),
+    ...(patch.videos !== undefined
+      ? { videos: patch.videos.filter((s) => typeof s === "string").slice(0, 200) }
       : {}),
     ...(patch.enabled !== undefined ? { enabled: Boolean(patch.enabled) } : {}),
     updatedAt: new Date().toISOString(),

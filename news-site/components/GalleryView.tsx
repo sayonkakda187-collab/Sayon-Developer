@@ -17,7 +17,15 @@ const TOP_AD = ADS.HOME;
 const FEED_ADS = [ADS.GALLERY_FEED, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
 const END_AD = ADS.RECOMMENDED;
 
-export function GalleryView({ title, images }: { title: string; images: string[] }) {
+export function GalleryView({
+  title,
+  images,
+  videos = [],
+}: {
+  title: string;
+  images: string[];
+  videos?: string[];
+}) {
   const [active, setActive] = useState<number | null>(null);
 
   // While the viewer is open: lock scroll, close on Esc, arrow-key navigation.
@@ -79,11 +87,26 @@ export function GalleryView({ title, images }: { title: string; images: string[]
 
       <AdSlot widgetId={TOP_AD} minHeight={120} />
 
-      {images.length === 0 ? (
-        <p className="py-16 text-center text-fg-muted">This gallery has no images yet.</p>
-      ) : (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{cells}</div>
+      {videos.length > 0 && (
+        <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {videos.map((src, i) => (
+            <video
+              key={`vid-${i}`}
+              src={src}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full rounded-xl bg-black"
+            />
+          ))}
+        </section>
       )}
+
+      {images.length > 0 ? (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{cells}</div>
+      ) : videos.length === 0 ? (
+        <p className="py-16 text-center text-fg-muted">This gallery is empty.</p>
+      ) : null}
 
       <div className="mt-6">
         <AdSlot widgetId={END_AD} minHeight={250} />

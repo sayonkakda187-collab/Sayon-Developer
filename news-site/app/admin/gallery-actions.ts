@@ -51,6 +51,20 @@ export async function setGalleryImagesAction(token: string, images: string[]): P
   return { ok: true };
 }
 
+/** Replace the whole video list (client owns add / remove, saves here). Video
+ *  files are uploaded browser→Blob directly via /api/admin/blob-upload; this
+ *  only persists the resulting URLs on the gallery. */
+export async function setGalleryVideosAction(token: string, videos: string[]): Promise<Result> {
+  await requireAdmin();
+  if (!Array.isArray(videos) || videos.some((s) => typeof s !== "string")) {
+    return { ok: false, error: "Invalid video list." };
+  }
+  const g = await updateGallery(token, { videos });
+  if (!g) return { ok: false, error: "Gallery not found." };
+  revalidatePath("/admin/galleries");
+  return { ok: true };
+}
+
 export async function deleteGalleryAction(token: string): Promise<Result> {
   await requireAdmin();
   await deleteGallery(token);
