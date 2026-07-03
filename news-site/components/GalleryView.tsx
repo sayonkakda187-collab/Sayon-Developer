@@ -6,14 +6,14 @@ import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 
 // In-content AdsKeeper widget ids interspersed among the images. Each id appears
-// ONCE on this page (a widget fills only one slot per page). GALLERY_FEED (2047583)
-// and GALLERY_FEED_2 (2047612) are DEDICATED gallery Feed widgets (their own
-// earnings reporting) and lead the feed rotation; the rest are reused from the
+// ONCE on this page (a widget fills only one slot per page). GALLERY_FEED (2047583),
+// GALLERY_FEED_2 (2047612) and GALLERY_FEED_3 (2047642) are DEDICATED gallery Feed
+// widgets (their own earnings reporting) and lead the feed rotation; the rest are reused from the
 // article/home placements, which live on different pages, so they fill
 // independently here. Layout: a header unit up top, feed units woven into the
 // grid, a recommendation unit at the end. All AdsKeeper — no pop networks.
 const TOP_AD = ADS.HOME;
-const FEED_ADS = [ADS.GALLERY_FEED, ADS.GALLERY_FEED_2, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
+const FEED_ADS = [ADS.GALLERY_FEED, ADS.GALLERY_FEED_2, ADS.GALLERY_FEED_3, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
 const END_AD = ADS.RECOMMENDED;
 
 export function GalleryView({ title, images }: { title: string; images: string[] }) {
