@@ -103,6 +103,15 @@ export const ADS = {
    *  account (production); elsewhere AdsKeeper returns nothing and the bar stays
    *  hidden. */
   STICKY_FOOTER: "2044386",
+  /** IN-ARTICLE IMAGE LIGHTBOX unit — shown INSIDE the full-screen viewer that
+   *  opens when a reader taps an article image (or the cover). Rendered on demand
+   *  via <ArticleMediaLightbox> (only while the viewer is open), so it never
+   *  collides with the article's other slots (a widget fills one slot per page,
+   *  and this container only exists while open). Needs its OWN dedicated widget —
+   *  a native "Under Article"/Feed unit or an IAB 300×250 works well. PLACEHOLDER
+   *  until you paste the widget id: images stay non-interactive on production and
+   *  the article is untouched; a labeled placeholder shows in dev / preview. */
+  LIGHTBOX: "REPLACE_WITH_LIGHTBOX_ID",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.

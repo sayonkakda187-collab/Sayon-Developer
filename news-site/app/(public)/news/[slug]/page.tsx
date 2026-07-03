@@ -17,6 +17,7 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { ArticleMediaLightbox } from "@/components/ArticleMediaLightbox";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { ADS } from "@/lib/ads";
 import { adsenseEnabled } from "@/lib/adsense";
@@ -194,6 +195,10 @@ export default async function ArticlePage({ params }: Props) {
       />
       <ReadingProgress />
 
+      {/* Tapping an article image/video (or the cover) opens a full-screen viewer
+          that carries the LIGHTBOX ad — an in-page "tap media → ad" experience,
+          never a pop-up/redirect. Inert until the LIGHTBOX widget id is live. */}
+      <ArticleMediaLightbox widgetId={ADS.LIGHTBOX}>
       {/* Top-of-page ad — placed ABOVE the headline + cover (just under the site
           header) for maximum visibility, per the requested layout. It collapses
           cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
@@ -214,7 +219,11 @@ export default async function ArticlePage({ params }: Props) {
               style={{ viewTransitionName: "shared-article-image" }}
               className="object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15" />
+            <div
+              className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15"
+              data-lightbox-src={article.coverImage}
+              data-lightbox-alt={article.title}
+            />
             {article.coverCredit && (
               <p className="absolute bottom-1.5 right-2 text-[10px] font-medium text-white/55">
                 Photo:{" "}
@@ -414,6 +423,7 @@ export default async function ArticlePage({ params }: Props) {
           </section>
         )}
       </div>
+      </ArticleMediaLightbox>
     </main>
   );
 }
