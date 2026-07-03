@@ -103,6 +103,12 @@ export const ADS = {
    *  account (production); elsewhere AdsKeeper returns nothing and the bar stays
    *  hidden. */
   STICKY_FOOTER: "2044386",
+  /** PRIVATE-GALLERY in-feed unit (AdsKeeper Feed widget 2047583) — a DEDICATED
+   *  Feed widget for the secret /g/<token> gallery pages, woven into the image
+   *  grid by <GalleryView>. Dedicated (not reused) so the galleries' ad earnings
+   *  report on their own in AdsKeeper. Appears once per gallery page (a widget
+   *  fills only one slot per page); fills only on the authorized domain. */
+  GALLERY_FEED: "2047583",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
