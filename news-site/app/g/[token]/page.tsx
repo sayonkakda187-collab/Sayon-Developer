@@ -36,6 +36,12 @@ export default async function PrivateGalleryPage({
       <AdsHead />
       <AdOverlay widgetId={ADS.NOTIFICATION} />
       <AdOverlay widgetId={ADS.INTERSTITIAL} />
+      {/* Two in-site notifications the owner created specifically for the gallery
+          pages (2047612 / 2047642) — self-displaying floating overlays, gallery-
+          only. Same format as NOTIFICATION above, so several may compete; each is
+          frequency-capped, so AdsKeeper realistically shows one at a time. */}
+      <AdOverlay widgetId={ADS.GALLERY_NOTIFICATION_1} />
+      <AdOverlay widgetId={ADS.GALLERY_NOTIFICATION_2} />
       <AdStickyFooter widgetId={ADS.STICKY_FOOTER} />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">

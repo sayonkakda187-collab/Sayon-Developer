@@ -109,16 +109,15 @@ export const ADS = {
    *  report on their own in AdsKeeper. Appears once per gallery page (a widget
    *  fills only one slot per page); fills only on the authorized domain. */
   GALLERY_FEED: "2047583",
-  /** SECOND dedicated PRIVATE-GALLERY Feed unit (AdsKeeper widget 2047612) —
-   *  woven into the /g/<token> gallery grid alongside GALLERY_FEED, reporting
-   *  separately. Distinct id, so it fills once per gallery page without breaking
-   *  the one-slot-per-widget-per-page rule. */
-  GALLERY_FEED_2: "2047612",
-  /** THIRD dedicated PRIVATE-GALLERY Feed unit (AdsKeeper widget 2047642) —
-   *  woven into the /g/<token> gallery grid alongside GALLERY_FEED(_2), reporting
-   *  separately. Distinct id, once per page. At this density AdsKeeper may not
-   *  fill every gallery slot — unfilled units collapse cleanly (no empty boxes). */
-  GALLERY_FEED_3: "2047642",
+  /** PRIVATE-GALLERY in-site NOTIFICATIONS (AdsKeeper widgets 2047612 + 2047642)
+   *  — self-displaying floating "in-site notification" widgets, rendered as
+   *  <AdOverlay> on the /g/<token> gallery pages ONLY (not site-wide). These are
+   *  the SAME format as the site-wide NOTIFICATION (2044288), so a gallery page
+   *  can run several notifications at once — AdsKeeper realistically shows one at
+   *  a time (each is frequency-capped). NOT in-content Feed units — do NOT put
+   *  them in an <AdSlot>. */
+  GALLERY_NOTIFICATION_1: "2047612",
+  GALLERY_NOTIFICATION_2: "2047642",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
