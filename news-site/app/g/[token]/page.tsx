@@ -7,6 +7,7 @@ import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 import { getGallery } from "@/lib/galleries";
 import { GalleryView } from "@/components/GalleryView";
+import { GalleryPresence } from "@/components/GalleryPresence";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,9 @@ export default async function PrivateGalleryPage({
       <AdOverlay widgetId={ADS.GALLERY_NOTIFICATION_1} />
       <AdOverlay widgetId={ADS.GALLERY_NOTIFICATION_2} />
       <AdStickyFooter widgetId={ADS.STICKY_FOOTER} />
+
+      {/* Invisible: heartbeats live-viewer presence so the admin sees who's watching. */}
+      <GalleryPresence token={params.token} />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <GalleryView title={gallery.title} images={gallery.images} videos={gallery.videos} />

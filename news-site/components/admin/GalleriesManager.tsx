@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/admin/Toast";
 import type { Gallery } from "@/lib/galleries";
@@ -60,6 +60,14 @@ async function uploadVideo(file: File, onProgress?: (pct: number) => void): Prom
   return blob.url;
 }
 
+type LiveInfo = { count: number; countries: Record<string, number>; devices: Record<string, number> };
+
+// Alpha-2 country code → flag emoji (regional indicators); unknown / "ZZ" → 🌐.
+function flag(cc: string): string {
+  if (!/^[A-Za-z]{2}$/.test(cc) || cc.toUpperCase() === "ZZ") return "🌐";
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
 export function GalleriesManager({
   galleries,
   baseUrl,
@@ -71,6 +79,28 @@ export function GalleriesManager({
   const { success, error } = useToast();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
+  const [live, setLive] = useState<Record<string, LiveInfo>>({});
+
+  // Poll live viewer counts for all galleries every ~7s.
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/admin/galleries/live", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { live?: Record<string, LiveInfo> };
+        if (alive) setLive(data.live || {});
+      } catch {
+        /* ignore transient errors */
+      }
+    };
+    load();
+    const iv = window.setInterval(load, 7000);
+    return () => {
+      alive = false;
+      window.clearInterval(iv);
+    };
+  }, []);
 
   function create() {
     const t = title.trim();
@@ -110,7 +140,7 @@ export function GalleriesManager({
       ) : (
         <ul className="space-y-6">
           {galleries.map((g) => (
-            <GalleryCard key={g.token} gallery={g} baseUrl={baseUrl} />
+            <GalleryCard key={g.token} gallery={g} baseUrl={baseUrl} live={live[g.token]} />
           ))}
         </ul>
       )}
@@ -118,7 +148,15 @@ export function GalleriesManager({
   );
 }
 
-function GalleryCard({ gallery, baseUrl }: { gallery: Gallery; baseUrl: string }) {
+function GalleryCard({
+  gallery,
+  baseUrl,
+  live,
+}: {
+  gallery: Gallery;
+  baseUrl: string;
+  live?: LiveInfo;
+}) {
   const router = useRouter();
   const { success, error } = useToast();
   const [pending, startTransition] = useTransition();
@@ -289,6 +327,36 @@ function GalleryCard({ gallery, baseUrl }: { gallery: Gallery; baseUrl: string }
         >
           Delete
         </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {live && live.count > 0 ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            {live.count} watching now
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-fg-faint">
+            <span className="h-2 w-2 rounded-full bg-fg-faint" />
+            No one watching
+          </span>
+        )}
+        {live && live.count > 0 && (
+          <span className="text-fg-muted">
+            {Object.entries(live.countries)
+              .sort((a, b) => b[1] - a[1])
+              .map(([cc, n]) => `${flag(cc)} ${n}`)
+              .join("  ")}
+            {"   ·   "}
+            {Object.entries(live.devices)
+              .sort((a, b) => b[1] - a[1])
+              .map(([d, n]) => `${n} ${d}`)
+              .join(" · ")}
+          </span>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 p-2">
