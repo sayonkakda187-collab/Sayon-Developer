@@ -23,7 +23,7 @@ export function GalleryPresence({ token }: { token: string }) {
 
     const ping = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      fetch(`/api/g/${token}/ping`, {
+      fetch(`/g/${token}/ping`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ visitorId: id }),
