@@ -109,6 +109,11 @@ export const ADS = {
    *  report on their own in AdsKeeper. Appears once per gallery page (a widget
    *  fills only one slot per page); fills only on the authorized domain. */
   GALLERY_FEED: "2047583",
+  /** SECOND dedicated PRIVATE-GALLERY Feed unit (AdsKeeper widget 2047612) —
+   *  woven into the /g/<token> gallery grid alongside GALLERY_FEED, reporting
+   *  separately. Distinct id, so it fills once per gallery page without breaking
+   *  the one-slot-per-widget-per-page rule. */
+  GALLERY_FEED_2: "2047612",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.
