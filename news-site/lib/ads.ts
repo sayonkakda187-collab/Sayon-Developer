@@ -94,6 +94,12 @@ export const ADS = {
    *  mobile + desktop (taps count as clicks). Rendered once site-wide via <AdOverlay>
    *  in the public layout. Only displays on an authorized domain (production). */
   INTERSTITIAL: "2044291",
+  /** SECOND site-wide INTERSTITIAL (AdsKeeper widget 2047757) — a self-triggering
+   *  full-screen pop-up, SAME format as INTERSTITIAL above. Rendered site-wide via
+   *  <AdOverlay> in the public layout AND on the /g/<token> gallery pages. Each
+   *  interstitial is frequency-capped in its dashboard settings, so the two never
+   *  fire at once. Fills only on the authorized production domain. */
+  INTERSTITIAL_2: "2047757",
   /** Site-wide STICKY FOOTER — a slim, dismissible bar pinned to the bottom of
    *  the viewport (home + every article), rendered once via <AdStickyFooter> in
    *  the public layout. Holds an AdsKeeper "IAB DISPLAY STANDARD AD UNIT" (a

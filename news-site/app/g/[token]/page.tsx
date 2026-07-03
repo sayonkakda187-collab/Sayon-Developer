@@ -36,6 +36,7 @@ export default async function PrivateGalleryPage({
       <AdsHead />
       <AdOverlay widgetId={ADS.NOTIFICATION} />
       <AdOverlay widgetId={ADS.INTERSTITIAL} />
+      <AdOverlay widgetId={ADS.INTERSTITIAL_2} />
       {/* Two in-site notifications the owner created specifically for the gallery
           pages (2047612 / 2047642) — self-displaying floating overlays, gallery-
           only. Same format as NOTIFICATION above, so several may compete; each is

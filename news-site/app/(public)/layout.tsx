@@ -46,6 +46,7 @@ export default async function PublicLayout({
           dashboard settings and only fills on the authorized production domain. */}
       <AdOverlay widgetId={ADS.NOTIFICATION} />
       <AdOverlay widgetId={ADS.INTERSTITIAL} />
+      <AdOverlay widgetId={ADS.INTERSTITIAL_2} />
       {/* Slim, dismissible sticky footer bar holding an IAB display banner —
           rendered once so it rides along on every public page; reveals only once
           the ad fills and only on the authorized production domain. */}
