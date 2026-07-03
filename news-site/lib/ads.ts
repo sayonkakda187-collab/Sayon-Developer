@@ -124,6 +124,13 @@ export const ADS = {
    *  them in an <AdSlot>. */
   GALLERY_NOTIFICATION_1: "2047612",
   GALLERY_NOTIFICATION_2: "2047642",
+  /** SITE-WIDE in-content FEED unit (AdsKeeper Feed widget 2047761) — a native
+   *  in-content card row rendered ONCE near the bottom of every public page
+   *  (home / article / category / search) via <AdSlot> in the public layout, and
+   *  on the /g/<token> gallery pages. A widget fills only one slot per page, and
+   *  this id is used only here, so it fills independently on each page. Collapses
+   *  cleanly if unfilled; only serves on the authorized production domain. */
+  SITEWIDE_FEED: "2047761",
 } as const;
 
 // 3) Master on/off switch. Leave false until your IDs above are real.

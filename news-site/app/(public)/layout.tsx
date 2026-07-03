@@ -4,6 +4,7 @@ import { deskClass } from "@/lib/ledger";
 import { AdsHead } from "@/components/AdsHead";
 import { AdOverlay } from "@/components/AdOverlay";
 import { AdStickyFooter } from "@/components/AdStickyFooter";
+import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 import { BreakingBanner } from "@/components/BreakingBanner";
 import { Ticker } from "@/components/ledger/Ticker";
@@ -60,6 +61,11 @@ export default async function PublicLayout({
         <MarketsTicker />
       </Suspense>
       <div className="flex-1">{children}</div>
+      {/* Site-wide in-content Feed unit — renders once near the bottom of every
+          public page (home / article / category / search). Collapses if unfilled. */}
+      <div className="px-4 sm:px-6">
+        <AdSlot widgetId={ADS.SITEWIDE_FEED} minHeight={120} />
+      </div>
       <LedgerNewsletter />
       <LedgerFooter sections={sections} />
     </>

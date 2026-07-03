@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AdsHead } from "@/components/AdsHead";
 import { AdOverlay } from "@/components/AdOverlay";
 import { AdStickyFooter } from "@/components/AdStickyFooter";
+import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
 import { getGallery } from "@/lib/galleries";
 import { GalleryView } from "@/components/GalleryView";
@@ -47,6 +48,10 @@ export default async function PrivateGalleryPage({
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <GalleryView title={gallery.title} images={gallery.images} videos={gallery.videos} />
+        {/* Site-wide in-content Feed unit (also runs on the gallery pages). */}
+        <div className="mt-6">
+          <AdSlot widgetId={ADS.SITEWIDE_FEED} minHeight={120} />
+        </div>
       </main>
     </div>
   );
