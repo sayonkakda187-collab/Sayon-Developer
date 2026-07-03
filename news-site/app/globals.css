@@ -2537,6 +2537,7 @@ a.dl-breaking-text:hover { text-decoration:none; }
 .admin-shell[data-section="scheduled"]    { --sa: 217 119 6;   --sa-ink: 180 83 9;    --sa-on: 251 191 36; }
 .admin-shell[data-section="ai-images"]    { --sa: 219 39 119;  --sa-ink: 190 24 93;   --sa-on: 244 114 182; }
 .admin-shell[data-section="sites"]        { --sa: 8 145 178;   --sa-ink: 14 116 144;  --sa-on: 34 211 238; }
+.admin-shell[data-section="galleries"]    { --sa: 192 38 211;  --sa-ink: 162 28 175;  --sa-on: 232 121 249; }
 .admin-shell[data-section="settings"]     { --sa: 100 116 139; --sa-ink: 71 85 105;   --sa-on: 148 163 184; }
 
 /* Dark mode: accents brighten to their AA variant (--sa → --sa-on), tints rise to

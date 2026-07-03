@@ -35,6 +35,13 @@ export const SearchIcon = (p: P) => (
     <path d="m20 20-3-3" />
   </svg>
 );
+export const GalleriesIcon = (p: P) => (
+  <svg {...base} className={p.className} aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.6" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
 export const CalendarIcon = (p: P) => (
   <svg {...base} strokeWidth={2} className={p.className} aria-hidden>
     <rect x="3" y="4" width="18" height="18" rx="2" />

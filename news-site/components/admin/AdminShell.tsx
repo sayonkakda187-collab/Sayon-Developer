@@ -32,6 +32,7 @@ import {
   AiImageIcon,
   ClockIcon,
   PageControlIcon,
+  GalleriesIcon,
 } from "./icons";
 
 type SiteOption = { id: string; name: string; isDefault: boolean };
@@ -50,6 +51,7 @@ const SECTION_ROUTES: [string, string][] = [
   ["ai-images", "/admin/ai-images"],
   ["scheduled", "/admin/scheduled"],
   ["sites", "/admin/sites"],
+  ["galleries", "/admin/galleries"],
   ["settings", "/admin/settings"],
 ];
 function sectionFor(pathname: string): string {
@@ -237,6 +239,15 @@ export function AdminShell({
               AI Images
             </Link>
             <Link
+              href="/admin/galleries"
+              data-tab="galleries"
+              className={`adm-navitem ${isActive("/admin/galleries") ? "on" : ""}`}
+              aria-current={isActive("/admin/galleries") ? "page" : undefined}
+            >
+              <GalleriesIcon />
+              Galleries
+            </Link>
+            <Link
               href="/admin/sites"
               data-tab="sites"
               className={`adm-navitem ${isActive("/admin/sites") ? "on" : ""}`}
@@ -418,6 +429,16 @@ export function AdminShell({
               >
                 <AiImageIcon />
                 AI Images
+              </Link>
+              <Link
+                href="/admin/galleries"
+                data-tab="galleries"
+                className={`adm-dlink ${isActive("/admin/galleries") ? "on" : ""}`}
+                tabIndex={open ? 0 : -1}
+                aria-current={isActive("/admin/galleries") ? "page" : undefined}
+              >
+                <GalleriesIcon />
+                Galleries
               </Link>
               <Link
                 href="/admin/sites"
