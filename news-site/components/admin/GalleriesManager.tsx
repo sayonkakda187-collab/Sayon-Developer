@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useToast } from "@/components/admin/Toast";
 import type { Gallery } from "@/lib/galleries";
 import { upload } from "@vercel/blob/client";
@@ -80,6 +81,7 @@ export function GalleriesManager({
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [live, setLive] = useState<Record<string, LiveInfo>>({});
+  const totalWatching = Object.values(live).reduce((s, v) => s + (v?.count || 0), 0);
 
   // Poll live viewer counts for all galleries every ~7s.
   useEffect(() => {
@@ -133,6 +135,20 @@ export function GalleriesManager({
         >
           Create gallery
         </button>
+        <Link
+          href="/admin/galleries/live"
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-surface-2"
+        >
+          <span className="relative flex h-2 w-2">
+            {totalWatching > 0 && (
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
+            )}
+            <span
+              className={`relative inline-flex h-2 w-2 rounded-full ${totalWatching > 0 ? "bg-emerald-500" : "bg-fg-faint"}`}
+            />
+          </span>
+          Live audience{totalWatching > 0 ? ` · ${totalWatching} watching` : ""}
+        </Link>
       </div>
 
       {galleries.length === 0 ? (

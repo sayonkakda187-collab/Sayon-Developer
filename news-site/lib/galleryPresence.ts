@@ -15,11 +15,25 @@ const PREFIX = "gpres:";
 const LIVE_WINDOW_MS = 35_000; // seen within 35s → live (2+ heartbeats of slack)
 const PRUNE_AFTER_MS = 120_000; // delete records older than 2 min
 
+// Rolling reader-count time series (whos.amung.us-style live graph). One JSON row
+// per gallery, keyed "gseries:<token>", holding minute-bucketed peak concurrent
+// readers for the last hour. Sampled straight from visitor heartbeats (throttled),
+// so the graph keeps its history even while the admin isn't watching.
+const SERIES_PREFIX = "gseries:";
+const SERIES_BUCKET_MS = 60_000; // 1-minute buckets
+export const SERIES_WINDOW_MS = 60 * 60_000; // keep last 60 minutes
+export const SERIES_WINDOW_MIN = 60;
+const SAMPLE_MIN_GAP_MS = 20_000; // at most ~1 sample / 20s per gallery
+
 export type GalleryLive = {
   count: number;
   countries: Record<string, number>;
   devices: Record<string, number>;
 };
+
+/** One point of the reader time series: `t` = minute-bucket start (ms), `c` = peak count. */
+export type SeriesPoint = { t: number; c: number };
+type SeriesRec = { last: number; points: SeriesPoint[] };
 
 const keyFor = (token: string, visitorId: string) => `${PREFIX}${token}:${visitorId}`;
 
@@ -85,4 +99,95 @@ export async function getLivePresence(): Promise<Record<string, GalleryLive>> {
     await prisma.appSetting.deleteMany({ where: { key: { in: stale } } }).catch(() => {});
   }
   return byToken;
+}
+
+/**
+ * Fold the current live-reader count for ONE gallery into its rolling time series.
+ * Called (best-effort) from each heartbeat, but throttled to ~once/20s per gallery
+ * so it costs little. Also prunes that gallery's own stale presence rows, so the
+ * table stays bounded even when the admin never opens the live dashboard.
+ */
+export async function sampleGallerySeries(token: string): Promise<void> {
+  const key = SERIES_PREFIX + token;
+  const now = Date.now();
+
+  const existing = await prisma.appSetting.findUnique({ where: { key } });
+  let rec: SeriesRec = { last: 0, points: [] };
+  if (existing?.value) {
+    try {
+      const o = JSON.parse(existing.value) as Partial<SeriesRec>;
+      rec = {
+        last: typeof o.last === "number" ? o.last : 0,
+        points: Array.isArray(o.points) ? o.points : [],
+      };
+    } catch {
+      /* corrupt → overwrite below */
+    }
+  }
+  // Throttle: skip the (heavier) count scan if we sampled very recently.
+  if (now - rec.last < SAMPLE_MIN_GAP_MS) return;
+
+  // Current concurrent readers of THIS gallery; prune its stale rows in passing.
+  const rows = await prisma.appSetting.findMany({
+    where: { key: { startsWith: `${PREFIX}${token}:` } },
+  });
+  let count = 0;
+  const stale: string[] = [];
+  for (const r of rows) {
+    let ts = 0;
+    try {
+      const o = JSON.parse(r.value) as { ts?: number };
+      ts = typeof o.ts === "number" ? o.ts : 0;
+    } catch {
+      /* stale */
+    }
+    if (now - ts > PRUNE_AFTER_MS) stale.push(r.key);
+    else if (now - ts <= LIVE_WINDOW_MS) count += 1;
+  }
+  if (stale.length) {
+    await prisma.appSetting.deleteMany({ where: { key: { in: stale } } }).catch(() => {});
+  }
+
+  // Fold into the current minute bucket (keep the peak), drop points past the window.
+  const bucket = Math.floor(now / SERIES_BUCKET_MS) * SERIES_BUCKET_MS;
+  const points = rec.points.filter((p) => p && typeof p.t === "number" && now - p.t <= SERIES_WINDOW_MS);
+  const last = points[points.length - 1];
+  if (last && last.t === bucket) last.c = Math.max(last.c, count);
+  else points.push({ t: bucket, c: count });
+
+  const value = JSON.stringify({ last: now, points } satisfies SeriesRec);
+  await prisma.appSetting
+    .upsert({ where: { key }, update: { value, encrypted: false }, create: { key, value, encrypted: false } })
+    .catch(() => {});
+}
+
+/** Admin: per-gallery reader time series (last hour), pruned on read. */
+export async function getGallerySeries(): Promise<Record<string, SeriesPoint[]>> {
+  const rows = await prisma.appSetting.findMany({ where: { key: { startsWith: SERIES_PREFIX } } });
+  const now = Date.now();
+  const out: Record<string, SeriesPoint[]> = {};
+  const stale: string[] = [];
+
+  for (const r of rows) {
+    const token = r.key.slice(SERIES_PREFIX.length);
+    try {
+      const rec = JSON.parse(r.value) as Partial<SeriesRec>;
+      const points = (Array.isArray(rec.points) ? rec.points : []).filter(
+        (p) => p && typeof p.t === "number" && typeof p.c === "number" && now - p.t <= SERIES_WINDOW_MS,
+      );
+      // Nothing fresh and not touched within the window → the gallery went quiet; drop the row.
+      if (points.length === 0 && now - (typeof rec.last === "number" ? rec.last : 0) > SERIES_WINDOW_MS) {
+        stale.push(r.key);
+        continue;
+      }
+      if (points.length) out[token] = points;
+    } catch {
+      stale.push(r.key);
+    }
+  }
+
+  if (stale.length) {
+    await prisma.appSetting.deleteMany({ where: { key: { in: stale } } }).catch(() => {});
+  }
+  return out;
 }
