@@ -110,9 +110,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url: `/news/${article.slug}`,
       publishedTime: article.publishedAt?.toISOString(),
       modifiedTime: article.updatedAt.toISOString(),
-      // og:image / twitter:image come from the branded opengraph-image.tsx card
-      // (per-article headline + category) — do not set images here or it overrides it.
+      // Prefer the article's REAL cover photo for the link/social preview, so a
+      // shared link — including one pasted into a Facebook comment — shows the news
+      // image. With NO cover, omit images and Next falls back to the branded
+      // opengraph-image.tsx card (headline on the brand background).
+      ...(article.coverImage ? { images: [{ url: article.coverImage }] } : {}),
     },
+    // Same choice for X/Twitter link previews (large image when there's a cover).
+    ...(article.coverImage
+      ? {
+          twitter: {
+            card: "summary_large_image" as const,
+            title: article.title,
+            description: article.excerpt ?? undefined,
+            images: [article.coverImage],
+          },
+        }
+      : {}),
   };
 }
 
