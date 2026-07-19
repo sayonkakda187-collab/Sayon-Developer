@@ -56,6 +56,16 @@ const VIA_LABEL: Record<string, string> = {
   currents: "Currents",
 };
 
+// One-click curated topics — these just prefill the keyword search, so the feed
+// still comes from your configured news APIs (inspiration-only headlines).
+// "Truth Social" has no usable public API, so this surfaces news COVERAGE about
+// Truth Social / Trump rather than the raw posts. Multi-word terms are ANDed by
+// the providers, so "Truth Social" reliably matches the phrase.
+const TRENDING_TOPICS: { id: string; label: string; query: string; dot?: boolean }[] = [
+  { id: "truth-social", label: "Truth Social", query: "Truth Social", dot: true },
+  { id: "trump", label: "Trump", query: "Donald Trump" },
+];
+
 export function TrendingNews({
   categories,
   languages,
@@ -225,6 +235,11 @@ export function TrendingNews({
     setQuery("");
     setCategory(id);
   }
+  // Quick topic → run its curated search (reuses the whole search path).
+  function pickTopic(q: string) {
+    setSearchInput(q);
+    setQuery(q);
+  }
   // Toggle a configured source on/off (triggers a reload via buildParams deps).
   function toggleSource(id: string) {
     setEnabled((prev) => {
@@ -347,6 +362,33 @@ export function TrendingNews({
               </button>
             );
           })}
+        </div>
+
+        {/* Quick topics: one-click curated searches (e.g. Truth Social / Trump
+            coverage). They prefill the keyword search — the feed still comes from
+            your configured news APIs as inspiration-only headlines. */}
+        <div className="adm-filterbar" aria-label="Quick topics" style={{ marginTop: 8 }}>
+          <span className="mr-1 inline-flex items-center text-[13px] font-semibold text-fg-muted">
+            Topics
+          </span>
+          {TRENDING_TOPICS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`adm-fchip ${query === t.query ? "on" : ""}`}
+              onClick={() => pickTopic(t.query)}
+              disabled={!configured}
+              title={`Show ${t.label} news coverage`}
+            >
+              {t.dot && (
+                <span
+                  className="mr-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-600 align-middle"
+                  aria-hidden
+                />
+              )}
+              {t.label}
+            </button>
+          ))}
         </div>
 
         <div className="adm-trend-toolrow">
