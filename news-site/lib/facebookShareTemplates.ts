@@ -28,18 +28,26 @@ export type FbShareSettings = {
   mode: ShareMode;
   captionTemplate: string;
   commentTemplate: string;
+  /** Attach the news preview image to the link comment (photo mode). Default on. */
+  commentImage: boolean;
 };
 
 export const DEFAULT_FB_SHARE_SETTINGS: FbShareSettings = {
   mode: "link",
   captionTemplate: DEFAULT_PHOTO_CAPTION,
   commentTemplate: DEFAULT_PHOTO_COMMENT,
+  commentImage: true,
 };
 
 export function normalizeFbShareSettings(p: Partial<FbShareSettings> | undefined): FbShareSettings {
   const caption = typeof p?.captionTemplate === "string" && p.captionTemplate.trim() ? p.captionTemplate.slice(0, 1500) : DEFAULT_PHOTO_CAPTION;
   const comment = typeof p?.commentTemplate === "string" && p.commentTemplate.trim() ? p.commentTemplate.slice(0, 500) : DEFAULT_PHOTO_COMMENT;
-  return { mode: isShareMode(p?.mode) ? p.mode : "link", captionTemplate: caption, commentTemplate: comment };
+  return {
+    mode: isShareMode(p?.mode) ? p.mode : "link",
+    captionTemplate: caption,
+    commentTemplate: comment,
+    commentImage: typeof p?.commentImage === "boolean" ? p.commentImage : true,
+  };
 }
 
 /** Substitute {tokens}, then tidy blank lines left where a token resolved empty. */

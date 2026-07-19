@@ -82,6 +82,7 @@ async function runDuePosts() {
         caption: post.caption ?? undefined,
         captionTemplate: shareSettings.captionTemplate,
         commentTemplate: shareSettings.commentTemplate,
+        commentImage: shareSettings.commentImage,
       };
       const result = await publishArticleToPage(post.article, post.facebookPage, shareConfig);
       await prisma.scheduledPost.update({

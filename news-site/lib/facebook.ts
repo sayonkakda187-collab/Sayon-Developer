@@ -207,9 +207,15 @@ export async function commentOnPost(args: {
   postId: string;
   accessToken: string;
   message: string;
+  /** Optional public image URL to attach so the comment shows a preview image
+   *  (Graph `attachment_url` → a photo comment). Falls back cleanly if omitted. */
+  attachmentUrl?: string;
 }): Promise<{ commentId: string }> {
   const body = new URLSearchParams();
   body.set("message", args.message);
+  if (args.attachmentUrl && args.attachmentUrl.trim()) {
+    body.set("attachment_url", args.attachmentUrl.trim());
+  }
   body.set("access_token", args.accessToken);
 
   const res = await graphFetch(`${GRAPH_BASE}/${encodeURIComponent(args.postId)}/comments`, {

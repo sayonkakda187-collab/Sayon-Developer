@@ -68,7 +68,7 @@ export function FacebookShareSettings({ initial }: { initial: FbShareSettings })
 
       <div className="adm-card-title" style={{ marginTop: 18 }}>Link comment template</div>
       <div className="adm-card-sub" style={{ marginBottom: 6 }}>
-        Token: <code className="adm-fb-code">{"{url}"}</code>
+        Tokens: <code className="adm-fb-code">{"{url}"}</code> <code className="adm-fb-code">{"{headline}"}</code>
       </div>
       <input
         className="adm-input"
@@ -78,6 +78,23 @@ export function FacebookShareSettings({ initial }: { initial: FbShareSettings })
       <button type="button" className="adm-link" style={{ marginTop: 4 }} onClick={() => setS((p) => ({ ...p, commentTemplate: DEFAULT_PHOTO_COMMENT }))}>
         Reset comment to default
       </button>
+
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 14, fontSize: 14, color: "var(--adm-ink)" }}>
+        <input
+          type="checkbox"
+          checked={s.commentImage}
+          onChange={(e) => setS((p) => ({ ...p, commentImage: e.target.checked }))}
+          style={{ marginTop: 3 }}
+        />
+        <span>
+          Show the news image on the link comment
+          <span className="adm-card-sub" style={{ display: "block", marginTop: 2 }}>
+            Attaches the article’s featured image (or the branded card) to the first comment, so the link
+            shows a preview thumbnail instead of a bare URL. If the image can’t be attached, the link comment
+            still posts.
+          </span>
+        </span>
+      </label>
 
       <div style={{ marginTop: 18 }}>
         <button type="button" className="adm-btn-primary" onClick={save} disabled={saving} style={{ minHeight: 44 }}>

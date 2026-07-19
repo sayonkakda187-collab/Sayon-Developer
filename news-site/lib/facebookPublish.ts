@@ -58,6 +58,8 @@ export type ShareConfig = {
   caption?: string;
   captionTemplate?: string;
   commentTemplate?: string;
+  /** Photo mode: attach the news preview image to the link comment. Default true. */
+  commentImage?: boolean;
 };
 
 /** Result of attempting to post one article to one page. */
@@ -103,17 +105,28 @@ async function markConnected(pageDbId: string): Promise<void> {
     .catch(() => {});
 }
 
-/** Add the link comment AS THE PAGE, retrying transient failures once. Permission/
- *  token errors are NOT retried (they won't change) and rethrow immediately. */
-async function commentWithRetry(postId: string, token: string, message: string): Promise<{ commentId: string }> {
+/** Add the link comment AS THE PAGE, retrying transient failures. Permission/
+ *  token errors are NOT retried (they won't change) and rethrow immediately.
+ *  When an image is attached, the LAST attempt drops it — so a bad/unfetchable
+ *  image never costs us the link itself (text-only comment still lands). */
+async function commentWithRetry(
+  postId: string,
+  token: string,
+  message: string,
+  attachmentUrl?: string,
+): Promise<{ commentId: string }> {
+  // With an image: try image, retry image, then a final text-only fallback.
+  const attempts: (string | undefined)[] = attachmentUrl
+    ? [attachmentUrl, attachmentUrl, undefined]
+    : [undefined, undefined];
   let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let i = 0; i < attempts.length; i++) {
     try {
-      return await commentOnPost({ postId, accessToken: token, message });
+      return await commentOnPost({ postId, accessToken: token, message, attachmentUrl: attempts[i] });
     } catch (e) {
       lastErr = e;
       if (e instanceof FacebookApiError && (e.permission || e.expired)) throw e;
-      await new Promise((r) => setTimeout(r, 600));
+      if (i < attempts.length - 1) await new Promise((r) => setTimeout(r, 600));
     }
   }
   throw lastErr;
@@ -175,10 +188,12 @@ export async function publishArticleToPage(
       const { postId } = await postPhotoToPage({ pageId: page.pageId, accessToken: token, imageUrl, caption });
       await markConnected(page.id);
 
-      // Promised the reader the link in the comments — add it AS THE PAGE.
+      // Promised the reader the link in the comments — add it AS THE PAGE, with the
+      // news preview image attached (unless disabled) so the comment shows a thumbnail.
       const commentMsg = renderTemplate(share?.commentTemplate || DEFAULT_PHOTO_COMMENT, { url, headline: article.title });
+      const commentImage = share?.commentImage === false ? undefined : imageUrl;
       try {
-        const { commentId } = await commentWithRetry(postId, token, commentMsg);
+        const { commentId } = await commentWithRetry(postId, token, commentMsg, commentImage);
         return { pageDbId: page.id, pageName: page.pageName, ok: true, graphPostId: postId, mode, commentId };
       } catch (ce) {
         return {
@@ -228,8 +243,9 @@ export async function publishArticleToPage(
 export async function addLinkComment(
   postId: string,
   page: PageForPost,
-  article: { slug: string; title: string },
+  article: { slug: string; title: string; coverImage?: string | null },
   commentTemplate?: string,
+  attachImage: boolean = true,
 ): Promise<{ ok: boolean; commentId?: string; error?: string; permission?: boolean }> {
   let token: string;
   try {
@@ -239,8 +255,9 @@ export async function addLinkComment(
   }
   const url = articleUrl(article.slug);
   const message = renderTemplate(commentTemplate || DEFAULT_PHOTO_COMMENT, { url, headline: article.title });
+  const commentImage = attachImage ? (article.coverImage || "").trim() || ogCardImageUrl(article.slug) : undefined;
   try {
-    const { commentId } = await commentWithRetry(postId, token, message);
+    const { commentId } = await commentWithRetry(postId, token, message, commentImage);
     return { ok: true, commentId };
   } catch (e) {
     return {

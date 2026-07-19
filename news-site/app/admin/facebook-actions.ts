@@ -691,7 +691,7 @@ export async function publishArticleNow(input: {
   // Resolve the share mode + templates (override → global default).
   const shareSettings = await getFbShareSettings();
   const mode: ShareMode = input.mode ?? shareSettings.mode;
-  const shareConfig = { mode, caption: input.caption, captionTemplate: shareSettings.captionTemplate, commentTemplate: shareSettings.commentTemplate };
+  const shareConfig = { mode, caption: input.caption, captionTemplate: shareSettings.captionTemplate, commentTemplate: shareSettings.commentTemplate, commentImage: shareSettings.commentImage };
 
   const pages = await prisma.facebookPage.findMany({
     where: { id: { in: input.pageDbIds } },
@@ -1084,7 +1084,7 @@ export async function retryShareComment(input: { id: string }): Promise<ActionRe
   const post = await prisma.scheduledPost.findUnique({
     where: { id: input.id },
     include: {
-      article: { select: { slug: true, title: true } },
+      article: { select: { slug: true, title: true, coverImage: true } },
       facebookPage: { select: { id: true, pageId: true, pageName: true, accessToken: true, status: true } },
     },
   });
@@ -1092,7 +1092,7 @@ export async function retryShareComment(input: { id: string }): Promise<ActionRe
   if (!post.article || !post.facebookPage) return fail("Article or page no longer exists.");
 
   const settings = await getFbShareSettings();
-  const res = await addLinkComment(post.graphPostId, post.facebookPage, post.article, settings.commentTemplate);
+  const res = await addLinkComment(post.graphPostId, post.facebookPage, post.article, settings.commentTemplate, settings.commentImage);
   if (!res.ok) {
     await prisma.scheduledPost
       .update({ where: { id: post.id }, data: { commentError: res.error ?? "Could not add the comment." } })
