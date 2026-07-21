@@ -10,6 +10,7 @@ import {
   getReadNext,
   incrementViews,
 } from "@/lib/queries";
+import { isNonHumanView } from "@/lib/botDetect";
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
@@ -143,12 +144,19 @@ export default async function ArticlePage({ params }: Props) {
   // (mobile/desktop/tablet) parsed from the User-Agent — privacy-respecting: only
   // aggregate per-country and per-device counts are stored, never the IP or the
   // raw UA string. Missing → Unknown country / Desktop.
+  //
+  // Only count REAL human page views: skip bots, link scrapers (e.g. Facebook's
+  // crawler), uptime monitors, and prefetches — so the Admin views / Audience /
+  // Live-readers numbers reflect actual people (and line up with AdsKeeper).
+  // (This does NOT affect the private-gallery Live Audience — that's separate.)
   const h = headers();
-  await incrementViews(
-    article.id,
-    h.get("x-vercel-ip-country"),
-    userAgent({ headers: h }).device.type,
-  );
+  if (!isNonHumanView(h)) {
+    await incrementViews(
+      article.id,
+      h.get("x-vercel-ip-country"),
+      userAgent({ headers: h }).device.type,
+    );
+  }
   const [related, comments] = await Promise.all([
     getReadNext({
       categoryId: article.categoryId,
