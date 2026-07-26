@@ -7,12 +7,26 @@ import { verifyPassword } from "@/lib/password";
 const SESSION_COOKIE = "admin_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days, in seconds
 
+/** Thrown when no session-signing secret is configured in production, so callers
+ *  can turn it into a clear, actionable message instead of an opaque 500. */
+export class AuthConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthConfigError";
+  }
+}
+
 function secret(): string {
-  const value = process.env.AUTH_SECRET;
+  // Accept EITHER secret — mirrors lib/crypto.ts, which reads
+  // `ENCRYPTION_KEY || AUTH_SECRET`. Without this, a deployment that set only
+  // ENCRYPTION_KEY could encrypt tokens fine yet fail every login. Both are
+  // high-entropy app secrets, and each primitive derives its own key (crypto.ts
+  // stretches via scrypt with its own salt), so they never share key material.
+  const value = process.env.AUTH_SECRET || process.env.ENCRYPTION_KEY;
   if (value && value.length > 0) return value;
   // Never sign sessions with a hardcoded secret in production.
   if (process.env.NODE_ENV === "production") {
-    throw new Error(
+    throw new AuthConfigError(
       "AUTH_SECRET is required in production. Set it to a long random value (e.g. `openssl rand -hex 32`).",
     );
   }
