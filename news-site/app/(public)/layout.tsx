@@ -52,13 +52,6 @@ export default async function PublicLayout({
           Independent of AdsKeeper above; each emits nothing until its src is set
           in lib/adsterra.ts and ADSTERRA_ENABLED is true. */}
       <AdsterraScripts />
-      {/* AdsKeeper self-displaying overlays — a floating in-site notification and a
-          click-triggered interstitial. Rendered once so they can appear on every
-          public page (home + articles); each positions/triggers itself per its
-          dashboard settings and only fills on the authorized production domain. */}
-      <AdOverlay widgetId={ads.NOTIFICATION} />
-      <AdOverlay widgetId={ads.INTERSTITIAL} />
-      <AdOverlay widgetId={ads.INTERSTITIAL_2} />
       {/* Slim, dismissible sticky footer bar holding an IAB display banner —
           rendered once so it rides along on every public page; reveals only once
           the ad fills and only on the authorized production domain. */}
@@ -82,6 +75,20 @@ export default async function PublicLayout({
       </div>
       <LedgerNewsletter />
       <LedgerFooter sections={sections} />
+      {/* AdsKeeper self-displaying overlays — the floating in-site notification and
+          the click-triggered interstitials. Rendered once so they ride along on
+          every public page (home + articles); each positions and triggers ITSELF
+          per its dashboard settings.
+          ⚠️ MOUNTED LAST ON PURPOSE. These are plain containers in normal flow.
+          When they sat at the TOP of the layout, an overlay that AdsKeeper filled
+          INLINE (rather than repositioning) rendered above the ticker and masthead
+          and pushed the whole site down — an ad appearing "above the article".
+          Anything that positions itself doesn't care where its container lives, so
+          keeping them after the footer costs those formats nothing and confines an
+          inline render to the very bottom of the page. Do not move these back up. */}
+      <AdOverlay widgetId={ads.NOTIFICATION} />
+      <AdOverlay widgetId={ads.INTERSTITIAL} />
+      <AdOverlay widgetId={ads.INTERSTITIAL_2} />
     </>
   );
 }
