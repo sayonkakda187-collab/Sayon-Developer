@@ -6,13 +6,22 @@ import { Link } from "next-view-transitions";
 import type { CSSProperties } from "react";
 import { deskClass, type LedgerStory } from "@/lib/ledger";
 import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
 import { Kicker } from "./Kicker";
 import { ArrowRight } from "./icons";
 
 /** "Latest Stories": a desk filter pill group over a responsive card grid. The
  *  grid re-keys on filter change so the staggered card entrance re-triggers. */
-export function Latest({ stories, filters }: { stories: LedgerStory[]; filters: string[] }) {
+export function Latest({
+  stories,
+  filters,
+  feedWidgetId,
+}: {
+  stories: LedgerStory[];
+  filters: string[];
+  /** In-feed AdsKeeper widget id, resolved per DOMAIN by the page (each domain
+   *  is its own registered site with its own widget ids). */
+  feedWidgetId: string;
+}) {
   const [cat, setCat] = useState("Top");
   const [pass, setPass] = useState(0);
   const shown = cat === "Top" ? stories : stories.filter((s) => s.cat === cat);
@@ -58,7 +67,7 @@ export function Latest({ stories, filters }: { stories: LedgerStory[]; filters: 
                   ad never lands with little/no content after it. */}
               {i === 5 && shown.length > 8 && (
                 <div className="tl-feed-ad" style={{ gridColumn: "1 / -1" }}>
-                  <AdSlot name="HOME_FEED" widgetId={ADS.HOME_FEED} minHeight={120} />
+                  <AdSlot widgetId={feedWidgetId} minHeight={120} />
                 </div>
               )}
             </Fragment>

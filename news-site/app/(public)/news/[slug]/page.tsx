@@ -18,6 +18,8 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { AdRail } from "@/components/AdRail";
+import { ReadMoreGate } from "@/components/ReadMoreGate";
 import { AdsterraNative } from "@/components/AdsterraNative";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { adsForHost } from "@/lib/ads";
@@ -210,6 +212,25 @@ export default async function ArticlePage({ params }: Props) {
 
   const parts = buildArticleParts(article.content);
 
+  // Gate the story right after the opening — at the first in-article ad, which
+  // is already the natural "after the intro" break. -1 when the piece is too
+  // short to have been split, in which case it renders ungated (nothing to hide).
+  const firstAd = parts.findIndex((p) => p.type === "ad");
+  const gateAt = firstAd !== -1 && firstAd < parts.length - 1 ? firstAd : -1;
+
+  const renderPart = (p: ArticlePart, i: number) =>
+    p.type === "md" ? (
+      <Markdown key={i} content={p.content} />
+    ) : p.type === "ad" ? (
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
+    ) : p.type === "ad2" ? (
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} minHeight={250} />
+    ) : p.type === "ad3" ? (
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
+    ) : (
+      <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
+    );
+
   return (
     <main>
       <script
@@ -218,11 +239,11 @@ export default async function ArticlePage({ params }: Props) {
       />
       <ReadingProgress />
 
-      {/* Top-of-page ad — placed ABOVE the headline + cover (just under the site
-          header) for maximum visibility, per the requested layout. It collapses
-          cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
+      {/* Top LEADERBOARD — a wide banner directly under the nav / breaking bar,
+          above the headline + cover. Collapses cleanly if AdsKeeper returns no
+          ad, so it never leaves an empty box above the story. */}
       <div className="px-4 sm:px-6">
-        <AdSlot name="IN_ARTICLE_TOP" widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
+        <AdSlot widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
       </div>
 
       {/* Immersive hero (headline over cover) */}
@@ -304,143 +325,162 @@ export default async function ArticlePage({ params }: Props) {
         </header>
       )}
 
-      {/* Reading column */}
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <div className="mx-auto max-w-prose">
-          <p className="mb-9 border-l-[3px] border-accent pl-5 text-xl font-medium leading-relaxed text-fg-muted motion-safe:animate-fade-up sm:text-2xl">
-            {article.excerpt}
-          </p>
+      {/* Reading column + the sticky desktop ad rail beside it — the layout the
+          reference site uses. `justify-center` means the story stays centred on
+          its own whenever the rail renders nothing (sidebar widget ids still
+          placeholders, or a phone), so there is never an empty right column. */}
+      <div className="mx-auto flex max-w-[1180px] justify-center gap-8 px-4 py-10 sm:px-6 lg:py-14">
+        <div className="w-full min-w-0 max-w-3xl">
+          <div className="mx-auto max-w-prose">
+            <p className="mb-9 border-l-[3px] border-accent pl-5 text-xl font-medium leading-relaxed text-fg-muted motion-safe:animate-fade-up sm:text-2xl">
+              {article.excerpt}
+            </p>
 
-          {keyPoints.length > 0 && (
-            <aside
-              className="mb-9 rounded-xl border border-border bg-surface p-5 motion-safe:animate-fade-up sm:p-6"
-              aria-label="Key points"
-            >
-              <h2 className="font-display text-xs font-bold uppercase tracking-[0.16em] text-accent-link">
-                Key Points
-              </h2>
-              <ul className="mt-3 space-y-2.5">
-                {keyPoints.map((point, i) => (
-                  <li key={i} className="flex gap-3 text-pretty leading-snug text-fg-muted">
-                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent" />
-                    <span>{point}</span>
+            {keyPoints.length > 0 && (
+              <aside
+                className="mb-9 rounded-xl border border-border bg-surface p-5 motion-safe:animate-fade-up sm:p-6"
+                aria-label="Key points"
+              >
+                <h2 className="font-display text-xs font-bold uppercase tracking-[0.16em] text-accent-link">
+                  Key Points
+                </h2>
+                <ul className="mt-3 space-y-2.5">
+                  {keyPoints.map((point, i) => (
+                    <li key={i} className="flex gap-3 text-pretty leading-snug text-fg-muted">
+                      <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
+
+            <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
+
+            {/* Body with up to two in-article ads — one after the opening (~4th
+                paragraph) and, on longer pieces, a second deeper in the body. The
+                story always renders first; each ad lazy-loads and collapses cleanly
+                when unfilled. */}
+            {gateAt === -1 ? (
+              parts.map((p, i) => renderPart(p, i))
+            ) : (
+              <>
+                {/* Opening of the story — always visible. */}
+                {parts.slice(0, gateAt).map((p, i) => renderPart(p, i))}
+                {/* "Read more" button with the in-article ad directly beneath it.
+                    The remainder is passed as children: rendered into the HTML
+                    (so crawlers read the full article) but visually clamped until
+                    the reader taps. */}
+                <ReadMoreGate
+                  ad={<AdSlot widgetId={ads.IN_ARTICLE} minHeight={120} />}
+                >
+                  {parts.slice(gateAt + 1).map((p, i) => renderPart(p, gateAt + 1 + i))}
+                </ReadMoreGate>
+              </>
+            )}
+
+            {article.tags.length > 0 && (
+              <div className="mt-12 flex flex-wrap gap-2">
+                {article.tags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg-muted"
+                  >
+                    #{tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-10 border-t border-border pt-6">
+              <ShareButtons url={shareUrl} title={article.title} />
+            </div>
+          </div>
+
+          {/* END-OF-ARTICLE "SPONSORED" block — the AdsKeeper recommendation
+              widget, AFTER the story ends (never above it), disclosed as
+              Sponsored the way the reference layout labels this position. */}
+          <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
+
+          {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
+              silent until configured in lib/adsterra.ts. */}
+          <AdsterraNative />
+
+          <section
+            id="comments"
+            aria-label="Comments"
+            className="mx-auto mt-14 max-w-prose border-t border-border pt-10"
+          >
+            <h2 className="font-display text-2xl font-bold tracking-tight">
+              Comments <span className="text-fg-faint">({comments.length})</span>
+            </h2>
+
+            {comments.length === 0 ? (
+              <p className="mt-4 text-fg-muted">
+                No comments yet. Be the first to share your thoughts.
+              </p>
+            ) : (
+              <ul className="mt-6 space-y-4">
+                {comments.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-xl border border-border bg-surface p-5"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-semibold text-fg">{c.authorName}</span>
+                      <time
+                        dateTime={c.createdAt.toISOString()}
+                        className="text-xs text-fg-faint"
+                      >
+                        {formatDate(c.createdAt)}
+                      </time>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap leading-relaxed text-fg-muted">
+                      {c.content}
+                    </p>
                   </li>
                 ))}
               </ul>
-            </aside>
-          )}
+            )}
 
-          <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
-
-          {/* Body with up to two in-article ads — one after the opening (~4th
-              paragraph) and, on longer pieces, a second deeper in the body. The
-              story always renders first; each ad lazy-loads and collapses cleanly
-              when unfilled. */}
-          {parts.map((p, i) =>
-            p.type === "md" ? (
-              <Markdown key={i} content={p.content} />
-            ) : p.type === "ad" ? (
-              <AdSlot key={i} name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />
-            ) : p.type === "ad2" ? (
-              <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ads.IN_ARTICLE_2} />
-            ) : p.type === "ad3" ? (
-              <AdSlot key={i} name="IN_ARTICLE_3" widgetId={ads.IN_ARTICLE_3} />
-            ) : (
-              <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
-            ),
-          )}
-
-          {article.tags.length > 0 && (
-            <div className="mt-12 flex flex-wrap gap-2">
-              {article.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg-muted"
-                >
-                  #{tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-10 border-t border-border pt-6">
-            <ShareButtons url={shareUrl} title={article.title} />
-          </div>
-        </div>
-
-        {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
-            widget lives here, AFTER the story ends (never above it). */}
-        <AdSlot name="RECOMMENDED" widgetId={ads.RECOMMENDED} minHeight={300} />
-
-        {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
-            silent until configured in lib/adsterra.ts. */}
-        <AdsterraNative />
-
-        <section
-          id="comments"
-          aria-label="Comments"
-          className="mx-auto mt-14 max-w-prose border-t border-border pt-10"
-        >
-          <h2 className="font-display text-2xl font-bold tracking-tight">
-            Comments <span className="text-fg-faint">({comments.length})</span>
-          </h2>
-
-          {comments.length === 0 ? (
-            <p className="mt-4 text-fg-muted">
-              No comments yet. Be the first to share your thoughts.
-            </p>
-          ) : (
-            <ul className="mt-6 space-y-4">
-              {comments.map((c) => (
-                <li
-                  key={c.id}
-                  className="rounded-xl border border-border bg-surface p-5"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-fg">{c.authorName}</span>
-                    <time
-                      dateTime={c.createdAt.toISOString()}
-                      className="text-xs text-fg-faint"
-                    >
-                      {formatDate(c.createdAt)}
-                    </time>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap leading-relaxed text-fg-muted">
-                    {c.content}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="mt-10">
-            <h3 className="font-display text-lg font-semibold">Leave a comment</h3>
-            <p className="mt-1 text-sm text-fg-faint">
-              Comments are reviewed before they appear.
-            </p>
-            <CommentForm articleId={article.id} />
-          </div>
-        </section>
-
-        {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
-        <AdSenseSlot enabled={adsOn} slot="article-end" minHeight={300} />
-
-        {related.length > 0 && (
-          <section className="mt-16 border-t border-border pt-10">
-            <Reveal>
-              <h2 className="mb-6 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                Related Stories
-              </h2>
-            </Reveal>
-            <div className="grid gap-x-5 gap-y-8 sm:grid-cols-3">
-              {related.map((item, i) => (
-                <Reveal key={item.id} delay={i * 60}>
-                  <ArticleCard article={item} />
-                </Reveal>
-              ))}
+            <div className="mt-10">
+              <h3 className="font-display text-lg font-semibold">Leave a comment</h3>
+              <p className="mt-1 text-sm text-fg-faint">
+                Comments are reviewed before they appear.
+              </p>
+              <CommentForm articleId={article.id} />
             </div>
           </section>
-        )}
+
+          {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
+          <AdSenseSlot enabled={adsOn} slot="article-end" minHeight={300} />
+
+          {related.length > 0 && (
+            <section className="mt-16 border-t border-border pt-10">
+              <Reveal>
+                <h2 className="mb-6 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                  Related Stories
+                </h2>
+              </Reveal>
+              <div className="grid gap-x-5 gap-y-8 sm:grid-cols-3">
+                {related.map((item, i) => (
+                  <Reveal key={item.id} delay={i * 60}>
+                    <ArticleCard article={item} />
+                  </Reveal>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Stacked sidebar units, desktop only — never mounted on phones, so a
+            reader who cannot see the rail is never served its impressions. */}
+        <AdRail
+          slots={[
+            { name: "SIDEBAR_1", widgetId: ads.SIDEBAR_1 },
+            { name: "SIDEBAR_2", widgetId: ads.SIDEBAR_2 },
+          ]}
+        />
       </div>
     </main>
   );

@@ -53,7 +53,7 @@ export default async function PrivateGalleryPage({
       <GalleryPresence token={params.token} />
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <GalleryView title={gallery.title} images={gallery.images} videos={gallery.videos} />
+        <GalleryView title={gallery.title} images={gallery.images} videos={gallery.videos} ads={ads} />
         {/* Site-wide in-content Feed unit (also runs on the gallery pages). */}
         <div className="mt-6">
           <AdSlot widgetId={ads.SITEWIDE_FEED} minHeight={120} />

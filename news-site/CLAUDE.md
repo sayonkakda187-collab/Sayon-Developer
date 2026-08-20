@@ -197,6 +197,41 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   cleanly** (renders nothing) if the network doesn't fill the slot within ~8s —
   so an unfilled unit never leaves an empty box (important now that a slot sits
   above the headline).
+**Placement map (matched to the reference site the owner picked,
+`brakingnews.today`).** Six positions, all AdsKeeper, all config-driven:
+
+| # | Position | Key | Where it's rendered |
+|---|---|---|---|
+| 1 | Top **leaderboard** under the nav/breaking bar | `IN_ARTICLE_TOP` (article) / `HOME` (home) | article + home page |
+| 2 | **Right sidebar**, two stacked units | `SIDEBAR_1`, `SIDEBAR_2` | `<AdRail>` on `/news/[slug]` |
+| 3 | Banner after the opening (under **Read more**) | `IN_ARTICLE` | article body |
+| 4 | Centred **~300×250 rectangle** deeper in the body | `IN_ARTICLE_2` | article body |
+| 5 | **"SPONSORED"** block at the end of the story | `RECOMMENDED` | article, before comments |
+| 6 | **Leaderboard above the footer** | `SITEWIDE_FEED` | `(public)/layout.tsx`, every page |
+
+`<AdSlot variant>` sets only the WRAPPER shape — `inline` (reading-column width),
+`rect` (centred 336px), `leaderboard` (wide 970px), `rail` (sidebar width). The
+network still decides the creative; the variant just stops a banner position from
+being laid out like a body card. `label` swaps the disclosure text
+("Advertisement" → "Sponsored" for position 5).
+
+**`components/AdRail.tsx`** — the desktop sidebar. Two rules that matter:
+1. It **mounts only at ≥1024px** (`matchMedia` in an effect, not `hidden lg:block`).
+   AdsKeeper's loader scans the whole DOM, so a `display:none` container would
+   still be filled — serving impressions to readers who cannot see them, which is
+   how ad accounts get flagged. Phones never get the containers at all.
+2. It **renders nothing** when none of its ids would show anything (still
+   placeholders / ads off). The article row is a centred flex, so with no rail the
+   story column stays exactly where it is today — never an empty right column.
+   Upper units sit in normal flow; the LAST one is `sticky top-24` so exactly one
+   unit rides along with the reader (a fully-sticky stack overflows the viewport
+   and permanently clips the lower unit).
+
+⚠️ `SIDEBAR_1`/`SIDEBAR_2` are **placeholders in both site sets** — they need
+their OWN widget ids (the rail is on the same page as the in-article units, and a
+widget fills only ONE slot per page). Until they're created in AdsKeeper, the rail
+is simply absent in production.
+
 - **Placement on `/news/[slug]`:** a **TOP-of-page unit ABOVE the headline +
   cover** (just under the site header) — **IN_ARTICLE_TOP** — for maximum
   visibility, per the owner's requested layout. It uses **`2030046`** — the **same
@@ -217,6 +252,13 @@ domain. No DB/auth/backend involvement — these IDs are public and safe to comm
   never jumps the hero down when it fills; collapses cleanly if unfilled.
   `IN_ARTICLE` stays a placeholder (renders nothing in prod) until you add a
   widget id.
+- **Per-domain ids everywhere.** Each domain is its own registered AdsKeeper site
+  with its own widget ids, so every placement resolves through
+  `adsForHost(headers().get("host"))` in the **server component** and is passed
+  down. `Latest.tsx` (homepage in-feed) and `GalleryView.tsx` (the `/g/<token>`
+  pages) used to import `ADS` directly, which meant the **legacy domain served the
+  primary site's placeholder ids** — i.e. no ad at all. They now take their widget
+  ids as props. Client components must **never** import `ADS` for a widget id.
 
 ## Google AdSense (account script + ads.txt)
 

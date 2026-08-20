@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
+import type { ADS } from "@/lib/ads";
 
 // In-content AdsKeeper widget ids interspersed among the images. Each id appears
 // ONCE on this page (a widget fills only one slot per page). GALLERY_FEED (2047583)
@@ -13,19 +13,40 @@ import { ADS } from "@/lib/ads";
 // in-site NOTIFICATIONS — 2047612 / 2047642 — are NOT here; they're self-displaying
 // overlays mounted on the gallery page.) Layout: a header unit up top, feed units
 // woven into the grid, a recommendation unit at the end. All AdsKeeper.
-const TOP_AD = ADS.HOME;
-const FEED_ADS = [ADS.GALLERY_FEED, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
-const END_AD = ADS.RECOMMENDED;
+/** Widget ids for this page, resolved per DOMAIN by the server component (each
+ *  domain is its own registered AdsKeeper site with its own widget ids). */
+export type GalleryAds = Pick<
+  typeof ADS,
+  "HOME" | "GALLERY_FEED" | "IN_ARTICLE" | "IN_ARTICLE_2" | "IN_ARTICLE_3" | "RECOMMENDED"
+>;
 
 export function GalleryView({
   title,
   images,
   videos = [],
+  ads,
 }: {
   title: string;
   images: string[];
   videos?: string[];
+  ads: GalleryAds;
 }) {
+  // A widget fills only ONE slot per page, so the same id must never appear in
+  // two containers here — and ids ARE shared across placements on purpose (a
+  // site with few widgets puts one id on several PAGES). Keep the first use of
+  // each id and drop any repeat, so a shared id can't quietly cost this page its
+  // ad. Placeholder ids differ per key, so they never collide.
+  const used = new Set<string>();
+  const once = (id: string): string | null => {
+    if (used.has(id)) return null;
+    used.add(id);
+    return id;
+  };
+  const TOP_AD = once(ads.HOME);
+  const FEED_ADS = [ads.GALLERY_FEED, ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3]
+    .map(once)
+    .filter((id): id is string => id !== null);
+  const END_AD = once(ads.RECOMMENDED);
   const [active, setActive] = useState<number | null>(null);
 
   // While the viewer is open: lock scroll, close on Esc, arrow-key navigation.
@@ -85,7 +106,7 @@ export function GalleryView({
         {title}
       </h1>
 
-      <AdSlot widgetId={TOP_AD} minHeight={120} />
+      {TOP_AD && <AdSlot widgetId={TOP_AD} minHeight={120} />}
 
       {videos.length > 0 && (
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -108,9 +129,11 @@ export function GalleryView({
         <p className="py-16 text-center text-fg-muted">This gallery is empty.</p>
       ) : null}
 
-      <div className="mt-6">
-        <AdSlot widgetId={END_AD} minHeight={250} />
-      </div>
+      {END_AD && (
+        <div className="mt-6">
+          <AdSlot widgetId={END_AD} minHeight={250} />
+        </div>
+      )}
 
       {/* Tap-to-enlarge viewer */}
       {active !== null && images[active] ? (

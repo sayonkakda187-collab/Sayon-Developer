@@ -134,6 +134,16 @@ export const ADS_LEGACY = {
    *  them in an <AdSlot>. */
   GALLERY_NOTIFICATION_1: "2047612",
   GALLERY_NOTIFICATION_2: "2047642",
+  /** DESKTOP SIDEBAR — the two stacked units in the sticky right rail beside the
+   *  article body (<AdRail>, desktop only; phones/tablets never mount them).
+   *  They need their OWN widget ids: the rail sits on the SAME page as the
+   *  in-article units, and a widget fills only ONE slot per page. Placeholders
+   *  until you create them, so the rail simply doesn't render — the story column
+   *  stays centred exactly as it is today, with no empty column. Create two
+   *  In-content / Feed (or IAB display) widgets in AdsKeeper and paste them here.
+   *  Tall formats work best; the rail is 300px wide. */
+  SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
+  SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
   /** SITE-WIDE in-content FEED unit (AdsKeeper Feed widget 2047761) — a native
    *  in-content card row rendered ONCE near the bottom of every public page
    *  (home / article / category / search) via <AdSlot> in the public layout, and
@@ -144,20 +154,48 @@ export const ADS_LEGACY = {
 } as const;
 
 /**
- * Widgets for ledgerdailynews.com (AdsKeeper site 1108814).
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ledgerdailynews.com — AdsKeeper site 1108814.  RESET: no widgets assigned.
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * AdsKeeper approved this domain as a SEPARATE website, so it starts with its
- * own widget inventory — the legacy ids above belong to dailyledger.today and
- * would never fill here. Only one widget exists so far, so every other slot is
- * a placeholder and collapses cleanly (no empty boxes).
+ * Every placement below is empty, so this domain currently shows NO ads at all
+ * — no banners, no sidebar, no pop-up, no sticky bar. Empty slots render
+ * nothing (not an empty box), so the pages stay clean.
  *
- * 2070887 is a FEED / in-content widget, mapped to SITEWIDE_FEED because that
- * is the single placement rendered on EVERY public page — home, article,
- * category, search and the galleries — so one widget covers the whole site.
- * To fill the remaining slots, create more widgets under site 1108814 and paste
- * their ids here (keep the formats matching: Feed/Header -> <AdSlot> slots,
- * In-site Notification / Interstitial -> the *NOTIFICATION* / *INTERSTITIAL*
- * keys, IAB display -> STICKY_FOOTER).
+ * ── Adding an ad back ───────────────────────────────────────────────────────
+ * Create a widget in AdsKeeper under site 1108814, then paste its id over the
+ * matching placeholder below. Nothing else needs to change — the slot starts
+ * serving on the next deploy.
+ *
+ *  #   PLACEMENT KEY            WHERE IT APPEARS                    FORMAT
+ *  1   IN_ARTICLE_TOP           article · above the headline        Feed / in-content
+ *  2   IN_ARTICLE               article · under "Read more"         Feed / in-content
+ *  3   IN_ARTICLE_2             article · middle of the story       Feed / in-content
+ *  4   IN_ARTICLE_3             article · deep in long stories      Feed / in-content
+ *  5   RECOMMENDED              article · end, the "Sponsored" box  Feed / in-content
+ *  6   SIDEBAR_1                article · sidebar, upper (desktop)  Feed / in-content
+ *  7   SIDEBAR_2                article · sidebar, lower (desktop)  Feed / in-content
+ *  8   HOME                     homepage · top of the feed          Feed / in-content
+ *  9   HOME_FEED                homepage · inside the story grid    Feed / in-content
+ * 10   SITEWIDE_FEED            every page · above the footer       Feed / in-content
+ * 11   GALLERY_FEED             /g/<token> galleries                Feed / in-content
+ * 12   NOTIFICATION             floats over every page              In-site notification
+ * 13   GALLERY_NOTIFICATION_1   floats over the galleries           In-site notification
+ * 14   GALLERY_NOTIFICATION_2   floats over the galleries           In-site notification
+ * 15   INTERSTITIAL             full-screen pop-up after N clicks   Interstitial
+ * 16   INTERSTITIAL_2           second full-screen pop-up           Interstitial
+ * 17   STICKY_FOOTER            slim bar pinned to the bottom       IAB display banner
+ *
+ * ⚠️ ONE WIDGET PER PAGE. An AdsKeeper widget fills only one slot on any given
+ * page, so two placements that appear on the SAME page need DIFFERENT ids
+ * (#1-#7 and #10 all share the article page). The same id CAN be reused across
+ * different pages — e.g. one id on #2 and #8 fills on both the article and the
+ * homepage. <GalleryView> de-duplicates ids for the gallery page automatically.
+ *
+ * ⚠️ IDS ARE NOT PORTABLE BETWEEN SITES. ADS_LEGACY's ids belong to AdsKeeper
+ * site 1097964 (dailyledger.today) and return nothing here. To use them on this
+ * domain, ask AdsKeeper to add ledgerdailynews.com as an additional domain on
+ * site 1097964 — then adsForHost() can simply return ADS_LEGACY for both hosts.
  */
 export const ADS_PRIMARY = {
   IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
@@ -168,16 +206,15 @@ export const ADS_PRIMARY = {
   HOME: "REPLACE_WITH_HOME_ID",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
-  /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
-   *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
-  INTERSTITIAL: "2070915",
+  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
   GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
-  /** Approved Feed / in-content widget for ledgerdailynews.com. */
-  SITEWIDE_FEED: "2070887",
+  SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
+  SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
+  SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
 } as const;
 
 /** Back-compat alias + the source of the placement-name type. */
@@ -235,4 +272,23 @@ export function adsHeadEnabled(siteId: string = ADSKEEPER_SITE_ID): boolean {
 /** Whether a specific placement should render a real ad. */
 export function adSlotLive(widgetId: string): boolean {
   return ADS_ENABLED && !isPlaceholder(widgetId);
+}
+
+/**
+ * Whether a NOT-live slot should still draw its labeled dashed placeholder —
+ * true in local dev and on Vercel *preview* deployments (so placements can be
+ * reviewed before the widget ids exist), never on the production domain.
+ */
+export function adSlotPlaceholder(widgetId: string): boolean {
+  return (
+    !adSlotLive(widgetId) &&
+    (process.env.NODE_ENV !== "production" ||
+      process.env.NEXT_PUBLIC_VERCEL_ENV === "preview")
+  );
+}
+
+/** Whether a slot puts ANYTHING on the page (a real ad or the placeholder).
+ *  Used by <AdRail> so an all-placeholder rail takes up no column at all. */
+export function adSlotRenders(widgetId: string): boolean {
+  return adSlotLive(widgetId) || adSlotPlaceholder(widgetId);
 }
