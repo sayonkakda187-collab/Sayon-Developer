@@ -170,14 +170,14 @@ export const ADS_PRIMARY = {
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
-  INTERSTITIAL: "2070915",
+  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
   GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
   /** Approved Feed / in-content widget for ledgerdailynews.com. */
-  SITEWIDE_FEED: "2070887",
+  SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
 } as const;
 
 /** Back-compat alias + the source of the placement-name type. */
