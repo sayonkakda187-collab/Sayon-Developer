@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ADS, adSlotLive } from "@/lib/ads";
+import { ADS, adSlotLive, adSlotPlaceholder } from "@/lib/ads";
 
 declare global {
   interface Window {
@@ -13,6 +13,23 @@ declare global {
 
 /** Config key a placeholder maps to, shown in dev so you know what to fill in. */
 type AdName = keyof typeof ADS;
+
+/**
+ * Shape of the unit — only the WRAPPER's width/spacing, never the creative
+ * itself (the network decides what it serves). Matches the reference layout:
+ *   • inline      — reading-column width, between paragraphs (default)
+ *   • rect        — a centred ~300x250 rectangle deeper in the body
+ *   • leaderboard — a wide banner across the top of the page / above the footer
+ *   • rail        — full width of the sticky desktop sidebar (see <AdRail>)
+ */
+export type AdVariant = "inline" | "rect" | "leaderboard" | "rail";
+
+const VARIANT_CLASS: Record<AdVariant, string> = {
+  inline: "mx-auto my-8 w-full max-w-prose",
+  rect: "mx-auto my-8 w-full max-w-[336px]",
+  leaderboard: "mx-auto my-6 w-full max-w-[970px]",
+  rail: "w-full",
+};
 
 /**
  * One AdsKeeper ad placement.
@@ -36,6 +53,8 @@ export function AdSlot({
   widgetId,
   name,
   minHeight = 280,
+  variant = "inline",
+  label = "Advertisement",
   className,
 }: {
   widgetId: string;
@@ -43,16 +62,17 @@ export function AdSlot({
   name?: AdName;
   /** Reserved height (px) to prevent layout shift while the ad loads. */
   minHeight?: number;
+  /** Wrapper shape — see AdVariant. */
+  variant?: AdVariant;
+  /** Disclosure text above the unit ("Sponsored" for the end-of-article set). */
+  label?: string;
   className?: string;
 }) {
   const live = adSlotLive(widgetId);
   // Show the labeled placeholder where it helps review — local dev and Vercel
   // preview deployments — but never to real visitors on the production domain.
   // (Vercel auto-exposes NEXT_PUBLIC_VERCEL_ENV = "production" | "preview".)
-  const showPlaceholder =
-    !live &&
-    (process.env.NODE_ENV !== "production" ||
-      process.env.NEXT_PUBLIC_VERCEL_ENV === "preview");
+  const showPlaceholder = adSlotPlaceholder(widgetId);
   const wrapRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   // Flips true when the network returns no ad, collapsing the slot cleanly.
@@ -131,12 +151,12 @@ export function AdSlot({
 
   return (
     <div
-      className={`mx-auto my-8 w-full max-w-prose ${className ?? ""}`}
+      className={`${VARIANT_CLASS[variant]} ${className ?? ""}`}
       role="complementary"
-      aria-label="Advertisement"
+      aria-label={label}
     >
       <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-faint">
-        Advertisement
+        {label}
       </p>
       {live ? (
         <div

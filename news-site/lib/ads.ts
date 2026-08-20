@@ -134,6 +134,16 @@ export const ADS_LEGACY = {
    *  them in an <AdSlot>. */
   GALLERY_NOTIFICATION_1: "2047612",
   GALLERY_NOTIFICATION_2: "2047642",
+  /** DESKTOP SIDEBAR — the two stacked units in the sticky right rail beside the
+   *  article body (<AdRail>, desktop only; phones/tablets never mount them).
+   *  They need their OWN widget ids: the rail sits on the SAME page as the
+   *  in-article units, and a widget fills only ONE slot per page. Placeholders
+   *  until you create them, so the rail simply doesn't render — the story column
+   *  stays centred exactly as it is today, with no empty column. Create two
+   *  In-content / Feed (or IAB display) widgets in AdsKeeper and paste them here.
+   *  Tall formats work best; the rail is 300px wide. */
+  SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
+  SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
   /** SITE-WIDE in-content FEED unit (AdsKeeper Feed widget 2047761) — a native
    *  in-content card row rendered ONCE near the bottom of every public page
    *  (home / article / category / search) via <AdSlot> in the public layout, and
@@ -176,6 +186,9 @@ export const ADS_PRIMARY = {
   GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
+  /** Desktop right-rail units — see the SIDEBAR_* note in ADS_LEGACY above. */
+  SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
+  SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
   /** Approved Feed / in-content widget for ledgerdailynews.com. */
   SITEWIDE_FEED: "2070887",
 } as const;
@@ -235,4 +248,23 @@ export function adsHeadEnabled(siteId: string = ADSKEEPER_SITE_ID): boolean {
 /** Whether a specific placement should render a real ad. */
 export function adSlotLive(widgetId: string): boolean {
   return ADS_ENABLED && !isPlaceholder(widgetId);
+}
+
+/**
+ * Whether a NOT-live slot should still draw its labeled dashed placeholder —
+ * true in local dev and on Vercel *preview* deployments (so placements can be
+ * reviewed before the widget ids exist), never on the production domain.
+ */
+export function adSlotPlaceholder(widgetId: string): boolean {
+  return (
+    !adSlotLive(widgetId) &&
+    (process.env.NODE_ENV !== "production" ||
+      process.env.NEXT_PUBLIC_VERCEL_ENV === "preview")
+  );
+}
+
+/** Whether a slot puts ANYTHING on the page (a real ad or the placeholder).
+ *  Used by <AdRail> so an all-placeholder rail takes up no column at all. */
+export function adSlotRenders(widgetId: string): boolean {
+  return adSlotLive(widgetId) || adSlotPlaceholder(widgetId);
 }

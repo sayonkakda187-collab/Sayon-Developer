@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
+import type { ADS } from "@/lib/ads";
 
 // In-content AdsKeeper widget ids interspersed among the images. Each id appears
 // ONCE on this page (a widget fills only one slot per page). GALLERY_FEED (2047583)
@@ -13,19 +13,27 @@ import { ADS } from "@/lib/ads";
 // in-site NOTIFICATIONS — 2047612 / 2047642 — are NOT here; they're self-displaying
 // overlays mounted on the gallery page.) Layout: a header unit up top, feed units
 // woven into the grid, a recommendation unit at the end. All AdsKeeper.
-const TOP_AD = ADS.HOME;
-const FEED_ADS = [ADS.GALLERY_FEED, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
-const END_AD = ADS.RECOMMENDED;
+/** Widget ids for this page, resolved per DOMAIN by the server component (each
+ *  domain is its own registered AdsKeeper site with its own widget ids). */
+export type GalleryAds = Pick<
+  typeof ADS,
+  "HOME" | "GALLERY_FEED" | "IN_ARTICLE" | "IN_ARTICLE_2" | "IN_ARTICLE_3" | "RECOMMENDED"
+>;
 
 export function GalleryView({
   title,
   images,
   videos = [],
+  ads,
 }: {
   title: string;
   images: string[];
   videos?: string[];
+  ads: GalleryAds;
 }) {
+  const TOP_AD = ads.HOME;
+  const FEED_ADS = [ads.GALLERY_FEED, ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3];
+  const END_AD = ads.RECOMMENDED;
   const [active, setActive] = useState<number | null>(null);
 
   // While the viewer is open: lock scroll, close on Esc, arrow-key navigation.

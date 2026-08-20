@@ -72,10 +72,16 @@ export default async function PublicLayout({
         <MarketsTicker />
       </Suspense>
       <div className="flex-1">{children}</div>
-      {/* Site-wide in-content Feed unit — renders once near the bottom of every
-          public page (home / article / category / search). Collapses if unfilled. */}
+      {/* Site-wide FOOTER LEADERBOARD — the wide banner above the newsletter +
+          footer on every public page (home / article / category / search), the
+          position the reference layout uses. Collapses if unfilled. */}
       <div className="px-4 sm:px-6">
-        <AdSlot widgetId={ads.SITEWIDE_FEED} minHeight={120} />
+        <AdSlot
+          name="SITEWIDE_FEED"
+          widgetId={ads.SITEWIDE_FEED}
+          variant="leaderboard"
+          minHeight={120}
+        />
         {/* Adsterra fixed-size footer banner — reserves its exact size so it
             never shifts the layout, and renders nothing until configured. */}
         <AdsterraBanner banner={BANNERS.FOOTER} />

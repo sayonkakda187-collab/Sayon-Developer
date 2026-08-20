@@ -48,15 +48,15 @@ export default async function Home() {
       {/* Most Read — top stories by views over the last 7 days (cached ~15 min). */}
       <MostRead />
 
-      {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
+      {/* AdsKeeper HOME leaderboard — kept for revenue; collapses when unfilled. */}
       <div style={{ padding: "28px 0" }}>
-        <AdSlot name="HOME" widgetId={ads.HOME} minHeight={120} />
+        <AdSlot name="HOME" widgetId={ads.HOME} variant="leaderboard" minHeight={120} />
       </div>
 
       {/* Reserved Google AdSense slot between the upper sections and the feed. */}
       <AdSenseSlot enabled={adsOn} slot="home-mid" className="max-w-3xl" />
 
-      <Latest stories={pool} filters={filters} />
+      <Latest stories={pool} filters={filters} feedWidgetId={ads.HOME_FEED} />
     </main>
   );
 }
