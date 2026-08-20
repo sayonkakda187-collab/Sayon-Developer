@@ -171,21 +171,24 @@ export const ADS_PRIMARY = {
    *  below the hero, which is not a header position. */
   IN_ARTICLE_TOP: "2070978",
   IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
-  /** In-content unit directly BELOW the "Key Points" box. Empty — 2071266 turned
-   *  out to be an In-site Notification (self-displaying), so it moved to
-   *  NOTIFICATION below. The position stays, ready for a Feed/in-content id. */
-  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
+  /** Directly BELOW the "Key Points" box, at the owner's explicit request.
+   *  ⚠️ 2071266 is an IN-SITE NOTIFICATION in the AdsKeeper dashboard — a
+   *  self-positioning format that renders as a floating card wherever its
+   *  dashboard POSITION says (currently TOP). Putting its container here does
+   *  NOT make it appear inline; the format decides that, not the markup. It was
+   *  MOVED here rather than copied: it previously ran site-wide via <AdOverlay>,
+   *  and two containers sharing one id on a page fight over the single fill.
+   *  A genuinely inline unit here needs an In-content / Feed widget. */
+  AFTER_KEY_POINTS: "2071266",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
   HOME: "REPLACE_WITH_HOME_ID",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
-  /** In-site NOTIFICATION 2071266 — a self-displaying floating card (dashboard:
-   *  type "In-site notification", position TOP, 5 rows, re-runs every 40s).
-   *  Mounted ONCE site-wide via <AdOverlay> in (public)/layout.tsx, so it rides
-   *  along on the homepage, every article, category and search. It positions and
-   *  triggers ITSELF — it must never go in an in-content <AdSlot>. */
-  NOTIFICATION: "2071266",
+  /** Site-wide floating notification. Empty: 2071266 moved to AFTER_KEY_POINTS
+   *  above, so it now loads only on article pages — the homepage, category and
+   *  search pages lost their one unit. Put an id back here to restore that. */
+  NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
