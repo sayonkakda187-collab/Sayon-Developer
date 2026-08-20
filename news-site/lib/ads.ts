@@ -168,7 +168,9 @@ export const ADS_PRIMARY = {
   HOME: "REPLACE_WITH_HOME_ID",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
-  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
+  /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
+   *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
+  INTERSTITIAL: "2070915",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
   GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
