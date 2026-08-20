@@ -1,7 +1,7 @@
 // Production domain — the canonical public origin. Used as the fallback so a
 // production build NEVER emits localhost canonical/og:url tags (which break
 // Facebook/Twitter share previews), even if NEXT_PUBLIC_SITE_URL is unset.
-const PRODUCTION_URL = "https://dailyledger.today";
+const PRODUCTION_URL = "https://ledgerdailynews.com";
 
 /**
  * Absolute base URL for metadata/Open Graph, canonical tags, the sitemap, and

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "The terms governing your use of The Daily Ledger (dailyledger.today).",
+  description: "The terms governing your use of The Daily Ledger (ledgerdailynews.com).",
 };
 
 const heading = "font-display text-2xl font-semibold tracking-tight text-fg sm:text-3xl";
@@ -20,7 +20,7 @@ export default function TermsPage() {
 
       <div className="mt-8 space-y-8">
         <p className={para}>
-          {`Welcome to The Daily Ledger (dailyledger.today). By accessing or using this Site, you agree to these Terms of Service. If you do not agree, please do not use the Site.`}
+          {`Welcome to The Daily Ledger (ledgerdailynews.com). By accessing or using this Site, you agree to these Terms of Service. If you do not agree, please do not use the Site.`}
         </p>
 
         <section className="space-y-3">

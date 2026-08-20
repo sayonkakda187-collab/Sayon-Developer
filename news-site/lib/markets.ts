@@ -44,7 +44,7 @@ async function fetchQuote(spec: SymbolSpec): Promise<Quote | null> {
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; DailyLedger/1.0; +https://dailyledger.today)",
+        "User-Agent": "Mozilla/5.0 (compatible; DailyLedger/1.0; +https://ledgerdailynews.com)",
         Accept: "application/json",
       },
       signal: controller.signal,

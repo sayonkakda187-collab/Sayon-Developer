@@ -45,7 +45,7 @@ const MIN_WIDTH = 1200;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const UTM = "utm_source=the_daily_ledger&utm_medium=referral";
 // Wikimedia asks for a descriptive User-Agent identifying the app + contact.
-const WIKI_UA = "TheDailyLedger/1.0 (https://dailyledger.today; featured-image search)";
+const WIKI_UA = "TheDailyLedger/1.0 (https://ledgerdailynews.com; featured-image search)";
 
 const LABELS: Record<ImageSourceId, string> = {
   pexels: "Pexels",

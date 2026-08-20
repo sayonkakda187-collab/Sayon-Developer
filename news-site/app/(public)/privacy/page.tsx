@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
       <div className="mt-8 space-y-8">
         <p className={para}>
-          {`The Daily Ledger ("we", "us", or "our") operates the website dailyledger.today (the "Site"). This Privacy Policy explains how we collect, use, and protect information when you visit the Site, and the choices you have. By using the Site, you agree to this Privacy Policy.`}
+          {`The Daily Ledger ("we", "us", or "our") operates the website ledgerdailynews.com (the "Site"). This Privacy Policy explains how we collect, use, and protect information when you visit the Site, and the choices you have. By using the Site, you agree to this Privacy Policy.`}
         </p>
 
         <section className="space-y-3">

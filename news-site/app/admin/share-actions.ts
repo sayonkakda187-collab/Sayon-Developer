@@ -14,7 +14,7 @@ import { siteConfig } from "@/lib/site";
 export type ShareInfo = {
   id: string;
   title: string;
-  /** Public canonical URL, e.g. https://dailyledger.today/news/{slug}. */
+  /** Public canonical URL, e.g. https://ledgerdailynews.com/news/{slug}. */
   url: string;
   /** Absolute cover image URL (matches the OG image), or null if none set. */
   image: string | null;

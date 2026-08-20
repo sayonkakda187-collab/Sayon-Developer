@@ -12,7 +12,7 @@ function ensure(): boolean {
   const pub = process.env.VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv) return false;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:noreply@dailyledger.today", pub, priv);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:noreply@ledgerdailynews.com", pub, priv);
   ready = true;
   return true;
 }
