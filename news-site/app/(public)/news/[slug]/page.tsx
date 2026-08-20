@@ -18,6 +18,7 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { ReadMoreGate } from "@/components/ReadMoreGate";
 import { AdsterraNative } from "@/components/AdsterraNative";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { adsForHost } from "@/lib/ads";
@@ -210,6 +211,25 @@ export default async function ArticlePage({ params }: Props) {
 
   const parts = buildArticleParts(article.content);
 
+  // Gate the story right after the opening — at the first in-article ad, which
+  // is already the natural "after the intro" break. -1 when the piece is too
+  // short to have been split, in which case it renders ungated (nothing to hide).
+  const firstAd = parts.findIndex((p) => p.type === "ad");
+  const gateAt = firstAd !== -1 && firstAd < parts.length - 1 ? firstAd : -1;
+
+  const renderPart = (p: ArticlePart, i: number) =>
+    p.type === "md" ? (
+      <Markdown key={i} content={p.content} />
+    ) : p.type === "ad" ? (
+      <AdSlot key={i} name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />
+    ) : p.type === "ad2" ? (
+      <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ads.IN_ARTICLE_2} />
+    ) : p.type === "ad3" ? (
+      <AdSlot key={i} name="IN_ARTICLE_3" widgetId={ads.IN_ARTICLE_3} />
+    ) : (
+      <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
+    );
+
   return (
     <main>
       <script
@@ -336,18 +356,22 @@ export default async function ArticlePage({ params }: Props) {
               paragraph) and, on longer pieces, a second deeper in the body. The
               story always renders first; each ad lazy-loads and collapses cleanly
               when unfilled. */}
-          {parts.map((p, i) =>
-            p.type === "md" ? (
-              <Markdown key={i} content={p.content} />
-            ) : p.type === "ad" ? (
-              <AdSlot key={i} name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />
-            ) : p.type === "ad2" ? (
-              <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ads.IN_ARTICLE_2} />
-            ) : p.type === "ad3" ? (
-              <AdSlot key={i} name="IN_ARTICLE_3" widgetId={ads.IN_ARTICLE_3} />
-            ) : (
-              <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
-            ),
+          {gateAt === -1 ? (
+            parts.map((p, i) => renderPart(p, i))
+          ) : (
+            <>
+              {/* Opening of the story — always visible. */}
+              {parts.slice(0, gateAt).map((p, i) => renderPart(p, i))}
+              {/* "Read more" button with the in-article ad directly beneath it.
+                  The remainder is passed as children: rendered into the HTML
+                  (so crawlers read the full article) but visually clamped until
+                  the reader taps. */}
+              <ReadMoreGate
+                ad={<AdSlot name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />}
+              >
+                {parts.slice(gateAt + 1).map((p, i) => renderPart(p, gateAt + 1 + i))}
+              </ReadMoreGate>
+            </>
           )}
 
           {article.tags.length > 0 && (

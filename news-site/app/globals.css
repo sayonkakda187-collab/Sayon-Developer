@@ -3327,3 +3327,63 @@ button.adm-pc-back { background: none; border: 0; padding: 0; margin: 0; font: i
   .adm-portal-tabs { max-width: none; }
   .adm-portal-foot { padding: 14px 12px; font-size: 11.5px; }
 }
+
+/* ── "Read more" article gate ────────────────────────────────────────────────
+   Opening of the story stays visible; the rest is CLAMPED (never removed from
+   the DOM, so crawlers still read the whole article) until the reader taps the
+   button. The in-article ad sits directly beneath the button. */
+.rmg-cta {
+  position: relative;
+  margin-top: -1.5rem; /* pull the fade up over the last lines of the opening */
+  padding-top: 1.5rem;
+}
+.rmg-fade {
+  position: absolute;
+  inset: -4.5rem 0 auto 0;
+  height: 4.5rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(var(--bg) / 0), rgb(var(--bg) / 0.92));
+}
+.rmg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px; /* comfortable tap target on phones */
+  padding: 0.85rem 1.25rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.75rem;
+  background: rgb(var(--surface));
+  color: rgb(var(--fg));
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.rmg-btn:hover {
+  background: rgb(var(--surface-2));
+  border-color: rgb(var(--fg-faint));
+}
+.rmg-btn:active { transform: translateY(1px); }
+.rmg-btn:focus-visible {
+  outline: 2px solid rgb(var(--fg));
+  outline-offset: 2px;
+}
+
+/* Collapsed: clipped to zero height but still present in the HTML. */
+.rmg-rest {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.45s ease, opacity 0.3s ease;
+}
+.rmg-rest.is-open {
+  max-height: none;
+  overflow: visible;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rmg-rest { transition: none; }
+  .rmg-btn { transition: none; }
+}
