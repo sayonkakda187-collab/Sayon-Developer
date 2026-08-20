@@ -201,7 +201,37 @@ export const ADS_PRIMARY = {
 /** Back-compat alias + the source of the placement-name type. */
 export const ADS = ADS_PRIMARY;
 
-export type AdSiteConfig = { siteId: string; ads: typeof ADS_PRIMARY };
+/**
+ * Ordered widget ids for the AFTER-EACH-SECTION slots in the article body — one
+ * ad below every "## " section of the story, in this order.
+ *
+ * ⚠️ THE LENGTH OF THIS LIST IS THE MAXIMUM NUMBER OF SECTION ADS AN ARTICLE CAN
+ * SHOW. An AdsKeeper widget fills only ONE container per page, so repeating an id
+ * to cover more sections does not produce more ads — the extra containers simply
+ * stay empty and remove themselves. To put an ad under every section of a story
+ * with N sections, this needs N DISTINCT In-content / Feed widget ids.
+ *
+ * Ids used elsewhere on the article page (IN_ARTICLE_TOP above the headline,
+ * RECOMMENDED at the end) must NOT be repeated here, for the same reason. Only
+ * in-content formats belong here — an In-site Notification or Interstitial
+ * positions itself and will never fill an in-body container.
+ */
+export const SECTION_ADS_LEGACY: readonly string[] = [
+  ADS_LEGACY.IN_ARTICLE, // 2019813
+  ADS_LEGACY.IN_ARTICLE_2, // 2019769
+  ADS_LEGACY.IN_ARTICLE_3, // 2044290
+];
+
+/** Section-ad ids for ledgerdailynews.com. Empty until Feed widgets exist under
+ *  site 1108814 — one per section you want covered. */
+export const SECTION_ADS_PRIMARY: readonly string[] = [];
+
+export type AdSiteConfig = {
+  siteId: string;
+  ads: typeof ADS_PRIMARY;
+  /** Ids for the after-each-section article slots, in order. */
+  sectionAds: readonly string[];
+};
 
 /**
  * Pick the AdsKeeper site + widget set for a request host. Pure and
@@ -213,9 +243,13 @@ export type AdSiteConfig = { siteId: string; ads: typeof ADS_PRIMARY };
 export function adsForHost(host?: string | null): AdSiteConfig {
   const h = (host || "").toLowerCase();
   if (h.includes("dailyledger.today")) {
-    return { siteId: SITE_ID_LEGACY, ads: ADS_LEGACY as unknown as typeof ADS_PRIMARY };
+    return {
+      siteId: SITE_ID_LEGACY,
+      ads: ADS_LEGACY as unknown as typeof ADS_PRIMARY,
+      sectionAds: SECTION_ADS_LEGACY,
+    };
   }
-  return { siteId: SITE_ID_PRIMARY, ads: ADS_PRIMARY };
+  return { siteId: SITE_ID_PRIMARY, ads: ADS_PRIMARY, sectionAds: SECTION_ADS_PRIMARY };
 }
 
 // 3) Master on/off switch. Leave false until your IDs above are real.

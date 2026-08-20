@@ -27,7 +27,14 @@ import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
 
-type ArticlePart = { type: "md"; content: string } | { type: "ad" } | { type: "ad2" } | { type: "ad3" } | { type: "adsense" };
+type ArticlePart =
+  | { type: "md"; content: string }
+  | { type: "ad" }
+  | { type: "ad2" }
+  | { type: "ad3" }
+  | { type: "adsense" }
+  /** An after-a-section slot; `slot` indexes into the host's sectionAds list. */
+  | { type: "section"; slot: number };
 
 // Homepage (with required UTM for Unsplash) for the cover credit line's source link.
 const COVER_SOURCE_HOME: Record<string, string> = {
@@ -36,6 +43,51 @@ const COVER_SOURCE_HOME: Record<string, string> = {
   Pixabay: "https://pixabay.com",
   "Wikimedia Commons": "https://commons.wikimedia.org",
 };
+
+/**
+ * One ad below every "## " section of the story.
+ *
+ * Sections are the H2 headings the articles are written with ("Trump Delays 50%
+ * Tariffs", "Consumers Could Feel the Effects", …). A slot goes after each
+ * section EXCEPT the last — an ad there would sit directly above the
+ * end-of-article unit, stacking two ads back to back.
+ *
+ * ⚠️ Capped at `sectionAdCount`, the number of DISTINCT widget ids the host has
+ * for these slots. An AdsKeeper widget fills only one container per page, so
+ * emitting more containers than ids would just add empty ones. Sections beyond
+ * the cap simply run on without an ad.
+ *
+ * Returns null when the piece has fewer than two headings — nothing to divide —
+ * so the caller can fall back to paragraph-based placement.
+ */
+function buildSectionParts(blocks: string[], sectionAdCount: number): ArticlePart[] | null {
+  // A heading block starts with "## " (H2). "###" and deeper stay inside a section.
+  const isHeading = (b: string) => /^##\s+\S/.test(b.trim()) && !/^###/.test(b.trim());
+  const headings = blocks.reduce<number[]>((acc, b, i) => (isHeading(b) ? [...acc, i] : acc), []);
+  if (headings.length < 2) return null;
+
+  // Section boundaries: intro (before the first heading, may be empty) then one
+  // run per heading. Cuts land ON a heading, so each ad closes the section above.
+  const bounds = headings[0] === 0 ? headings : [0, ...headings];
+  const parts: ArticlePart[] = [];
+  let used = 0;
+  for (let i = 0; i < bounds.length; i++) {
+    const start = bounds[i];
+    const end = i + 1 < bounds.length ? bounds[i + 1] : blocks.length;
+    const body = blocks.slice(start, end).join("\n\n");
+    if (body.trim()) parts.push({ type: "md", content: body });
+    // No ad after the final section — it would collide with the end-of-article unit.
+    const isLast = i === bounds.length - 1;
+    if (!isLast && used < sectionAdCount) {
+      parts.push({ type: "section", slot: used });
+      // The reserved AdSense slot rides along with the first in-body ad, exactly
+      // as it does in the paragraph-based layout.
+      if (used === 0) parts.push({ type: "adsense" });
+      used++;
+    }
+  }
+  return used > 0 ? parts : null;
+}
 
 /**
  * Split the article body to inject in-article ads between paragraphs, scaled to
@@ -48,8 +100,18 @@ const COVER_SOURCE_HOME: Record<string, string> = {
  * prominent top-of-page ad and the end-of-article recommendation are rendered
  * separately (above the headline and after the body), not here.
  */
-function buildArticleParts(content: string): ArticlePart[] {
+function buildArticleParts(content: string, sectionAdCount = 0): ArticlePart[] {
   const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
+
+  // Preferred layout: one ad BELOW EACH "## " section of the story. Only used
+  // when the piece actually has sections to divide (2+ headings) and there are
+  // widget ids to fill the slots — otherwise fall through to the paragraph-based
+  // placement below, so a heading-less article still carries its ads.
+  if (sectionAdCount > 0) {
+    const sectioned = buildSectionParts(blocks, sectionAdCount);
+    if (sectioned) return sectioned;
+  }
+
   const n = blocks.length;
   if (n === 0) return [{ type: "md", content }];
 
@@ -151,7 +213,7 @@ export default async function ArticlePage({ params }: Props) {
   // Live-readers numbers reflect actual people (and line up with AdsKeeper).
   // (This does NOT affect the private-gallery Live Audience — that's separate.)
   const h = headers();
-  const { ads } = adsForHost(h.get("host"));
+  const { ads, sectionAds } = adsForHost(h.get("host"));
   if (!isNonHumanView(h)) {
     await incrementViews(
       article.id,
@@ -208,7 +270,7 @@ export default async function ArticlePage({ params }: Props) {
     </>
   );
 
-  const parts = buildArticleParts(article.content);
+  const parts = buildArticleParts(article.content, sectionAds.length);
 
   return (
     <main>
@@ -337,13 +399,15 @@ export default async function ArticlePage({ params }: Props) {
 
           <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
-          {/* Body with up to two in-article ads — one after the opening (~4th
-              paragraph) and, on longer pieces, a second deeper in the body. The
-              story always renders first; each ad lazy-loads and collapses cleanly
-              when unfilled. */}
+          {/* Body with its in-article ads. Preferred layout is one unit below
+              each "## " section; a piece with no sections falls back to the
+              paragraph-based placement. Every unit lazy-loads and removes itself
+              when the network returns nothing. */}
           {parts.map((p, i) =>
             p.type === "md" ? (
               <Markdown key={i} content={p.content} />
+            ) : p.type === "section" ? (
+              <AdSlot key={i} widgetId={sectionAds[p.slot]} />
             ) : p.type === "ad" ? (
               <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
             ) : p.type === "ad2" ? (
