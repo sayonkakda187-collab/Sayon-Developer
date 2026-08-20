@@ -1,5 +1,6 @@
 import Script from "next/script";
-import { ADSKEEPER_SITE_ID, adsHeadEnabled } from "@/lib/ads";
+import { headers } from "next/headers";
+import { adsForHost, adsHeadEnabled } from "@/lib/ads";
 
 /**
  * Loads the AdsKeeper preloader script once, site-wide. Mounted in the public
@@ -11,11 +12,14 @@ import { ADSKEEPER_SITE_ID, adsHeadEnabled } from "@/lib/ads";
  * non-blocking. Individual ad containers are rendered by <AdSlot>.
  */
 export function AdsHead() {
-  if (!adsHeadEnabled()) return null;
+  // Each domain is its own registered AdsKeeper site, so the loader id is
+  // resolved from the request host — the wrong loader would serve nothing.
+  const { siteId } = adsForHost(headers().get("host"));
+  if (!adsHeadEnabled(siteId)) return null;
   return (
     <Script
       id="adskeeper-loader"
-      src={`https://jsc.adskeeper.com/site/${ADSKEEPER_SITE_ID}.js`}
+      src={`https://jsc.adskeeper.com/site/${siteId}.js`}
       strategy="afterInteractive"
       async
     />

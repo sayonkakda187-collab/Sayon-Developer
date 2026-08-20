@@ -26,8 +26,18 @@
  * fine to commit them here. No database, auth, or backend change is involved.
  */
 
-// 1) Your AdsKeeper SITE ID (the number in the head loader URL). ← REPLACE
-export const ADSKEEPER_SITE_ID = "1097964";
+// 1) SITE IDs — one per website REGISTERED in AdsKeeper.
+//
+//    Each registered site gets its own loader id AND its own widget ids; a
+//    widget from one site does NOT serve on another. Both domains are attached
+//    in Vercel (old Facebook posts still link to the legacy one), so the loader
+//    and the widget set are chosen per REQUEST HOST — see adsForHost() below.
+/** ledgerdailynews.com — current primary domain. */
+export const SITE_ID_PRIMARY = "1108814";
+/** dailyledger.today — previous domain, still serving old shared links. */
+export const SITE_ID_LEGACY = "1097964";
+/** Default when the host is unknown (previews, localhost). */
+export const ADSKEEPER_SITE_ID = SITE_ID_PRIMARY;
 
 // 2) One WIDGET ID per on-page placement.
 //    NOTE: AdsKeeper widgets (MGID platform) are one-per-placement — a widget id
@@ -39,7 +49,7 @@ export const ADSKEEPER_SITE_ID = "1097964";
 //    fills only one slot per page). All four are IN-CONTENT widgets (Header/Feed) —
 //    the format that renders as inline native cards in the body. The second MID unit
 //    only appears on longer pieces (see buildArticleParts in the article page).
-export const ADS = {
+export const ADS_LEGACY = {
   /** TOP-of-page article unit — rendered ABOVE the headline + cover (just under
    *  the site header) for maximum visibility. Uses 2030046 — the SAME Header
    *  Widget as the homepage HOME slot — so opening a full story shows the same
@@ -133,6 +143,61 @@ export const ADS = {
   SITEWIDE_FEED: "2047761",
 } as const;
 
+/**
+ * Widgets for ledgerdailynews.com (AdsKeeper site 1108814).
+ *
+ * AdsKeeper approved this domain as a SEPARATE website, so it starts with its
+ * own widget inventory — the legacy ids above belong to dailyledger.today and
+ * would never fill here. Only one widget exists so far, so every other slot is
+ * a placeholder and collapses cleanly (no empty boxes).
+ *
+ * 2070887 is a FEED / in-content widget, mapped to SITEWIDE_FEED because that
+ * is the single placement rendered on EVERY public page — home, article,
+ * category, search and the galleries — so one widget covers the whole site.
+ * To fill the remaining slots, create more widgets under site 1108814 and paste
+ * their ids here (keep the formats matching: Feed/Header -> <AdSlot> slots,
+ * In-site Notification / Interstitial -> the *NOTIFICATION* / *INTERSTITIAL*
+ * keys, IAB display -> STICKY_FOOTER).
+ */
+export const ADS_PRIMARY = {
+  IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
+  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
+  IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
+  IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
+  RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
+  HOME: "REPLACE_WITH_HOME_ID",
+  HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
+  NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
+  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
+  INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
+  STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
+  GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
+  GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
+  GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
+  /** Approved Feed / in-content widget for ledgerdailynews.com. */
+  SITEWIDE_FEED: "2070887",
+} as const;
+
+/** Back-compat alias + the source of the placement-name type. */
+export const ADS = ADS_PRIMARY;
+
+export type AdSiteConfig = { siteId: string; ads: typeof ADS_PRIMARY };
+
+/**
+ * Pick the AdsKeeper site + widget set for a request host. Pure and
+ * client-safe; server components pass `headers().get("host")`.
+ *
+ * An unknown host (Vercel preview, localhost) falls back to the primary site —
+ * AdsKeeper serves nothing off an authorized domain anyway, so slots collapse.
+ */
+export function adsForHost(host?: string | null): AdSiteConfig {
+  const h = (host || "").toLowerCase();
+  if (h.includes("dailyledger.today")) {
+    return { siteId: SITE_ID_LEGACY, ads: ADS_LEGACY as unknown as typeof ADS_PRIMARY };
+  }
+  return { siteId: SITE_ID_PRIMARY, ads: ADS_PRIMARY };
+}
+
 // 3) Master on/off switch. Leave false until your IDs above are real.
 //    Typed as `boolean` (not the literal `false`) so the on/off branches in
 //    AdSlot/AdsHead type-check cleanly when you flip it.
@@ -161,8 +226,8 @@ export function isPlaceholder(id: string | null | undefined): boolean {
 }
 
 /** Whether the head preloader should mount: ads on AND a real site id set. */
-export function adsHeadEnabled(): boolean {
-  return ADS_ENABLED && !isPlaceholder(ADSKEEPER_SITE_ID);
+export function adsHeadEnabled(siteId: string = ADSKEEPER_SITE_ID): boolean {
+  return ADS_ENABLED && !isPlaceholder(siteId);
 }
 
 /** Whether a specific placement should render a real ad. */

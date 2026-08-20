@@ -5,7 +5,8 @@ import { AdsHead } from "@/components/AdsHead";
 import { AdOverlay } from "@/components/AdOverlay";
 import { AdStickyFooter } from "@/components/AdStickyFooter";
 import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
+import { headers } from "next/headers";
+import { adsForHost } from "@/lib/ads";
 import { AdsterraScripts } from "@/components/AdsterraScripts";
 import { AdsterraBanner } from "@/components/AdsterraBanner";
 import { BANNERS } from "@/lib/adsterra";
@@ -22,6 +23,9 @@ export default async function PublicLayout({
   children: React.ReactNode;
 }) {
   const [categories, trending] = await Promise.all([getCategories(), getTrending(8)]);
+  // AdsKeeper site + widget set for THIS domain (each domain is its own
+  // registered site, with its own loader and its own widget ids).
+  const { ads } = adsForHost(headers().get("host"));
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -52,13 +56,13 @@ export default async function PublicLayout({
           click-triggered interstitial. Rendered once so they can appear on every
           public page (home + articles); each positions/triggers itself per its
           dashboard settings and only fills on the authorized production domain. */}
-      <AdOverlay widgetId={ADS.NOTIFICATION} />
-      <AdOverlay widgetId={ADS.INTERSTITIAL} />
-      <AdOverlay widgetId={ADS.INTERSTITIAL_2} />
+      <AdOverlay widgetId={ads.NOTIFICATION} />
+      <AdOverlay widgetId={ads.INTERSTITIAL} />
+      <AdOverlay widgetId={ads.INTERSTITIAL_2} />
       {/* Slim, dismissible sticky footer bar holding an IAB display banner —
           rendered once so it rides along on every public page; reveals only once
           the ad fills and only on the authorized production domain. */}
-      <AdStickyFooter widgetId={ADS.STICKY_FOOTER} />
+      <AdStickyFooter widgetId={ads.STICKY_FOOTER} />
       <BreakingBanner />
       <Ticker items={tickerItems} />
       <Masthead today={today} nav={nav} />
@@ -71,7 +75,7 @@ export default async function PublicLayout({
       {/* Site-wide in-content Feed unit — renders once near the bottom of every
           public page (home / article / category / search). Collapses if unfilled. */}
       <div className="px-4 sm:px-6">
-        <AdSlot widgetId={ADS.SITEWIDE_FEED} minHeight={120} />
+        <AdSlot widgetId={ads.SITEWIDE_FEED} minHeight={120} />
         {/* Adsterra fixed-size footer banner — reserves its exact size so it
             never shifts the layout, and renders nothing until configured. */}
         <AdsterraBanner banner={BANNERS.FOOTER} />

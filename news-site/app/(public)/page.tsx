@@ -5,13 +5,16 @@ import { Latest } from "@/components/ledger/Latest";
 import { MostRead } from "@/components/MostRead";
 import { AdSlot } from "@/components/AdSlot";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
-import { ADS } from "@/lib/ads";
+import { headers } from "next/headers";
+import { adsForHost } from "@/lib/ads";
 import { adsenseEnabled } from "@/lib/adsense";
 
 // Desk order used when a category is present (others append alphabetically).
 const DESK_ORDER = ["Business", "Sports", "Technology", "World"];
 
 export default async function Home() {
+  // Widget set for THIS domain (each domain is its own AdsKeeper site).
+  const { ads } = adsForHost(headers().get("host"));
   const { featured, feed } = await getHomepage();
 
   if (!featured) {
@@ -47,7 +50,7 @@ export default async function Home() {
 
       {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
       <div style={{ padding: "28px 0" }}>
-        <AdSlot name="HOME" widgetId={ADS.HOME} minHeight={120} />
+        <AdSlot name="HOME" widgetId={ads.HOME} minHeight={120} />
       </div>
 
       {/* Reserved Google AdSense slot between the upper sections and the feed. */}
