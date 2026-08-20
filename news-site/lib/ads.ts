@@ -154,76 +154,66 @@ export const ADS_LEGACY = {
 } as const;
 
 /**
- * Widgets for ledgerdailynews.com (AdsKeeper site 1108814).
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ledgerdailynews.com — AdsKeeper site 1108814.  RESET: no widgets assigned.
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * ⚠️ THE IDS ABOVE CANNOT BE COPIED DOWN HERE. AdsKeeper approved this domain as
- * a SEPARATE website, and a widget only serves on the domain of the site it was
- * created under — ADS_LEGACY's 17 ids belong to site 1097964 (dailyledger.today)
- * and would return nothing here. Getting this domain to the same ad coverage as
- * dailyledger.today means EITHER creating the widgets below under site 1108814,
- * OR asking AdsKeeper support to add ledgerdailynews.com as an additional domain
- * on site 1097964 (then the existing 17 ids work as-is and ADS_LEGACY can simply
- * be reused for both hosts in adsForHost()).
+ * Every placement below is empty, so this domain currently shows NO ads at all
+ * — no banners, no sidebar, no pop-up, no sticky bar. Empty slots render
+ * nothing (not an empty box), so the pages stay clean.
  *
- * ── Making the most of the two widgets that DO exist ────────────────────────
- * A widget fills only one slot PER PAGE, but the same id may be used on
- * DIFFERENT pages. So the single in-content widget (2070887) is placed at the
- * best position on each page type rather than at one mediocre position on all
- * of them:
- *   • article  → IN_ARTICLE, directly under the "Read more" button, which every
- *                reader who finishes the story passes (highest viewability)
- *   • homepage → HOME
- *   • gallery  → arrives via the IN_ARTICLE slot in <GalleryView>'s rotation
- * The second in-content widget (2070978) takes IN_ARTICLE_TOP, so the article —
- * where nearly all traffic lands — now carries the page's two strongest slots
- * (above the headline + under the Read more button).
- * It used to sit on SITEWIDE_FEED — the very bottom of every page, below the
- * comments — which is the weakest slot on the page. The trade-off: SITEWIDE_FEED
- * is now empty, so /category and /search carry no in-content unit until a second
- * Feed widget exists. Those pages get a fraction of this site's traffic (readers
- * arrive on articles from Facebook), so this is a clear net gain.
+ * ── Adding an ad back ───────────────────────────────────────────────────────
+ * Create a widget in AdsKeeper under site 1108814, then paste its id over the
+ * matching placeholder below. Nothing else needs to change — the slot starts
+ * serving on the next deploy.
  *
- * ── Widgets to create under site 1108814 for full parity ────────────────────
- *   IN_ARTICLE_2 · IN_ARTICLE_3 · RECOMMENDED · HOME_FEED · SIDEBAR_1 ·
- *   SIDEBAR_2 · SITEWIDE_FEED · GALLERY_FEED               → In-content (Feed)
- *   NOTIFICATION · GALLERY_NOTIFICATION_1 · GALLERY_NOTIFICATION_2
- *                                                          → In-site Notification
- *   INTERSTITIAL_2                                         → Interstitial
- *   STICKY_FOOTER                                          → IAB display banner
- * Paste each new id over its placeholder; nothing else needs to change.
+ *  #   PLACEMENT KEY            WHERE IT APPEARS                    FORMAT
+ *  1   IN_ARTICLE_TOP           article · above the headline        Feed / in-content
+ *  2   IN_ARTICLE               article · under "Read more"         Feed / in-content
+ *  3   IN_ARTICLE_2             article · middle of the story       Feed / in-content
+ *  4   IN_ARTICLE_3             article · deep in long stories      Feed / in-content
+ *  5   RECOMMENDED              article · end, the "Sponsored" box  Feed / in-content
+ *  6   SIDEBAR_1                article · sidebar, upper (desktop)  Feed / in-content
+ *  7   SIDEBAR_2                article · sidebar, lower (desktop)  Feed / in-content
+ *  8   HOME                     homepage · top of the feed          Feed / in-content
+ *  9   HOME_FEED                homepage · inside the story grid    Feed / in-content
+ * 10   SITEWIDE_FEED            every page · above the footer       Feed / in-content
+ * 11   GALLERY_FEED             /g/<token> galleries                Feed / in-content
+ * 12   NOTIFICATION             floats over every page              In-site notification
+ * 13   GALLERY_NOTIFICATION_1   floats over the galleries           In-site notification
+ * 14   GALLERY_NOTIFICATION_2   floats over the galleries           In-site notification
+ * 15   INTERSTITIAL             full-screen pop-up after N clicks   Interstitial
+ * 16   INTERSTITIAL_2           second full-screen pop-up           Interstitial
+ * 17   STICKY_FOOTER            slim bar pinned to the bottom       IAB display banner
+ *
+ * ⚠️ ONE WIDGET PER PAGE. An AdsKeeper widget fills only one slot on any given
+ * page, so two placements that appear on the SAME page need DIFFERENT ids
+ * (#1-#7 and #10 all share the article page). The same id CAN be reused across
+ * different pages — e.g. one id on #2 and #8 fills on both the article and the
+ * homepage. <GalleryView> de-duplicates ids for the gallery page automatically.
+ *
+ * ⚠️ IDS ARE NOT PORTABLE BETWEEN SITES. ADS_LEGACY's ids belong to AdsKeeper
+ * site 1097964 (dailyledger.today) and return nothing here. To use them on this
+ * domain, ask AdsKeeper to add ledgerdailynews.com as an additional domain on
+ * site 1097964 — then adsForHost() can simply return ADS_LEGACY for both hosts.
  */
 export const ADS_PRIMARY = {
-  /** Approved in-content widget #2 — the TOP-of-article leaderboard, above the
-   *  headline and cover. AdsKeeper's snippet recommends a 300px min-height, which
-   *  is what the slot reserves. Distinct from IN_ARTICLE below, so both fill on
-   *  the same page. */
-  IN_ARTICLE_TOP: "2070978",
-  /** Approved Feed / in-content widget, put on the ARTICLE page's prime slot —
-   *  directly beneath the "Read more" button. Same id as HOME below; they are on
-   *  different pages, so each fills independently. */
-  IN_ARTICLE: "2070887",
+  IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
+  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
-  /** Same Feed widget on the HOMEPAGE — a different page from the article, so
-   *  sharing the id is fine and each fills on its own. */
-  HOME: "2070887",
+  HOME: "REPLACE_WITH_HOME_ID",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
-  /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
-   *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
-  INTERSTITIAL: "2070915",
+  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
   GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
-  /** Desktop right-rail units — see the SIDEBAR_* note in ADS_LEGACY above. */
   SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
   SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
-  /** Empty on purpose: 2070887 moved to IN_ARTICLE / HOME, which are far
-   *  stronger positions than the bottom of the page. Create one more Feed widget
-   *  to bring the /category and /search pages back. */
   SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
 } as const;
 
