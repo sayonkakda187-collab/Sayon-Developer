@@ -67,7 +67,7 @@ export function Latest({
                   ad never lands with little/no content after it. */}
               {i === 5 && shown.length > 8 && (
                 <div className="tl-feed-ad" style={{ gridColumn: "1 / -1" }}>
-                  <AdSlot name="HOME_FEED" widgetId={feedWidgetId} minHeight={120} />
+                  <AdSlot widgetId={feedWidgetId} minHeight={120} />
                 </div>
               )}
             </Fragment>

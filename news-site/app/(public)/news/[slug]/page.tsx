@@ -222,12 +222,11 @@ export default async function ArticlePage({ params }: Props) {
     p.type === "md" ? (
       <Markdown key={i} content={p.content} />
     ) : p.type === "ad" ? (
-      <AdSlot key={i} name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
     ) : p.type === "ad2" ? (
-      // Deeper in the body: a centred rectangle rather than a full-width band.
-      <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ads.IN_ARTICLE_2} variant="rect" minHeight={250} />
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} minHeight={250} />
     ) : p.type === "ad3" ? (
-      <AdSlot key={i} name="IN_ARTICLE_3" widgetId={ads.IN_ARTICLE_3} />
+      <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
     ) : (
       <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
     );
@@ -244,12 +243,7 @@ export default async function ArticlePage({ params }: Props) {
           above the headline + cover. Collapses cleanly if AdsKeeper returns no
           ad, so it never leaves an empty box above the story. */}
       <div className="px-4 sm:px-6">
-        <AdSlot
-          name="IN_ARTICLE_TOP"
-          widgetId={ads.IN_ARTICLE_TOP}
-          variant="leaderboard"
-          minHeight={300}
-        />
+        <AdSlot widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
       </div>
 
       {/* Immersive hero (headline over cover) */}
@@ -378,7 +372,7 @@ export default async function ArticlePage({ params }: Props) {
                     (so crawlers read the full article) but visually clamped until
                     the reader taps. */}
                 <ReadMoreGate
-                  ad={<AdSlot name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} minHeight={120} />}
+                  ad={<AdSlot widgetId={ads.IN_ARTICLE} minHeight={120} />}
                 >
                   {parts.slice(gateAt + 1).map((p, i) => renderPart(p, gateAt + 1 + i))}
                 </ReadMoreGate>
@@ -406,13 +400,7 @@ export default async function ArticlePage({ params }: Props) {
           {/* END-OF-ARTICLE "SPONSORED" block — the AdsKeeper recommendation
               widget, AFTER the story ends (never above it), disclosed as
               Sponsored the way the reference layout labels this position. */}
-          <AdSlot
-            name="RECOMMENDED"
-            widgetId={ads.RECOMMENDED}
-            variant="leaderboard"
-            label="Sponsored"
-            minHeight={300}
-          />
+          <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
 
           {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
               silent until configured in lib/adsterra.ts. */}

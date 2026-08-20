@@ -60,7 +60,7 @@ export function AdRail({ slots, className }: { slots: RailSlot[]; className?: st
             // leave the lower unit permanently clipped.)
             className={last ? "sticky top-24" : "mb-6"}
           >
-            <AdSlot name={s.name} widgetId={s.widgetId} variant="rail" minHeight={300} />
+            <AdSlot widgetId={s.widgetId} minHeight={300} />
           </div>
         );
       })}
