@@ -156,26 +156,51 @@ export const ADS_LEGACY = {
 /**
  * Widgets for ledgerdailynews.com (AdsKeeper site 1108814).
  *
- * AdsKeeper approved this domain as a SEPARATE website, so it starts with its
- * own widget inventory — the legacy ids above belong to dailyledger.today and
- * would never fill here. Only one widget exists so far, so every other slot is
- * a placeholder and collapses cleanly (no empty boxes).
+ * ⚠️ THE IDS ABOVE CANNOT BE COPIED DOWN HERE. AdsKeeper approved this domain as
+ * a SEPARATE website, and a widget only serves on the domain of the site it was
+ * created under — ADS_LEGACY's 17 ids belong to site 1097964 (dailyledger.today)
+ * and would return nothing here. Getting this domain to the same ad coverage as
+ * dailyledger.today means EITHER creating the widgets below under site 1108814,
+ * OR asking AdsKeeper support to add ledgerdailynews.com as an additional domain
+ * on site 1097964 (then the existing 17 ids work as-is and ADS_LEGACY can simply
+ * be reused for both hosts in adsForHost()).
  *
- * 2070887 is a FEED / in-content widget, mapped to SITEWIDE_FEED because that
- * is the single placement rendered on EVERY public page — home, article,
- * category, search and the galleries — so one widget covers the whole site.
- * To fill the remaining slots, create more widgets under site 1108814 and paste
- * their ids here (keep the formats matching: Feed/Header -> <AdSlot> slots,
- * In-site Notification / Interstitial -> the *NOTIFICATION* / *INTERSTITIAL*
- * keys, IAB display -> STICKY_FOOTER).
+ * ── Making the most of the two widgets that DO exist ────────────────────────
+ * A widget fills only one slot PER PAGE, but the same id may be used on
+ * DIFFERENT pages. So the single in-content widget (2070887) is placed at the
+ * best position on each page type rather than at one mediocre position on all
+ * of them:
+ *   • article  → IN_ARTICLE, directly under the "Read more" button, which every
+ *                reader who finishes the story passes (highest viewability)
+ *   • homepage → HOME
+ *   • gallery  → arrives via the IN_ARTICLE slot in <GalleryView>'s rotation
+ * It used to sit on SITEWIDE_FEED — the very bottom of every page, below the
+ * comments — which is the weakest slot on the page. The trade-off: SITEWIDE_FEED
+ * is now empty, so /category and /search carry no in-content unit until a second
+ * Feed widget exists. Those pages get a fraction of this site's traffic (readers
+ * arrive on articles from Facebook), so this is a clear net gain.
+ *
+ * ── Widgets to create under site 1108814 for full parity ────────────────────
+ *   IN_ARTICLE_TOP · IN_ARTICLE_2 · IN_ARTICLE_3 · RECOMMENDED · HOME_FEED ·
+ *   SIDEBAR_1 · SIDEBAR_2 · SITEWIDE_FEED · GALLERY_FEED   → In-content (Feed)
+ *   NOTIFICATION · GALLERY_NOTIFICATION_1 · GALLERY_NOTIFICATION_2
+ *                                                          → In-site Notification
+ *   INTERSTITIAL_2                                         → Interstitial
+ *   STICKY_FOOTER                                          → IAB display banner
+ * Paste each new id over its placeholder; nothing else needs to change.
  */
 export const ADS_PRIMARY = {
   IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
-  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
+  /** Approved Feed / in-content widget, put on the ARTICLE page's prime slot —
+   *  directly beneath the "Read more" button. Same id as HOME below; they are on
+   *  different pages, so each fills independently. */
+  IN_ARTICLE: "2070887",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
-  HOME: "REPLACE_WITH_HOME_ID",
+  /** Same Feed widget on the HOMEPAGE — a different page from the article, so
+   *  sharing the id is fine and each fills on its own. */
+  HOME: "2070887",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
@@ -189,8 +214,10 @@ export const ADS_PRIMARY = {
   /** Desktop right-rail units — see the SIDEBAR_* note in ADS_LEGACY above. */
   SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
   SIDEBAR_2: "REPLACE_WITH_SIDEBAR_2_ID",
-  /** Approved Feed / in-content widget for ledgerdailynews.com. */
-  SITEWIDE_FEED: "2070887",
+  /** Empty on purpose: 2070887 moved to IN_ARTICLE / HOME, which are far
+   *  stronger positions than the bottom of the page. Create one more Feed widget
+   *  to bring the /category and /search pages back. */
+  SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
 } as const;
 
 /** Back-compat alias + the source of the placement-name type. */

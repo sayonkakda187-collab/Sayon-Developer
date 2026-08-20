@@ -31,9 +31,22 @@ export function GalleryView({
   videos?: string[];
   ads: GalleryAds;
 }) {
-  const TOP_AD = ads.HOME;
-  const FEED_ADS = [ads.GALLERY_FEED, ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3];
-  const END_AD = ads.RECOMMENDED;
+  // A widget fills only ONE slot per page, so the same id must never appear in
+  // two containers here — and ids ARE shared across placements on purpose (a
+  // site with few widgets puts one id on several PAGES). Keep the first use of
+  // each id and drop any repeat, so a shared id can't quietly cost this page its
+  // ad. Placeholder ids differ per key, so they never collide.
+  const used = new Set<string>();
+  const once = (id: string): string | null => {
+    if (used.has(id)) return null;
+    used.add(id);
+    return id;
+  };
+  const TOP_AD = once(ads.HOME);
+  const FEED_ADS = [ads.GALLERY_FEED, ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3]
+    .map(once)
+    .filter((id): id is string => id !== null);
+  const END_AD = once(ads.RECOMMENDED);
   const [active, setActive] = useState<number | null>(null);
 
   // While the viewer is open: lock scroll, close on Esc, arrow-key navigation.
@@ -93,7 +106,7 @@ export function GalleryView({
         {title}
       </h1>
 
-      <AdSlot widgetId={TOP_AD} minHeight={120} />
+      {TOP_AD && <AdSlot widgetId={TOP_AD} minHeight={120} />}
 
       {videos.length > 0 && (
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -116,9 +129,11 @@ export function GalleryView({
         <p className="py-16 text-center text-fg-muted">This gallery is empty.</p>
       ) : null}
 
-      <div className="mt-6">
-        <AdSlot widgetId={END_AD} minHeight={250} />
-      </div>
+      {END_AD && (
+        <div className="mt-6">
+          <AdSlot widgetId={END_AD} minHeight={250} />
+        </div>
+      )}
 
       {/* Tap-to-enlarge viewer */}
       {active !== null && images[active] ? (
