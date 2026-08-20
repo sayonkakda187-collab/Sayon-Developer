@@ -330,6 +330,11 @@ export default async function ArticlePage({ params }: Props) {
             </aside>
           )}
 
+          {/* Ad directly below the Key Points box. Deliberately OUTSIDE the
+              keyPoints check — an article with no key points still shows it here,
+              in the same spot right after the standfirst. */}
+          <AdSlot widgetId={ads.AFTER_KEY_POINTS} minHeight={250} className="mb-9" />
+
           <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
           {/* Body with up to two in-article ads — one after the opening (~4th

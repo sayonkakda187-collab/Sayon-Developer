@@ -63,6 +63,10 @@ export const ADS_LEGACY = {
    *  (renders inline native cards), distinct from the TOP and END ids so all
    *  article slots fill independently on the same page. */
   IN_ARTICLE: "2019813",
+  /** Below the "Key Points" box. Placeholder: every in-content widget on THIS
+   *  site is already used elsewhere on the article page, and a widget fills only
+   *  one slot per page — this needs its own id. */
+  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
   /** Optional SECOND in-article unit, deeper in the body (~⅔ through) on longer
    *  pieces (8+ paragraphs), kept well clear of IN_ARTICLE so two ads never crowd.
    *  Uses 2019769 — a FEED in-content widget, distinct so it fills alongside the rest. */
@@ -167,6 +171,10 @@ export const ADS_PRIMARY = {
    *  below the hero, which is not a header position. */
   IN_ARTICLE_TOP: "2070978",
   IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
+  /** Directly BELOW the "Key Points" box, near the top of the story. AdsKeeper's
+   *  snippet for this one carries no min-height, so the slot reserves a modest
+   *  250px rather than the 300 a header unit asks for. */
+  AFTER_KEY_POINTS: "2071266",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
