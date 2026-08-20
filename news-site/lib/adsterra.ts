@@ -32,7 +32,15 @@
  */
 
 // ── 1) Master switch. Leave false until the IDs below are real. ─────────────
-export const ADSTERRA_ENABLED: boolean = true;
+//
+// Currently OFF and no keys are set: the previous 728x90 unit was approved for
+// dailyledger.today and the site now publishes as ledgerdailynews.com, so that
+// unit was removed to be used on a different site. Adsterra ad units belong to
+// ONE registered website — reusing a unit across domains does not serve. To run
+// Adsterra here again, register ledgerdailynews.com in Adsterra, create fresh
+// units, paste the keys below and flip this to true. All the wiring below is
+// intact, so that is the only change needed.
+export const ADSTERRA_ENABLED: boolean = false;
 
 // ── 2) Self-displaying, site-wide formats (script src only) ─────────────────
 /** Social Bar — a floating bar/notification Adsterra positions itself. */
@@ -57,7 +65,7 @@ export const BANNERS = {
   /** Inside the article body. 300x250 works on mobile + desktop. */
   ARTICLE: { key: "REPLACE_WITH_BANNER_KEY", width: 300, height: 250 },
   /** Bottom of every public page. 728x90 desktop leaderboard. */
-  FOOTER: { key: "5844092eda7a98466a8f01ee44d5b3f6", width: 728, height: 90 },
+  FOOTER: { key: "REPLACE_WITH_FOOTER_BANNER_KEY", width: 728, height: 90 },
 } as const;
 
 /** Host that serves the atOptions `invoke.js`. Adsterra normally uses
