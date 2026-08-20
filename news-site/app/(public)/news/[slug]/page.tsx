@@ -18,6 +18,7 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { AdsterraNative } from "@/components/AdsterraNative";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { ADS } from "@/lib/ads";
 import { adsenseEnabled } from "@/lib/adsense";
@@ -369,6 +370,10 @@ export default async function ArticlePage({ params }: Props) {
         {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
             widget lives here, AFTER the story ends (never above it). */}
         <AdSlot name="RECOMMENDED" widgetId={ADS.RECOMMENDED} minHeight={300} />
+
+        {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
+            silent until configured in lib/adsterra.ts. */}
+        <AdsterraNative />
 
         <section
           id="comments"

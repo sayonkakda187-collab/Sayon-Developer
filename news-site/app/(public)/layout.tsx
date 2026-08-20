@@ -6,6 +6,9 @@ import { AdOverlay } from "@/components/AdOverlay";
 import { AdStickyFooter } from "@/components/AdStickyFooter";
 import { AdSlot } from "@/components/AdSlot";
 import { ADS } from "@/lib/ads";
+import { AdsterraScripts } from "@/components/AdsterraScripts";
+import { AdsterraBanner } from "@/components/AdsterraBanner";
+import { BANNERS } from "@/lib/adsterra";
 import { BreakingBanner } from "@/components/BreakingBanner";
 import { Ticker } from "@/components/ledger/Ticker";
 import { MarketsTicker } from "@/components/ledger/MarketsTicker";
@@ -41,6 +44,10 @@ export default async function PublicLayout({
   return (
     <>
       <AdsHead />
+      {/* Adsterra self-displaying units (Social Bar / Popunder / In-Page Push).
+          Independent of AdsKeeper above; each emits nothing until its src is set
+          in lib/adsterra.ts and ADSTERRA_ENABLED is true. */}
+      <AdsterraScripts />
       {/* AdsKeeper self-displaying overlays — a floating in-site notification and a
           click-triggered interstitial. Rendered once so they can appear on every
           public page (home + articles); each positions/triggers itself per its
@@ -65,6 +72,9 @@ export default async function PublicLayout({
           public page (home / article / category / search). Collapses if unfilled. */}
       <div className="px-4 sm:px-6">
         <AdSlot widgetId={ADS.SITEWIDE_FEED} minHeight={120} />
+        {/* Adsterra fixed-size footer banner — reserves its exact size so it
+            never shifts the layout, and renders nothing until configured. */}
+        <AdsterraBanner banner={BANNERS.FOOTER} />
       </div>
       <LedgerNewsletter />
       <LedgerFooter sections={sections} />
