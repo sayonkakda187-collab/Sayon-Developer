@@ -43,9 +43,12 @@ export function AdRail({ slots, className }: { slots: RailSlot[]; className?: st
   if (!desktop || shown.length === 0) return null;
 
   return (
-    // The <aside> is a flex item, so it stretches to the full height of the
-    // article row — that tall box is what the sticky unit below travels inside.
-    <aside className={`w-[300px] flex-none ${className ?? ""}`} aria-label="Advertisements">
+    // A plain <div>, not an <aside>: every <AdSlot> inside already exposes its
+    // own labelled `complementary` landmark, and nesting landmarks just makes a
+    // screen reader announce the same thing twice. As a flex item it stretches
+    // to the full height of the article row — that tall box is what the sticky
+    // unit below travels inside.
+    <div className={`w-[300px] flex-none ${className ?? ""}`}>
       {shown.map((s, i) => {
         const last = i === shown.length - 1;
         return (
@@ -61,6 +64,6 @@ export function AdRail({ slots, className }: { slots: RailSlot[]; className?: st
           </div>
         );
       })}
-    </aside>
+    </div>
   );
 }
