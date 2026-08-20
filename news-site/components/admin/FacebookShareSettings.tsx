@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { saveFacebookShareSettingsAction } from "@/app/admin/facebook-actions";
+import { siteConfig } from "@/lib/site";
 import {
   type FbShareSettings,
   type ShareMode,
@@ -50,6 +51,31 @@ export function FacebookShareSettings({ initial }: { initial: FbShareSettings })
           <code className="adm-fb-code">pages_manage_engagement</code> permission on the Page token.
         </p>
       )}
+
+      <div className="adm-card-title" style={{ marginTop: 18 }}>Share link domain</div>
+      <div className="adm-card-sub" style={{ marginBottom: 6 }}>
+        The domain used for the article link that gets posted to Facebook — both the
+        link post and the link in the comment. Leave blank to use this site’s own
+        address (<code className="adm-fb-code">{siteConfig.url}</code>). Set it to
+        publish under a different domain without a redeploy.
+      </div>
+      <input
+        className="adm-input"
+        value={s.shareBaseUrl}
+        placeholder={siteConfig.url}
+        onChange={(e) => setS((p) => ({ ...p, shareBaseUrl: e.target.value }))}
+        inputMode="url"
+        autoComplete="off"
+        spellCheck={false}
+      />
+      <p className="adm-card-sub" style={{ marginTop: 6 }}>
+        Links will look like{" "}
+        <code className="adm-fb-code">
+          {(s.shareBaseUrl.trim() || siteConfig.url).replace(/\/$/, "")}/news/your-article
+        </code>
+        . ⚠️ Only point this at a domain that actually serves this site, or the
+        shared links will 404 for readers.
+      </p>
 
       <div className="adm-card-title" style={{ marginTop: 18 }}>Photo caption template</div>
       <div className="adm-card-sub" style={{ marginBottom: 6 }}>

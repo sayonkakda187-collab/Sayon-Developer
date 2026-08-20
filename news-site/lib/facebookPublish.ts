@@ -12,17 +12,23 @@ import {
   creditLine,
 } from "@/lib/facebookShareTemplates";
 
-/** Canonical public URL for an article (Facebook scrapes its OG tags). */
-export function articleUrl(slug: string): string {
-  // Single source of truth: siteConfig.url is env-aware and never localhost in
-  // production, so shared links are always absolute + canonical.
-  return `${siteConfig.url}/news/${slug}`;
+/** Base for shared links: the admin's Share-settings domain when set, else the
+ *  site's own canonical URL (env-aware, never localhost in production). */
+function shareBase(baseUrl?: string): string {
+  return (baseUrl?.trim() || siteConfig.url).replace(/\/$/, "");
+}
+
+/** Canonical public URL for an article (Facebook scrapes its OG tags).
+ *  `baseUrl` overrides the domain — used by the Share-settings option so links
+ *  can point at a different domain without a redeploy. */
+export function articleUrl(slug: string, baseUrl?: string): string {
+  return `${shareBase(baseUrl)}/news/${slug}`;
 }
 
 /** The branded per-article OG card image (used as the photo when an article has
  *  no featured image). It's a public 1200x630 PNG Facebook can fetch. */
-export function ogCardImageUrl(slug: string): string {
-  return `${siteConfig.url}/news/${slug}/opengraph-image`;
+export function ogCardImageUrl(slug: string, baseUrl?: string): string {
+  return `${shareBase(baseUrl)}/news/${slug}/opengraph-image`;
 }
 
 /** The message body posted to Facebook for a LINK-mode share. */
@@ -60,6 +66,8 @@ export type ShareConfig = {
   commentTemplate?: string;
   /** Photo mode: attach the news preview image to the link comment. Default true. */
   commentImage?: boolean;
+  /** Domain for the shared article link (post + comment). Blank = site default. */
+  shareBaseUrl?: string;
 };
 
 /** Result of attempting to post one article to one page. */
@@ -170,11 +178,11 @@ export async function publishArticleToPage(
   }
 
   const mode: ShareMode = share?.mode ?? "link";
-  const url = articleUrl(article.slug);
+  const url = articleUrl(article.slug, share?.shareBaseUrl);
 
   try {
     if (mode === "photo") {
-      const imageUrl = (article.coverImage || "").trim() || ogCardImageUrl(article.slug);
+      const imageUrl = (article.coverImage || "").trim() || ogCardImageUrl(article.slug, share?.shareBaseUrl);
       const rawCaption =
         share?.caption?.trim() ||
         renderTemplate(share?.captionTemplate || DEFAULT_PHOTO_CAPTION, {
@@ -246,6 +254,7 @@ export async function addLinkComment(
   article: { slug: string; title: string; coverImage?: string | null },
   commentTemplate?: string,
   attachImage: boolean = true,
+  shareBaseUrl?: string,
 ): Promise<{ ok: boolean; commentId?: string; error?: string; permission?: boolean }> {
   let token: string;
   try {
@@ -253,9 +262,9 @@ export async function addLinkComment(
   } catch {
     return { ok: false, error: "Stored token could not be decrypted. Reconnect the page." };
   }
-  const url = articleUrl(article.slug);
+  const url = articleUrl(article.slug, shareBaseUrl);
   const message = renderTemplate(commentTemplate || DEFAULT_PHOTO_COMMENT, { url, headline: article.title });
-  const commentImage = attachImage ? (article.coverImage || "").trim() || ogCardImageUrl(article.slug) : undefined;
+  const commentImage = attachImage ? (article.coverImage || "").trim() || ogCardImageUrl(article.slug, shareBaseUrl) : undefined;
   try {
     const { commentId } = await commentWithRetry(postId, token, message, commentImage);
     return { ok: true, commentId };

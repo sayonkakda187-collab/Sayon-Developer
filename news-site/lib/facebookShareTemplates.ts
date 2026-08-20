@@ -30,6 +30,11 @@ export type FbShareSettings = {
   commentTemplate: string;
   /** Attach the news preview image to the link comment (photo mode). Default on. */
   commentImage: boolean;
+  /** Domain used to build the article link that gets SHARED to Facebook — the
+   *  link post itself and the link posted in the comment. Empty = use the site's
+   *  own canonical URL (NEXT_PUBLIC_SITE_URL / lib/site.ts). Set this to publish
+   *  under a different domain without a redeploy, e.g. after a domain move. */
+  shareBaseUrl: string;
 };
 
 export const DEFAULT_FB_SHARE_SETTINGS: FbShareSettings = {
@@ -37,6 +42,7 @@ export const DEFAULT_FB_SHARE_SETTINGS: FbShareSettings = {
   captionTemplate: DEFAULT_PHOTO_CAPTION,
   commentTemplate: DEFAULT_PHOTO_COMMENT,
   commentImage: true,
+  shareBaseUrl: "",
 };
 
 export function normalizeFbShareSettings(p: Partial<FbShareSettings> | undefined): FbShareSettings {
@@ -47,7 +53,29 @@ export function normalizeFbShareSettings(p: Partial<FbShareSettings> | undefined
     captionTemplate: caption,
     commentTemplate: comment,
     commentImage: typeof p?.commentImage === "boolean" ? p.commentImage : true,
+    shareBaseUrl: normalizeShareBaseUrl(p?.shareBaseUrl),
   };
+}
+
+/**
+ * Clean an admin-entered share domain. Accepts "example.com" or a full URL,
+ * always returns an https origin with no trailing slash (or "" to fall back to
+ * the site's own canonical URL). Anything unparseable becomes "" rather than
+ * silently producing broken share links.
+ */
+export function normalizeShareBaseUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const raw = value.trim();
+  if (!raw) return "";
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    if (!u.hostname.includes(".")) return "";
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return "";
+  }
 }
 
 /** Substitute {tokens}, then tidy blank lines left where a token resolved empty. */
