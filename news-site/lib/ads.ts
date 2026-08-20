@@ -133,6 +133,28 @@ export const ADS = {
   SITEWIDE_FEED: "2047761",
 } as const;
 
+/*
+ * ── AGGRESSIVE OVERLAY FORMATS — OFF ────────────────────────────────────────
+ * Interstitials (full-screen pop-ups) and in-site notifications (floating
+ * cards) are the formats security vendors hunt for: a young domain running
+ * self-triggering overlays looks, to an automated scanner, exactly like a
+ * malvertising page.
+ *
+ * dailyledger.today was blocked by Spectrum's "Security Shield" (CUJO AI) as a
+ * "suspicious site", cutting off readers on one of the largest US ISPs. Losing
+ * whole VISITORS costs far more than these units earn per visit, so they are
+ * disabled while the domain's reputation is rebuilt.
+ *
+ * This gate applies to EVERY <AdOverlay> — the site-wide NOTIFICATION /
+ * INTERSTITIAL / INTERSTITIAL_2 and the gallery notifications. In-content
+ * units (<AdSlot>), the sticky footer, and the Adsterra banner/native units are
+ * NOT affected and keep earning.
+ *
+ * Set this back to `true` to re-enable them (ideally only after the
+ * reclassification requests come back clean).
+ */
+export const OVERLAY_ADS_ENABLED: boolean = false;
+
 // 3) Master on/off switch. Leave false until your IDs above are real.
 //    Typed as `boolean` (not the literal `false`) so the on/off branches in
 //    AdSlot/AdsHead type-check cleanly when you flip it.
@@ -168,4 +190,12 @@ export function adsHeadEnabled(): boolean {
 /** Whether a specific placement should render a real ad. */
 export function adSlotLive(widgetId: string): boolean {
   return ADS_ENABLED && !isPlaceholder(widgetId);
+}
+
+/** Whether a SELF-DISPLAYING OVERLAY (interstitial / in-site notification)
+ *  should render. Requires the extra OVERLAY_ADS_ENABLED gate above, so all
+ *  overlay formats can be switched off in one place without touching the
+ *  in-content units. */
+export function adOverlayLive(widgetId: string): boolean {
+  return OVERLAY_ADS_ENABLED && adSlotLive(widgetId);
 }

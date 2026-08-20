@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { adSlotLive } from "@/lib/ads";
+import { adOverlayLive } from "@/lib/ads";
 
 declare global {
   interface Window {
@@ -27,13 +27,13 @@ export function AdOverlay({ widgetId }: { widgetId: string }) {
   const triggered = useRef(false);
 
   useEffect(() => {
-    if (!adSlotLive(widgetId) || triggered.current) return;
+    if (!adOverlayLive(widgetId) || triggered.current) return;
     triggered.current = true;
     // Tell AdsKeeper to scan the DOM and fill any widget containers (incl. this one).
     window._mgq = window._mgq || [];
     window._mgq.push(["_mgc.load"]);
   }, [widgetId]);
 
-  if (!adSlotLive(widgetId)) return null;
+  if (!adOverlayLive(widgetId)) return null;
   return <div data-type="_mgwidget" data-widget-id={widgetId} />;
 }
