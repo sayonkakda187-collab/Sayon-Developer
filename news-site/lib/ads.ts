@@ -171,16 +171,21 @@ export const ADS_PRIMARY = {
    *  below the hero, which is not a header position. */
   IN_ARTICLE_TOP: "2070978",
   IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
-  /** Directly BELOW the "Key Points" box, near the top of the story. AdsKeeper's
-   *  snippet for this one carries no min-height, so the slot reserves a modest
-   *  250px rather than the 300 a header unit asks for. */
-  AFTER_KEY_POINTS: "2071266",
+  /** In-content unit directly BELOW the "Key Points" box. Empty — 2071266 turned
+   *  out to be an In-site Notification (self-displaying), so it moved to
+   *  NOTIFICATION below. The position stays, ready for a Feed/in-content id. */
+  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
   HOME: "REPLACE_WITH_HOME_ID",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
-  NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
+  /** In-site NOTIFICATION 2071266 — a self-displaying floating card (dashboard:
+   *  type "In-site notification", position TOP, 5 rows, re-runs every 40s).
+   *  Mounted ONCE site-wide via <AdOverlay> in (public)/layout.tsx, so it rides
+   *  along on the homepage, every article, category and search. It positions and
+   *  triggers ITSELF — it must never go in an in-content <AdSlot>. */
+  NOTIFICATION: "2071266",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
