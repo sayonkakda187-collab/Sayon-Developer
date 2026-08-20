@@ -222,7 +222,7 @@ export default async function ArticlePage({ params }: Props) {
           header) for maximum visibility, per the requested layout. It collapses
           cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
       <div className="px-4 sm:px-6">
-        <AdSlot name="IN_ARTICLE_TOP" widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
+        <AdSlot widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
       </div>
 
       {/* Immersive hero (headline over cover) */}
@@ -340,11 +340,11 @@ export default async function ArticlePage({ params }: Props) {
             p.type === "md" ? (
               <Markdown key={i} content={p.content} />
             ) : p.type === "ad" ? (
-              <AdSlot key={i} name="IN_ARTICLE" widgetId={ads.IN_ARTICLE} />
+              <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
             ) : p.type === "ad2" ? (
-              <AdSlot key={i} name="IN_ARTICLE_2" widgetId={ads.IN_ARTICLE_2} />
+              <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} />
             ) : p.type === "ad3" ? (
-              <AdSlot key={i} name="IN_ARTICLE_3" widgetId={ads.IN_ARTICLE_3} />
+              <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
             ) : (
               <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
             ),
@@ -370,7 +370,7 @@ export default async function ArticlePage({ params }: Props) {
 
         {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
             widget lives here, AFTER the story ends (never above it). */}
-        <AdSlot name="RECOMMENDED" widgetId={ads.RECOMMENDED} minHeight={300} />
+        <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
 
         {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
             silent until configured in lib/adsterra.ts. */}

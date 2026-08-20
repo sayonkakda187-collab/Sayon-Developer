@@ -50,7 +50,7 @@ export default async function Home() {
 
       {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
       <div style={{ padding: "28px 0" }}>
-        <AdSlot name="HOME" widgetId={ads.HOME} minHeight={120} />
+        <AdSlot widgetId={ads.HOME} minHeight={120} />
       </div>
 
       {/* Reserved Google AdSense slot between the upper sections and the feed. */}

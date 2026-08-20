@@ -160,7 +160,12 @@ export const ADS_LEGACY = {
  * keys, IAB display -> STICKY_FOOTER).
  */
 export const ADS_PRIMARY = {
-  IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
+  /** AdsKeeper HEADER WIDGET (4 columns desktop / 2 mobile, "Interesting for
+   *  you"). Its dashboard entry states it "should be placed above the page
+   *  content", which on an article means above the headline and cover — so it
+   *  goes here and nowhere else. Do NOT also map it to HOME: that slot sits
+   *  below the hero, which is not a header position. */
+  IN_ARTICLE_TOP: "2070978",
   IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",

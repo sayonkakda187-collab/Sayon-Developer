@@ -58,7 +58,7 @@ export function Latest({ stories, filters }: { stories: LedgerStory[]; filters: 
                   ad never lands with little/no content after it. */}
               {i === 5 && shown.length > 8 && (
                 <div className="tl-feed-ad" style={{ gridColumn: "1 / -1" }}>
-                  <AdSlot name="HOME_FEED" widgetId={ADS.HOME_FEED} minHeight={120} />
+                  <AdSlot widgetId={ADS.HOME_FEED} minHeight={120} />
                 </div>
               )}
             </Fragment>
