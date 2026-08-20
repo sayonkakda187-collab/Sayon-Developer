@@ -174,6 +174,9 @@ export const ADS_LEGACY = {
  *                reader who finishes the story passes (highest viewability)
  *   • homepage → HOME
  *   • gallery  → arrives via the IN_ARTICLE slot in <GalleryView>'s rotation
+ * The second in-content widget (2070978) takes IN_ARTICLE_TOP, so the article —
+ * where nearly all traffic lands — now carries the page's two strongest slots
+ * (above the headline + under the Read more button).
  * It used to sit on SITEWIDE_FEED — the very bottom of every page, below the
  * comments — which is the weakest slot on the page. The trade-off: SITEWIDE_FEED
  * is now empty, so /category and /search carry no in-content unit until a second
@@ -181,8 +184,8 @@ export const ADS_LEGACY = {
  * arrive on articles from Facebook), so this is a clear net gain.
  *
  * ── Widgets to create under site 1108814 for full parity ────────────────────
- *   IN_ARTICLE_TOP · IN_ARTICLE_2 · IN_ARTICLE_3 · RECOMMENDED · HOME_FEED ·
- *   SIDEBAR_1 · SIDEBAR_2 · SITEWIDE_FEED · GALLERY_FEED   → In-content (Feed)
+ *   IN_ARTICLE_2 · IN_ARTICLE_3 · RECOMMENDED · HOME_FEED · SIDEBAR_1 ·
+ *   SIDEBAR_2 · SITEWIDE_FEED · GALLERY_FEED               → In-content (Feed)
  *   NOTIFICATION · GALLERY_NOTIFICATION_1 · GALLERY_NOTIFICATION_2
  *                                                          → In-site Notification
  *   INTERSTITIAL_2                                         → Interstitial
@@ -190,7 +193,11 @@ export const ADS_LEGACY = {
  * Paste each new id over its placeholder; nothing else needs to change.
  */
 export const ADS_PRIMARY = {
-  IN_ARTICLE_TOP: "REPLACE_WITH_IN_ARTICLE_TOP_ID",
+  /** Approved in-content widget #2 — the TOP-of-article leaderboard, above the
+   *  headline and cover. AdsKeeper's snippet recommends a 300px min-height, which
+   *  is what the slot reserves. Distinct from IN_ARTICLE below, so both fill on
+   *  the same page. */
+  IN_ARTICLE_TOP: "2070978",
   /** Approved Feed / in-content widget, put on the ARTICLE page's prime slot —
    *  directly beneath the "Read more" button. Same id as HOME below; they are on
    *  different pages, so each fills independently. */

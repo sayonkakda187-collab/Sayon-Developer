@@ -248,7 +248,7 @@ export default async function ArticlePage({ params }: Props) {
           name="IN_ARTICLE_TOP"
           widgetId={ads.IN_ARTICLE_TOP}
           variant="leaderboard"
-          minHeight={120}
+          minHeight={300}
         />
       </div>
 
