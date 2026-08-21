@@ -190,7 +190,15 @@ export const ADS_PRIMARY = {
   AFTER_KEY_POINTS: "2071391",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
-  RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
+  /** IN-ARTICLE widget 2071409 — the END-OF-ARTICLE unit, rendered after the
+   *  story body and before the comments.
+   *
+   *  Deliberately here rather than IN_ARTICLE_2: buildArticleParts counts the
+   *  live IN_ARTICLE/_2/_3 ids, and a second one flips it off the midpoint
+   *  branch back to the staggered ladder — which would drag 2071266 out of the
+   *  middle of the story, where it was specifically asked to be. RECOMMENDED is
+   *  a separate slot, so the mid-article position is untouched. */
+  RECOMMENDED: "2071409",
   /** HEADER WIDGET 2070978 on the HOMEPAGE — same id as IN_ARTICLE_TOP, which is
    *  fine and intended: a widget fills one slot per PAGE, and these are different
    *  pages. AdsKeeper types it "Header widget — a responsive single-row ad unit
