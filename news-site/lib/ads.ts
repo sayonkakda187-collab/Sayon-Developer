@@ -177,26 +177,24 @@ export const ADS_PRIMARY = {
   /** In-body unit. Empty — awaiting an In-content / Feed widget. The only other
    *  id this site has (2071266) is an In-site Notification and belongs on
    *  NOTIFICATION, not here. */
-  /** MIDDLE of the story — 2071409, a genuine IN-ARTICLE widget.
+  /** Placement 2 — mid-article, centred by text length (see buildArticleParts).
    *
-   *  It swapped places with 2071266, which is an In-site Notification. That one
-   *  DID render inline once (below Key Points), but AdsKeeper does not promise a
-   *  notification format will fill an in-content container, and it is on a 40s
-   *  display cycle — mid-article it left the slot empty. The middle of the story
-   *  is the position that matters most here, so it gets the widget type that is
-   *  proven to fill it. */
-  IN_ARTICLE: "2071409",
-  /** IN-CONTENT / FEED widget 2071391, directly BELOW the "Key Points" box.
-   *  Reused on HOME_FEED and GALLERY_FEED — different pages, so each fills
-   *  independently. Never on SITEWIDE_FEED, which renders on every page. */
-  AFTER_KEY_POINTS: "2071391",
+   *  ⚠️ All three in-body slots share ONE id (2071423), which is deliberate.
+   *  AdsKeeper's own install snippet says the container "can be added in multiple
+   *  places on page <body> where you want your widgets to appear", so a single
+   *  widget is meant to serve several positions. This replaces the previous
+   *  patchwork of 2071391 / 2071409 / 2071266 in the article body — one widget,
+   *  three positions, one earnings line to read.
+   *
+   *  If AdsKeeper turns out to fill only the first of the three, give the other
+   *  two their own ids; the slots are unchanged either way. */
+  IN_ARTICLE: "2071423",
+  /** Placement 1 — below the title/meta block, before the first body paragraph. */
+  AFTER_KEY_POINTS: "2071423",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
-  /** END of the article, after the story and before the comments — 2071266.
-   *  The In-site Notification takes this slot instead of the middle: if the
-   *  format does not fill an in-content container, it costs the weaker position
-   *  rather than the strong one. */
-  RECOMMENDED: "2071266",
+  /** Placement 3 — end of the article content, before the comments. */
+  RECOMMENDED: "2071423",
   /** HEADER WIDGET 2070978 on the HOMEPAGE — same id as IN_ARTICLE_TOP, which is
    *  fine and intended: a widget fills one slot per PAGE, and these are different
    *  pages. AdsKeeper types it "Header widget — a responsive single-row ad unit

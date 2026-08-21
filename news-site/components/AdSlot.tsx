@@ -119,16 +119,21 @@ export function AdSlot({
 
   if (!live) return null;
 
-  // AdsKeeper's standard container, verbatim. Height is reserved only while the
-  // ad is on its way: released once it lands, and released again if it never
-  // does — so an empty slot takes up no space but is still there to be filled.
+  // AdsKeeper's standard container, wrapped only to centre it and stop a wide
+  // creative from forcing horizontal scroll on a phone. Height is reserved just
+  // while the ad is on its way: released once it lands, and released again if it
+  // never does — so an empty slot takes up no space but is still there to fill.
   return (
-    <div
-      ref={slotRef}
-      data-type="_mgwidget"
-      data-widget-id={widgetId}
-      className={className}
-      style={filled || empty ? undefined : { minHeight }}
-    />
+    <div className={`ad-placement-wrapper my-5 flex w-full justify-center ${className ?? ""}`}>
+      <div
+        ref={slotRef}
+        data-type="_mgwidget"
+        data-widget-id={widgetId}
+        // max-w-full is the guard against horizontal overflow: whatever the
+        // network serves is clamped to the column instead of widening the page.
+        className="w-full max-w-full"
+        style={filled || empty ? undefined : { minHeight }}
+      />
+    </div>
   );
 }
