@@ -182,8 +182,6 @@ export const ADS_PRIMARY = {
    *  container sits (proven twice on the live site). So it is an in-body unit,
    *  and buildArticleParts centres it because it is the only one. */
   IN_ARTICLE: "2071266",
-  /** Directly BELOW the "Key Points" box. Empty — 2071266 moved down to
-   *  IN_ARTICLE (the middle of the story) at the owner's request. */
   /** IN-CONTENT / FEED widget 2071391, directly BELOW the "Key Points" box.
    *  Reused on HOME_FEED and GALLERY_FEED — different pages, so each fills
    *  independently. Never on SITEWIDE_FEED, which renders on every page. */
@@ -233,7 +231,14 @@ export const ADS_PRIMARY = {
    *  never mounts below 1024px, so phones never receive the container and the
    *  impression is never served to a reader who cannot see it. */
   SIDEBAR_1: "2071408",
-  SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
+  /** FEED widget 2071410 — the site-wide unit above the footer, rendered once in
+   *  (public)/layout.tsx so it appears on EVERY public page. It is the only ad
+   *  that reaches /category and /search, which otherwise carry none.
+   *
+   *  Because it is on every page, its id must not be reused by any other slot.
+   *  On an article it lands after the comments and related stories, so it is the
+   *  lowest-viewability unit of the set — the value here is the listing pages. */
+  SITEWIDE_FEED: "2071410",
 } as const;
 
 /** Back-compat alias + the source of the placement-name type. */
