@@ -27,13 +27,42 @@ function isReminderLine(line: string): boolean {
 }
 
 /**
+ * Remove bracketed editorial placeholders — "[VERIFY: …]", "[TK]", "[confirm …]"
+ * — from a draft body.
+ *
+ * The prompt already tells the model to write around a gap rather than flag it,
+ * but a prompt is a request, not a guarantee, so this is the enforcement. A
+ * marker sitting inline is cut out and the surrounding sentence tidied; a line
+ * or block that was ONLY a marker disappears entirely rather than leaving a
+ * blank paragraph behind.
+ */
+function stripPlaceholders(text: string): string {
+  const cleaned = text
+    .replace(/\[\s*(?:VERIFY|TK|CONFIRM|CHECK|CITATION NEEDED)\b[^\]]*\]/gi, "")
+    // Tidy what the removal leaves: doubled spaces, a space before punctuation,
+    // and a stranded connector at the end of a sentence.
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/\(\s*\)/g, "")
+    // A marker at the end of a sentence leaves the line trailing whitespace.
+    .replace(/[ \t]+$/gm, "");
+
+  // Drop lines that are now empty but were not blank before the strip.
+  return cleaned
+    .split("\n")
+    .filter((line, i) => line.trim() !== "" || text.split("\n")[i]?.trim() === "")
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+/**
  * Strip any general AI reminder / "editor's note" / "verify before publication"
  * header or footer from a draft body — including a leading blockquote disclaimer
- * and a trailing "---" + note. Keeps the real article text and inline
- * [VERIFY: …] markers. Idempotent and safe on already-clean drafts.
+ * and a trailing "---" + note — and remove bracketed editorial placeholders so
+ * the draft reads as finished prose. Idempotent and safe on clean drafts.
  */
 export function sanitizeDraft(input: string): string {
-  let text = (input ?? "").replace(/\r\n/g, "\n");
+  let text = stripPlaceholders((input ?? "").replace(/\r\n/g, "\n"));
 
   // Split into blocks on blank lines so we can drop whole reminder blocks.
   const blocks = text.split(/\n{2,}/);
