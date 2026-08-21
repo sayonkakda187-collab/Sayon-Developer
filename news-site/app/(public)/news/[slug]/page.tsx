@@ -18,6 +18,7 @@ import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
+import { AdRail } from "@/components/AdRail";
 import { AdsterraNative } from "@/components/AdsterraNative";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
 import { adsForHost, adSlotLive } from "@/lib/ads";
@@ -392,150 +393,156 @@ export default async function ArticlePage({ params }: Props) {
         </header>
       )}
 
-      {/* Reading column */}
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <div className="mx-auto max-w-prose">
-          <p className="mb-9 border-l-[3px] border-accent pl-5 text-xl font-medium leading-relaxed text-fg-muted motion-safe:animate-fade-up sm:text-2xl">
-            {article.excerpt}
-          </p>
+      {/* Reading column + the desktop sidebar rail. `justify-center` keeps the
+          story centred on its own whenever the rail renders nothing (no live
+          sidebar id, or a phone), so there is never an empty right column. */}
+      <div className="mx-auto flex max-w-[1180px] justify-center gap-8 px-4 py-10 sm:px-6 lg:py-14">
+        <div className="w-full min-w-0 max-w-3xl">
+          <div className="mx-auto max-w-prose">
+            <p className="mb-9 border-l-[3px] border-accent pl-5 text-xl font-medium leading-relaxed text-fg-muted motion-safe:animate-fade-up sm:text-2xl">
+              {article.excerpt}
+            </p>
 
-          {keyPoints.length > 0 && (
-            <aside
-              className="mb-9 rounded-xl border border-border bg-surface p-5 motion-safe:animate-fade-up sm:p-6"
-              aria-label="Key points"
-            >
-              <h2 className="font-display text-xs font-bold uppercase tracking-[0.16em] text-accent-link">
-                Key Points
-              </h2>
-              <ul className="mt-3 space-y-2.5">
-                {keyPoints.map((point, i) => (
-                  <li key={i} className="flex gap-3 text-pretty leading-snug text-fg-muted">
-                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent" />
-                    <span>{point}</span>
+            {keyPoints.length > 0 && (
+              <aside
+                className="mb-9 rounded-xl border border-border bg-surface p-5 motion-safe:animate-fade-up sm:p-6"
+                aria-label="Key points"
+              >
+                <h2 className="font-display text-xs font-bold uppercase tracking-[0.16em] text-accent-link">
+                  Key Points
+                </h2>
+                <ul className="mt-3 space-y-2.5">
+                  {keyPoints.map((point, i) => (
+                    <li key={i} className="flex gap-3 text-pretty leading-snug text-fg-muted">
+                      <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-accent" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
+
+            {/* Ad directly below the Key Points box. Deliberately OUTSIDE the
+                keyPoints check — an article with no key points still shows it here,
+                in the same spot right after the standfirst. */}
+            <AdSlot widgetId={ads.AFTER_KEY_POINTS} minHeight={250} className="mb-9" />
+
+            <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
+
+            {/* Body with its in-article ads. Preferred layout is one unit below
+                each "## " section; a piece with no sections falls back to the
+                paragraph-based placement. Every unit lazy-loads and removes itself
+                when the network returns nothing. */}
+            {parts.map((p, i) =>
+              p.type === "md" ? (
+                <Markdown key={i} content={p.content} />
+              ) : p.type === "section" ? (
+                <AdSlot key={i} widgetId={sectionAds[p.slot]} />
+              ) : p.type === "ad" ? (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
+              ) : p.type === "ad2" ? (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} />
+              ) : p.type === "ad3" ? (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
+              ) : (
+                <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
+              ),
+            )}
+
+            {article.tags.length > 0 && (
+              <div className="mt-12 flex flex-wrap gap-2">
+                {article.tags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg-muted"
+                  >
+                    #{tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-10 border-t border-border pt-6">
+              <ShareButtons url={shareUrl} title={article.title} />
+            </div>
+          </div>
+
+          {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
+              widget lives here, AFTER the story ends (never above it). */}
+          <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
+
+          {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
+              silent until configured in lib/adsterra.ts. */}
+          <AdsterraNative />
+
+          <section
+            id="comments"
+            aria-label="Comments"
+            className="mx-auto mt-14 max-w-prose border-t border-border pt-10"
+          >
+            <h2 className="font-display text-2xl font-bold tracking-tight">
+              Comments <span className="text-fg-faint">({comments.length})</span>
+            </h2>
+
+            {comments.length === 0 ? (
+              <p className="mt-4 text-fg-muted">
+                No comments yet. Be the first to share your thoughts.
+              </p>
+            ) : (
+              <ul className="mt-6 space-y-4">
+                {comments.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-xl border border-border bg-surface p-5"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-semibold text-fg">{c.authorName}</span>
+                      <time
+                        dateTime={c.createdAt.toISOString()}
+                        className="text-xs text-fg-faint"
+                      >
+                        {formatDate(c.createdAt)}
+                      </time>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap leading-relaxed text-fg-muted">
+                      {c.content}
+                    </p>
                   </li>
                 ))}
               </ul>
-            </aside>
-          )}
+            )}
 
-          {/* Ad directly below the Key Points box. Deliberately OUTSIDE the
-              keyPoints check — an article with no key points still shows it here,
-              in the same spot right after the standfirst. */}
-          <AdSlot widgetId={ads.AFTER_KEY_POINTS} minHeight={250} className="mb-9" />
-
-          <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
-
-          {/* Body with its in-article ads. Preferred layout is one unit below
-              each "## " section; a piece with no sections falls back to the
-              paragraph-based placement. Every unit lazy-loads and removes itself
-              when the network returns nothing. */}
-          {parts.map((p, i) =>
-            p.type === "md" ? (
-              <Markdown key={i} content={p.content} />
-            ) : p.type === "section" ? (
-              <AdSlot key={i} widgetId={sectionAds[p.slot]} />
-            ) : p.type === "ad" ? (
-              <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
-            ) : p.type === "ad2" ? (
-              <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} />
-            ) : p.type === "ad3" ? (
-              <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
-            ) : (
-              <AdSenseSlot key={i} enabled={adsOn} slot="in-article" />
-            ),
-          )}
-
-          {article.tags.length > 0 && (
-            <div className="mt-12 flex flex-wrap gap-2">
-              {article.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg-muted"
-                >
-                  #{tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-10 border-t border-border pt-6">
-            <ShareButtons url={shareUrl} title={article.title} />
-          </div>
-        </div>
-
-        {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
-            widget lives here, AFTER the story ends (never above it). */}
-        <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
-
-        {/* Adsterra native row, also AFTER the story ends. Lazy-loaded and
-            silent until configured in lib/adsterra.ts. */}
-        <AdsterraNative />
-
-        <section
-          id="comments"
-          aria-label="Comments"
-          className="mx-auto mt-14 max-w-prose border-t border-border pt-10"
-        >
-          <h2 className="font-display text-2xl font-bold tracking-tight">
-            Comments <span className="text-fg-faint">({comments.length})</span>
-          </h2>
-
-          {comments.length === 0 ? (
-            <p className="mt-4 text-fg-muted">
-              No comments yet. Be the first to share your thoughts.
-            </p>
-          ) : (
-            <ul className="mt-6 space-y-4">
-              {comments.map((c) => (
-                <li
-                  key={c.id}
-                  className="rounded-xl border border-border bg-surface p-5"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-fg">{c.authorName}</span>
-                    <time
-                      dateTime={c.createdAt.toISOString()}
-                      className="text-xs text-fg-faint"
-                    >
-                      {formatDate(c.createdAt)}
-                    </time>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap leading-relaxed text-fg-muted">
-                    {c.content}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="mt-10">
-            <h3 className="font-display text-lg font-semibold">Leave a comment</h3>
-            <p className="mt-1 text-sm text-fg-faint">
-              Comments are reviewed before they appear.
-            </p>
-            <CommentForm articleId={article.id} />
-          </div>
-        </section>
-
-        {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
-        <AdSenseSlot enabled={adsOn} slot="article-end" minHeight={300} />
-
-        {related.length > 0 && (
-          <section className="mt-16 border-t border-border pt-10">
-            <Reveal>
-              <h2 className="mb-6 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                Related Stories
-              </h2>
-            </Reveal>
-            <div className="grid gap-x-5 gap-y-8 sm:grid-cols-3">
-              {related.map((item, i) => (
-                <Reveal key={item.id} delay={i * 60}>
-                  <ArticleCard article={item} />
-                </Reveal>
-              ))}
+            <div className="mt-10">
+              <h3 className="font-display text-lg font-semibold">Leave a comment</h3>
+              <p className="mt-1 text-sm text-fg-faint">
+                Comments are reviewed before they appear.
+              </p>
+              <CommentForm articleId={article.id} />
             </div>
           </section>
-        )}
+
+          {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
+          <AdSenseSlot enabled={adsOn} slot="article-end" minHeight={300} />
+
+          {related.length > 0 && (
+            <section className="mt-16 border-t border-border pt-10">
+              <Reveal>
+                <h2 className="mb-6 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                  Related Stories
+                </h2>
+              </Reveal>
+              <div className="grid gap-x-5 gap-y-8 sm:grid-cols-3">
+                {related.map((item, i) => (
+                  <Reveal key={item.id} delay={i * 60}>
+                    <ArticleCard article={item} />
+                  </Reveal>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <AdRail widgetIds={[ads.SIDEBAR_1]} />
       </div>
     </main>
   );

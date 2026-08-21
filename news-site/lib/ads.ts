@@ -144,6 +144,10 @@ export const ADS_LEGACY = {
    *  on the /g/<token> gallery pages. A widget fills only one slot per page, and
    *  this id is used only here, so it fills independently on each page. Collapses
    *  cleanly if unfilled; only serves on the authorized production domain. */
+  /** DESKTOP SIDEBAR rail beside the article body. Placeholder: every in-content
+   *  widget on THIS site already appears elsewhere on the article page, and a
+   *  widget fills only one slot per page — this needs its own id. */
+  SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
   SITEWIDE_FEED: "2047761",
 } as const;
 
@@ -216,6 +220,11 @@ export const ADS_PRIMARY = {
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
   /** Approved Feed / in-content widget for ledgerdailynews.com. */
+  /** SIDEBAR WIDGET 2071408 — a tall unit for a narrow column, so it renders in
+   *  the desktop rail beside the article body (<AdRail>). DESKTOP ONLY: the rail
+   *  never mounts below 1024px, so phones never receive the container and the
+   *  impression is never served to a reader who cannot see it. */
+  SIDEBAR_1: "2071408",
   SITEWIDE_FEED: "REPLACE_WITH_SITEWIDE_FEED_ID",
 } as const;
 
