@@ -219,7 +219,17 @@ export const ADS_PRIMARY = {
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
-  STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
+  /** ALERT unit 2071425 — a floating bar pinned to the bottom of the viewport on
+   *  every public page (homepage, articles, category, search), via
+   *  <AdStickyFooter> in the public layout.
+   *
+   *  Deliberately NOT on NOTIFICATION. That slot mounts through <AdOverlay>,
+   *  which puts a bare container in normal flow AFTER the footer — fine for a
+   *  format that repositions itself, but this account's notification widgets
+   *  render INLINE, which is what stranded an ad under the copyright line.
+   *  <AdStickyFooter> is position:fixed, so an inline render still appears as a
+   *  floating bar, reveals only once the ad fills, and can be dismissed. */
+  STICKY_FOOTER: "2071425",
   GALLERY_FEED: "2071391",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",

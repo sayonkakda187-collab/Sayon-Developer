@@ -81,10 +81,7 @@ export function AdStickyFooter({ widgetId }: { widgetId: string }) {
       aria-label="Advertisement"
     >
       <div className="mx-auto max-w-5xl border-t border-border bg-surface shadow-lg">
-        <div className="flex items-center justify-between px-2 py-0.5">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-fg-faint">
-            Advertisement
-          </span>
+        <div className="flex items-center justify-end px-2 py-0.5">
           <button
             type="button"
             onClick={() => setDismissed(true)}
@@ -96,7 +93,10 @@ export function AdStickyFooter({ widgetId }: { widgetId: string }) {
             </span>
           </button>
         </div>
-        <div className="flex justify-center px-2 pb-1.5">
+        {/* Height cap: a notification-style creative can be several rows tall, and
+            a fixed bar has no page flow to push into — without this it could
+            cover most of a phone screen. */}
+        <div className="flex max-h-[45vh] justify-center overflow-y-auto px-2 pb-1.5">
           {live ? (
             <div ref={slotRef} data-type="_mgwidget" data-widget-id={widgetId} />
           ) : (
