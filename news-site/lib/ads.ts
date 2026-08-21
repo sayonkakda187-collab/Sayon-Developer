@@ -173,10 +173,17 @@ export const ADS_PRIMARY = {
   /** In-body unit. Empty — awaiting an In-content / Feed widget. The only other
    *  id this site has (2071266) is an In-site Notification and belongs on
    *  NOTIFICATION, not here. */
-  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
+  /** MIDDLE of the article body — 2071266. It is typed "In-site notification" in
+   *  AdsKeeper, but it does NOT self-position: it renders inline wherever its
+   *  container sits (proven twice on the live site). So it is an in-body unit,
+   *  and buildArticleParts centres it because it is the only one. */
+  IN_ARTICLE: "2071266",
   /** Directly BELOW the "Key Points" box. Empty — 2071266 moved down to
    *  IN_ARTICLE (the middle of the story) at the owner's request. */
-  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
+  /** IN-CONTENT / FEED widget 2071391, directly BELOW the "Key Points" box.
+   *  Reused on HOME_FEED and GALLERY_FEED — different pages, so each fills
+   *  independently. Never on SITEWIDE_FEED, which renders on every page. */
+  AFTER_KEY_POINTS: "2071391",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
@@ -186,19 +193,26 @@ export const ADS_PRIMARY = {
    *  that should be placed ABOVE the page content", so it renders at the very top
    *  of the homepage, above the hero. */
   HOME: "2070978",
-  HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
-  /** IN-SITE NOTIFICATION 2071266 — its designated placement. AdsKeeper types it
-   *  "In-site notification" (position TOP, 5 rows, re-runs every 40s): the widget
-   *  decides when and where it appears from those dashboard settings, so it is
-   *  mounted ONCE site-wide via <AdOverlay> and never dropped into an in-content
-   *  slot. Move it in the dashboard, not in this file. */
-  NOTIFICATION: "2071266",
+  HOME_FEED: "2071391",
+  /** ⚠️ LEAVE EMPTY unless a widget genuinely positions ITSELF.
+   *
+   *  <AdOverlay> renders a bare container at the very END of the layout, after
+   *  the footer. That is only correct for a format that then repositions itself
+   *  (fixed/absolute). A widget that renders INLINE instead appears stranded
+   *  below the footer — which is exactly what happened when 2071266 was assigned
+   *  here: AdsKeeper types it "In-site notification", but it renders inline, so
+   *  readers got a "Promoted content" block under the copyright line.
+   *
+   *  The dashboard TYPE is not sufficient evidence. Before putting an id here,
+   *  confirm ON THE LIVE SITE that the widget floats rather than rendering in
+   *  place. If it renders inline, it belongs in an in-content slot above. */
+  NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
-  GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
+  GALLERY_FEED: "2071391",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
   /** Approved Feed / in-content widget for ledgerdailynews.com. */

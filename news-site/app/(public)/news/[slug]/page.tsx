@@ -132,7 +132,19 @@ function buildArticleParts(content: string, sectionAdCount = 0, inBodyAdCount = 
   // its first cut sits early precisely because more ads follow it.)
   if (inBodyAdCount <= 1) {
     if (n < 4) return [{ type: "md", content }];
-    const mid = balancedCut(Math.round(n / 2));
+    // Midpoint by TEXT LENGTH, not block count. Blocks are wildly uneven — a
+    // heading is a few words, a paragraph is a few lines — so splitting at
+    // block n/2 lands well above the visual middle on a story with many
+    // headings. Cutting where half the prose has been read is what "the middle
+    // of the article" actually means to a reader.
+    const half = blocks.reduce((sum, b) => sum + b.length, 0) / 2;
+    let run = 0;
+    let target = 1;
+    for (let i = 0; i < n; i++) {
+      run += blocks[i].length;
+      if (run >= half) { target = i + 1; break; }
+    }
+    const mid = balancedCut(Math.min(Math.max(target, 1), n - 1));
     if (mid < 1 || mid >= n) return [{ type: "md", content }];
     return [md(0, mid), { type: "ad" }, { type: "adsense" }, md(mid)];
   }
