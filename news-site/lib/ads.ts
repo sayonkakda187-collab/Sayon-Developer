@@ -215,9 +215,18 @@ export const ADS_PRIMARY = {
    *  confirm ON THE LIVE SITE that the widget floats rather than rendering in
    *  place. If it renders inline, it belongs in an in-content slot above. */
   NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
-  /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
-   *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
-  INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
+  /** INTERSTITIAL 2071426 — the full-screen unit that fires on internal link
+   *  transitions. Mounted ONCE site-wide through <AdOverlay> in the public
+   *  layout, so it arms on every public page; the widget decides when to show
+   *  from its own dashboard settings.
+   *
+   *  ⚠️ <AdOverlay> renders a bare container at the END of the layout, after the
+   *  footer. That is right for a format that builds its own overlay, which is
+   *  what an interstitial does by definition. But if this one renders INLINE
+   *  instead — as this account's notification widgets do — it will appear as a
+   *  block below the copyright line rather than as a pop-up. Check that on the
+   *  live site; if it lands inline, it belongs in an in-content slot instead. */
+  INTERSTITIAL: "2071426",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   /** ALERT unit 2071425 — a floating bar pinned to the bottom of the viewport on
    *  every public page (homepage, articles, category, search), via
