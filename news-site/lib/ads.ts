@@ -176,7 +176,16 @@ export const ADS_PRIMARY = {
   IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
   /** Directly BELOW the "Key Points" box. Empty — 2071266 moved down to
    *  IN_ARTICLE (the middle of the story) at the owner's request. */
-  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
+  /** IN-CONTENT / FEED widget 2071391 — the first true in-body unit this site
+   *  has. Renders directly BELOW the "Key Points" box, where the reader has just
+   *  finished the summary and is starting the story.
+   *
+   *  The same id is reused on HOME_FEED and GALLERY_FEED below, which is correct:
+   *  a widget fills one slot per PAGE, and the homepage, an article and a gallery
+   *  are three different pages, so it fills independently on each. It is
+   *  deliberately NOT on SITEWIDE_FEED — that slot renders on EVERY page,
+   *  including this one, which would put the id twice on the article. */
+  AFTER_KEY_POINTS: "2071391",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
@@ -186,7 +195,9 @@ export const ADS_PRIMARY = {
    *  that should be placed ABOVE the page content", so it renders at the very top
    *  of the homepage, above the hero. */
   HOME: "2070978",
-  HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
+  /** Same in-content widget, inside the homepage "Latest Stories" grid — a
+   *  different page from the article, so it fills there too. */
+  HOME_FEED: "2071391",
   /** IN-SITE NOTIFICATION 2071266 — its designated placement. AdsKeeper types it
    *  "In-site notification" (position TOP, 5 rows, re-runs every 40s): the widget
    *  decides when and where it appears from those dashboard settings, so it is
@@ -198,7 +209,9 @@ export const ADS_PRIMARY = {
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",
   INTERSTITIAL_2: "REPLACE_WITH_INTERSTITIAL_2_ID",
   STICKY_FOOTER: "REPLACE_WITH_STICKY_FOOTER_ID",
-  GALLERY_FEED: "REPLACE_WITH_GALLERY_FEED_ID",
+  /** Same in-content widget on the /g/<token> gallery pages — again a different
+   *  page, so it fills independently of the article and the homepage. */
+  GALLERY_FEED: "2071391",
   GALLERY_NOTIFICATION_1: "REPLACE_WITH_GALLERY_NOTIFICATION_1_ID",
   GALLERY_NOTIFICATION_2: "REPLACE_WITH_GALLERY_NOTIFICATION_2_ID",
   /** Approved Feed / in-content widget for ledgerdailynews.com. */
