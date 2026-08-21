@@ -170,24 +170,29 @@ export const ADS_PRIMARY = {
    *  goes here and nowhere else. Do NOT also map it to HOME: that slot sits
    *  below the hero, which is not a header position. */
   IN_ARTICLE_TOP: "2070978",
-  /** MIDDLE of the story. 2071266 is typed "In-site notification" in AdsKeeper
-   *  but renders INLINE in its container — confirmed live on the article page —
-   *  so it works as a normal in-body unit. It is the only in-body id this site
-   *  has, so the body carries ONE ad and it is placed at the MIDPOINT (see
-   *  buildArticleParts) rather than just after the opening. */
-  IN_ARTICLE: "2071266",
+  /** In-body unit. Empty — awaiting an In-content / Feed widget. The only other
+   *  id this site has (2071266) is an In-site Notification and belongs on
+   *  NOTIFICATION, not here. */
+  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
   /** Directly BELOW the "Key Points" box. Empty — 2071266 moved down to
    *  IN_ARTICLE (the middle of the story) at the owner's request. */
   AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",
-  HOME: "REPLACE_WITH_HOME_ID",
+  /** HEADER WIDGET 2070978 on the HOMEPAGE — same id as IN_ARTICLE_TOP, which is
+   *  fine and intended: a widget fills one slot per PAGE, and these are different
+   *  pages. AdsKeeper types it "Header widget — a responsive single-row ad unit
+   *  that should be placed ABOVE the page content", so it renders at the very top
+   *  of the homepage, above the hero. */
+  HOME: "2070978",
   HOME_FEED: "REPLACE_WITH_HOME_FEED_ID",
-  /** Site-wide floating notification. Empty: 2071266 moved to AFTER_KEY_POINTS
-   *  above, so it now loads only on article pages — the homepage, category and
-   *  search pages lost their one unit. Put an id back here to restore that. */
-  NOTIFICATION: "REPLACE_WITH_NOTIFICATION_ID",
+  /** IN-SITE NOTIFICATION 2071266 — its designated placement. AdsKeeper types it
+   *  "In-site notification" (position TOP, 5 rows, re-runs every 40s): the widget
+   *  decides when and where it appears from those dashboard settings, so it is
+   *  mounted ONCE site-wide via <AdOverlay> and never dropped into an in-content
+   *  slot. Move it in the dashboard, not in this file. */
+  NOTIFICATION: "2071266",
   /** Self-triggering full-screen pop-up (fires after N internal clicks, per its
    *  dashboard frequency cap). Rendered site-wide via <AdOverlay>. */
   INTERSTITIAL: "REPLACE_WITH_INTERSTITIAL_ID",

@@ -43,15 +43,18 @@ export default async function Home() {
 
   return (
     <main className="tl-wrap tl-home">
+      {/* HEADER WIDGET — AdsKeeper types this unit "a responsive single-row ad
+          unit that should be placed ABOVE the page content", so it sits at the
+          very top of the homepage, ahead of the hero — the same relationship it
+          has to the headline on an article page. */}
+      <div style={{ paddingBottom: 28 }}>
+        <AdSlot widgetId={ads.HOME} minHeight={120} />
+      </div>
+
       <LedgerHero hero={hero} leads={leads} />
 
       {/* Most Read — top stories by views over the last 7 days (cached ~15 min). */}
       <MostRead />
-
-      {/* AdsKeeper HOME unit — kept for revenue; collapses cleanly when unfilled. */}
-      <div style={{ padding: "28px 0" }}>
-        <AdSlot widgetId={ads.HOME} minHeight={120} />
-      </div>
 
       {/* Reserved Google AdSense slot between the upper sections and the feed. */}
       <AdSenseSlot enabled={adsOn} slot="home-mid" className="max-w-3xl" />
