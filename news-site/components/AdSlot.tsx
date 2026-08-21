@@ -47,8 +47,9 @@ export function AdSlot({
 }) {
   const live = adSlotLive(widgetId);
   const slotRef = useRef<HTMLDivElement>(null);
-  // Set when the network returns no ad, so the slot leaves no blank gap.
-  const [unfilled, setUnfilled] = useState(false);
+  // Set when nothing has painted yet, so the slot reserves no height and leaves
+  // no blank gap. The container STAYS mounted — see the note in the effect.
+  const [empty, setEmpty] = useState(false);
   // Set once the ad lands, releasing the reserved height so the container hugs it.
   const [filled, setFilled] = useState(false);
 
@@ -69,18 +70,27 @@ export function AdSlot({
         ro = new ResizeObserver(() => {
           if (slot.offsetHeight >= 30) {
             setFilled(true);
+            setEmpty(false);
             ro?.disconnect();
           }
         });
         ro.observe(slot);
       }
 
-      // Grace period: afterwards it either has content (also a backstop for
-      // browsers without ResizeObserver) or the slot removes itself.
+      // Grace period. Afterwards, if nothing has painted, RELEASE the reserved
+      // height so no blank gap is left — but keep the container in the DOM and
+      // the ResizeObserver running.
+      //
+      // ⚠️ This used to UNMOUNT the slot, which silently broke any widget that
+      // paints late. AdsKeeper units can be configured to display on a schedule
+      // (2071266 is set to a 40-second display frequency), and a unit that had
+      // not painted within 8s had its container deleted — so the network could
+      // never fill it at all. Removing the container is unrecoverable; dropping
+      // the reserved height is not.
       timer = window.setTimeout(() => {
         if (!slot.isConnected) return;
         if (slot.offsetHeight >= 30) setFilled(true);
-        else setUnfilled(true);
+        else setEmpty(true);
       }, 8000);
     };
 
@@ -107,16 +117,18 @@ export function AdSlot({
     };
   }, [live, widgetId]);
 
-  if (!live || unfilled) return null;
+  if (!live) return null;
 
-  // AdsKeeper's standard container, verbatim.
+  // AdsKeeper's standard container, verbatim. Height is reserved only while the
+  // ad is on its way: released once it lands, and released again if it never
+  // does — so an empty slot takes up no space but is still there to be filled.
   return (
     <div
       ref={slotRef}
       data-type="_mgwidget"
       data-widget-id={widgetId}
       className={className}
-      style={filled ? undefined : { minHeight }}
+      style={filled || empty ? undefined : { minHeight }}
     />
   );
 }
