@@ -170,16 +170,15 @@ export const ADS_PRIMARY = {
    *  goes here and nowhere else. Do NOT also map it to HOME: that slot sits
    *  below the hero, which is not a header position. */
   IN_ARTICLE_TOP: "2070978",
-  IN_ARTICLE: "REPLACE_WITH_IN_ARTICLE_ID",
-  /** Directly BELOW the "Key Points" box, at the owner's explicit request.
-   *  ⚠️ 2071266 is an IN-SITE NOTIFICATION in the AdsKeeper dashboard — a
-   *  self-positioning format that renders as a floating card wherever its
-   *  dashboard POSITION says (currently TOP). Putting its container here does
-   *  NOT make it appear inline; the format decides that, not the markup. It was
-   *  MOVED here rather than copied: it previously ran site-wide via <AdOverlay>,
-   *  and two containers sharing one id on a page fight over the single fill.
-   *  A genuinely inline unit here needs an In-content / Feed widget. */
-  AFTER_KEY_POINTS: "2071266",
+  /** MIDDLE of the story. 2071266 is typed "In-site notification" in AdsKeeper
+   *  but renders INLINE in its container — confirmed live on the article page —
+   *  so it works as a normal in-body unit. It is the only in-body id this site
+   *  has, so the body carries ONE ad and it is placed at the MIDPOINT (see
+   *  buildArticleParts) rather than just after the opening. */
+  IN_ARTICLE: "2071266",
+  /** Directly BELOW the "Key Points" box. Empty — 2071266 moved down to
+   *  IN_ARTICLE (the middle of the story) at the owner's request. */
+  AFTER_KEY_POINTS: "REPLACE_WITH_AFTER_KEY_POINTS_ID",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   RECOMMENDED: "REPLACE_WITH_RECOMMENDED_ID",

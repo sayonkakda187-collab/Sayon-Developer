@@ -20,7 +20,7 @@ import { ReadingProgress } from "@/components/ReadingProgress";
 import { AdSlot } from "@/components/AdSlot";
 import { AdsterraNative } from "@/components/AdsterraNative";
 import { AdSenseSlot } from "@/components/AdSenseSlot";
-import { adsForHost } from "@/lib/ads";
+import { adsForHost, adSlotLive } from "@/lib/ads";
 import { adsenseEnabled } from "@/lib/adsense";
 import { parseKeyPoints } from "@/lib/keyPoints";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
@@ -100,7 +100,7 @@ function buildSectionParts(blocks: string[], sectionAdCount: number): ArticlePar
  * prominent top-of-page ad and the end-of-article recommendation are rendered
  * separately (above the headline and after the body), not here.
  */
-function buildArticleParts(content: string, sectionAdCount = 0): ArticlePart[] {
+function buildArticleParts(content: string, sectionAdCount = 0, inBodyAdCount = 3): ArticlePart[] {
   const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
 
   // Preferred layout: one ad BELOW EACH "## " section of the story. Only used
@@ -115,6 +115,9 @@ function buildArticleParts(content: string, sectionAdCount = 0): ArticlePart[] {
   const n = blocks.length;
   if (n === 0) return [{ type: "md", content }];
 
+  // A slice of the body as one markdown part. The reserved Google AdSense slot
+  // (renders nothing unless enabled — see lib/adsense.ts) rides with the first ad.
+  const md = (a: number, b?: number): ArticlePart => ({ type: "md", content: blocks.slice(a, b).join("\n\n") });
   const fenceCount = (s: string) => (s.match(/```/g) || []).length;
   // Move the cut forward until the leading slice has balanced code fences.
   const balancedCut = (idx: number): number => {
@@ -122,6 +125,17 @@ function buildArticleParts(content: string, sectionAdCount = 0): ArticlePart[] {
     while (i < n && fenceCount(blocks.slice(0, i).join("\n\n")) % 2 !== 0) i++;
     return i < n ? i : -1;
   };
+
+  // With only ONE in-body widget to fill, that single ad belongs in the MIDDLE of
+  // the story rather than just after the opening — otherwise the whole lower half
+  // runs without one. (The multi-slot ladder below is for sites with several ids:
+  // its first cut sits early precisely because more ads follow it.)
+  if (inBodyAdCount <= 1) {
+    if (n < 4) return [{ type: "md", content }];
+    const mid = balancedCut(Math.round(n / 2));
+    if (mid < 1 || mid >= n) return [{ type: "md", content }];
+    return [md(0, mid), { type: "ad" }, { type: "adsense" }, md(mid)];
+  }
 
   // First mid-article slot after the opening, only when the body is long enough.
   let cut = n >= 4 ? balancedCut(3) : -1;
@@ -143,9 +157,6 @@ function buildArticleParts(content: string, sectionAdCount = 0): ArticlePart[] {
     if (b > cut2 && b <= n - 2) cut3 = b;
   }
 
-  // Build the parts left→right. The reserved Google AdSense slot (renders nothing
-  // unless AdSense slots are enabled — see lib/adsense.ts) sits after the first ad.
-  const md = (a: number, b?: number): ArticlePart => ({ type: "md", content: blocks.slice(a, b).join("\n\n") });
   const parts: ArticlePart[] = [md(0, cut), { type: "ad" }, { type: "adsense" }];
   let prev = cut;
   if (cut2 !== -1) {
@@ -270,7 +281,10 @@ export default async function ArticlePage({ params }: Props) {
     </>
   );
 
-  const parts = buildArticleParts(article.content, sectionAds.length);
+  // How many of the three in-body slots this domain can actually fill. One → the
+  // single ad is centred in the story; several → the staggered ladder.
+  const inBodyAdCount = [ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3].filter(adSlotLive).length;
+  const parts = buildArticleParts(article.content, sectionAds.length, inBodyAdCount);
 
   return (
     <main>
