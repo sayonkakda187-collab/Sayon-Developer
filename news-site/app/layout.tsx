@@ -79,11 +79,14 @@ export default function RootLayout({
     >
       <body className="flex min-h-screen flex-col bg-bg font-sans text-fg antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        {/* Google AdSense account library. Site-wide; loads on every page.
+            INSIDE <body> deliberately: a <script> is not valid as a child of
+            <html>, and React treats that as a hydration mismatch — it warned on
+            every page, admin included. next/script hoists it regardless, so the
+            position in the JSX costs nothing. */}
+        <AdSenseHead />
         <ViewTransitions>{children}</ViewTransitions>
       </body>
-      {/* Google AdSense account script — server-injected into <head> for site
-          verification/review. Site-wide; loads on every page. */}
-      <AdSenseHead />
     </html>
   );
 }
