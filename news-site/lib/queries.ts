@@ -40,6 +40,32 @@ export function getCategories() {
   return prisma.category.findMany({ orderBy: { name: "asc" } });
 }
 
+/**
+ * Category name + slug for the public nav, header and footer — CACHED.
+ *
+ * These run on EVERY public pageview, so uncached they were two round trips to
+ * Postgres per visitor (plus the bytes back). That is what exhausted the
+ * database's monthly free allowance: the site is dynamic (the ad layer reads
+ * headers()), so nothing was served from a page cache either.
+ *
+ * Deliberately Date-free: Category carries a createdAt, and Next's data cache
+ * does not round-trip Date objects reliably. Nothing in the nav needs it, so
+ * selecting only the three fields makes this both cacheable and smaller on the
+ * wire. getCategories() above is untouched for the admin, which does want the
+ * full record.
+ */
+export type NavCategory = { id: string; name: string; slug: string };
+
+export const getNavCategories = unstable_cache(
+  async (): Promise<NavCategory[]> =>
+    prisma.category.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
+  ["nav-categories-v1"],
+  { revalidate: 300 },
+);
+
 /** Latest published headlines for the top "trending" bar (display only). */
 export function getTrending(take = 6) {
   return prisma.article.findMany({
@@ -49,6 +75,14 @@ export function getTrending(take = 6) {
     take,
   });
 }
+
+/** The same trending headlines, CACHED — this also runs on every pageview.
+ *  Already Date-free (title + slug only), so it caches cleanly as-is. */
+export const getTrendingCached = unstable_cache(
+  async (take = 6): Promise<{ title: string; slug: string }[]> => getTrending(take),
+  ["trending-headlines-v1"],
+  { revalidate: 120 },
+);
 
 /** Homepage payload: a featured hero, the latest grid, and per-category sections. */
 export async function getHomepage() {

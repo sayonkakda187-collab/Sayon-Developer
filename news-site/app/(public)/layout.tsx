@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getCategories, getTrending } from "@/lib/queries";
+import { getNavCategories, getTrendingCached } from "@/lib/queries";
 import { deskClass } from "@/lib/ledger";
 import { AdsHead } from "@/components/AdsHead";
 import { AdOverlay } from "@/components/AdOverlay";
@@ -22,7 +22,7 @@ export default async function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [categories, trending] = await Promise.all([getCategories(), getTrending(8)]);
+  const [categories, trending] = await Promise.all([getNavCategories(), getTrendingCached(8)]);
   // AdsKeeper site + widget set for THIS domain (each domain is its own
   // registered site, with its own loader and its own widget ids).
   const { ads } = adsForHost(headers().get("host"));
