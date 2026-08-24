@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "if [ -z \"${DIRECT_URL:-}\" ]; then DIRECT_URL=\"${DATABASE_URL_UNPOOLED:-${POSTGRES_URL_NON_POOLING:-${DATABASE_URL:-}}}\"; fi; if [ -n \"${DIRECT_URL:-}\" ]; then export DIRECT_URL; else unset DIRECT_URL; fi; prisma generate && prisma migrate deploy && next build",
+  "buildCommand": "sh scripts/vercel-build.sh",
   "crons": [
     {
       "path": "/api/cron/facebook-post",
