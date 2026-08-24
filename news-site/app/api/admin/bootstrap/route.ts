@@ -58,13 +58,35 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const email = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD ?? "";
+  // Credentials come from the request body, falling back to the environment.
+  // Body-first means only ONE variable (BOOTSTRAP_SECRET) has to be added to
+  // the host to get an account created — fewer dashboard steps, fewer mistakes.
+  // It is no less safe: the request is HTTPS, and it still has to pass the
+  // secret check above and the empty-table check below.
+  const body = (await req.json().catch(() => ({}))) as {
+    email?: unknown;
+    password?: unknown;
+  };
+  const email = (typeof body.email === "string" ? body.email : process.env.ADMIN_EMAIL ?? "")
+    .trim()
+    .toLowerCase();
+  const password =
+    typeof body.password === "string" ? body.password : process.env.ADMIN_PASSWORD ?? "";
+
   if (!email || !password) {
     return NextResponse.json(
-      { error: "Set ADMIN_EMAIL and ADMIN_PASSWORD in the environment first." },
+      { error: "Provide email and password in the request body, or set ADMIN_EMAIL and ADMIN_PASSWORD." },
       { status: 400 },
     );
+  }
+  if (password.length < 8) {
+    return NextResponse.json(
+      { error: "Password must be at least 8 characters." },
+      { status: 400 },
+    );
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: "That does not look like an email address." }, { status: 400 });
   }
 
   await prisma.user.create({
@@ -85,9 +107,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({
       database: "reachable",
       users,
-      adminEmailSet: Boolean(process.env.ADMIN_EMAIL),
-      adminPasswordSet: Boolean(process.env.ADMIN_PASSWORD),
-      canBootstrap: users === 0 && Boolean(process.env.ADMIN_EMAIL) && Boolean(process.env.ADMIN_PASSWORD),
+      // Credentials may be supplied in the POST body, so their absence from the
+      // environment does not block anything — only an existing account does.
+      adminEnvVarsSet: Boolean(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD),
+      canBootstrap: users === 0,
     });
   } catch {
     return NextResponse.json(
