@@ -148,7 +148,29 @@ function describeConnection(): Record<string, unknown> {
       pooled: u.hostname.includes("-pooler") || u.searchParams.has("pgbouncer"),
     };
   } catch {
-    return { databaseUrlSet: true, note: "DATABASE_URL is set but is not a valid URL." };
+    // Describe the SHAPE of the value, never its content. Credentials live after
+    // "://", so reporting length and which markers are present says what is wrong
+    // with a paste without echoing any of it.
+    const trimmed = raw.trim();
+    return {
+      databaseUrlSet: true,
+      note: "DATABASE_URL is set but is not a valid URL.",
+      shape: {
+        length: raw.length,
+        startsWith: /^postgres(ql)?:\/\//.test(trimmed)
+          ? "postgres:// (correct)"
+          : /^psql\b/.test(trimmed)
+            ? "psql — the whole shell COMMAND was pasted, not just the URL"
+            : /^["']/.test(trimmed)
+              ? "a quote — the value is wrapped in quotes"
+              : /^[A-Z_]+=/.test(trimmed)
+                ? "NAME= — the variable name was included in the value"
+                : "something else",
+        hasSchemeSeparator: trimmed.includes("://"),
+        hasLeadingOrTrailingSpace: raw !== trimmed,
+        hasLineBreak: /[\r\n]/.test(raw),
+      },
+    };
   }
 }
 
