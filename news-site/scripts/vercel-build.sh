@@ -11,8 +11,21 @@
 # query engine, so setting it for the build alone is sufficient.
 set -e
 
+# Match the direct-connection variable whatever PREFIX the host gave it. Vercel's
+# marketplace integrations let you namespace the variables they create, so the
+# same value can arrive as DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, or
+# SUPABASE_DATABASE_URL_UNPOOLED. Matching on the suffix covers all of them
+# without hardcoding one installation's choice.
 if [ -z "${DIRECT_URL:-}" ]; then
-  DIRECT_URL="${DATABASE_URL_UNPOOLED:-${POSTGRES_URL_NON_POOLING:-${DATABASE_URL:-}}}"
+  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*DATABASE_URL_UNPOOLED=//p' | head -n 1)"
+fi
+if [ -z "${DIRECT_URL:-}" ]; then
+  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*POSTGRES_URL_NON_POOLING=//p' | head -n 1)"
+fi
+# Last resort: the pooled URL. Migrations over a pooler can fail, but failing
+# with a real connection string beats failing with nothing.
+if [ -z "${DIRECT_URL:-}" ]; then
+  DIRECT_URL="${DATABASE_URL:-}"
 fi
 
 # Export only a real value. Exporting "" would override Prisma's own .env
