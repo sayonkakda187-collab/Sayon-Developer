@@ -36,6 +36,26 @@ else
   unset DIRECT_URL
 fi
 
+# Same problem as DIRECT_URL, one level up: DATABASE_URL itself may be missing or
+# hold something that is not a connection string (the variable NAME gets pasted
+# instead of the value surprisingly often — the copy control sits next to the
+# name, and integration variables are secrets whose value cannot be revealed).
+# Prefer a pooled/Prisma-shaped URL, matching on the suffix so any prefix works.
+case "${DATABASE_URL:-}" in
+  postgres://*|postgresql://*) ;;
+  *)
+    for suffix in POSTGRES_PRISMA_URL POSTGRES_URL DATABASE_URL_UNPOOLED POSTGRES_URL_NON_POOLING; do
+      candidate="$(env | sed -n "s/^[A-Za-z0-9_]*${suffix}=//p" | grep -E '^postgres(ql)?://' | head -n 1)"
+      if [ -n "$candidate" ]; then
+        echo "NOTE: DATABASE_URL was unusable; using a connection string from *${suffix}."
+        DATABASE_URL="$candidate"
+        export DATABASE_URL
+        break
+      fi
+    done
+    ;;
+esac
+
 prisma generate
 
 # Migrations must not take the whole deployment down with them.
