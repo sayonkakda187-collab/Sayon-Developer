@@ -61,6 +61,11 @@ else
   unset DIRECT_URL
 fi
 
+# Keep the runtime migration bundle in step with prisma/migrations. Generating
+# it here means a new migration can never ship with a stale bundle, no matter
+# whether anyone remembered to run the script by hand.
+node scripts/gen-migrations.mjs
+
 prisma generate
 
 # Migrations must not take the whole deployment down with them.
