@@ -37,5 +37,32 @@ else
 fi
 
 prisma generate
-prisma migrate deploy
+
+# Migrations must not take the whole deployment down with them.
+#
+# A failure here — unreachable database, missing DATABASE_URL, bad credentials —
+# previously aborted the build, so the site kept serving an older deployment and
+# the only record of WHY was inside Vercel's build log. That makes the problem
+# hard to see for anyone who cannot easily reach those logs.
+#
+# Now the error is printed loudly and the build continues. The deployed site then
+# reports the real database state as JSON at /api/admin/bootstrap, which is far
+# easier to read than a build log. A site that deploys and says "database
+# unreachable" beats a site that will not deploy at all.
+#
+# The app is safe either way: with no tables, pages return errors rather than
+# wrong data, exactly as they do now.
+if prisma migrate deploy; then
+  echo "migrations: applied"
+else
+  # Capture the status FIRST — any command in between (an echo included) would
+  # overwrite $? and report a successful exit code for a failure.
+  migrate_status=$?
+  echo "-------------------------------------------------------------------"
+  echo "WARNING: prisma migrate deploy FAILED (exit ${migrate_status})."
+  echo "The build continues so the site deploys and can report the problem."
+  echo "Check /api/admin/bootstrap?secret=... on the deployed site."
+  echo "-------------------------------------------------------------------"
+fi
+
 next build
