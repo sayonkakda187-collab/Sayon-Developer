@@ -11,31 +11,6 @@
 # query engine, so setting it for the build alone is sufficient.
 set -e
 
-# Match the direct-connection variable whatever PREFIX the host gave it. Vercel's
-# marketplace integrations let you namespace the variables they create, so the
-# same value can arrive as DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, or
-# SUPABASE_DATABASE_URL_UNPOOLED. Matching on the suffix covers all of them
-# without hardcoding one installation's choice.
-if [ -z "${DIRECT_URL:-}" ]; then
-  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*DATABASE_URL_UNPOOLED=//p' | head -n 1)"
-fi
-if [ -z "${DIRECT_URL:-}" ]; then
-  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*POSTGRES_URL_NON_POOLING=//p' | head -n 1)"
-fi
-# Last resort: the pooled URL. Migrations over a pooler can fail, but failing
-# with a real connection string beats failing with nothing.
-if [ -z "${DIRECT_URL:-}" ]; then
-  DIRECT_URL="${DATABASE_URL:-}"
-fi
-
-# Export only a real value. Exporting "" would override Prisma's own .env
-# loading and turn a clear "not set" error into a confusing empty-string one.
-if [ -n "${DIRECT_URL:-}" ]; then
-  export DIRECT_URL
-else
-  unset DIRECT_URL
-fi
-
 # Same problem as DIRECT_URL, one level up: DATABASE_URL itself may be missing or
 # hold something that is not a connection string (the variable NAME gets pasted
 # instead of the value surprisingly often — the copy control sits next to the
@@ -55,6 +30,36 @@ case "${DATABASE_URL:-}" in
     done
     ;;
 esac
+
+# Match the direct-connection variable whatever PREFIX the host gave it. Vercel's
+# marketplace integrations let you namespace the variables they create, so the
+# same value can arrive as DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, or
+# SUPABASE_DATABASE_URL_UNPOOLED. Matching on the suffix covers all of them
+# without hardcoding one installation's choice.
+if [ -z "${DIRECT_URL:-}" ]; then
+  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*DATABASE_URL_UNPOOLED=//p' | head -n 1)"
+fi
+if [ -z "${DIRECT_URL:-}" ]; then
+  DIRECT_URL="$(env | sed -n 's/^[A-Za-z0-9_]*POSTGRES_URL_NON_POOLING=//p' | head -n 1)"
+fi
+# Last resort: the pooled URL. Migrations over a pooler can fail, but failing
+# with a real connection string beats failing with nothing.
+# Last resort: the pooled URL — but only if it is actually a Postgres URL.
+# Inheriting a malformed DATABASE_URL here is what silently broke migrations:
+# DIRECT_URL took the bad value before DATABASE_URL had been repaired.
+if [ -z "${DIRECT_URL:-}" ]; then
+  case "${DATABASE_URL:-}" in
+    postgres://*|postgresql://*) DIRECT_URL="${DATABASE_URL}" ;;
+  esac
+fi
+
+# Export only a real value. Exporting "" would override Prisma's own .env
+# loading and turn a clear "not set" error into a confusing empty-string one.
+if [ -n "${DIRECT_URL:-}" ]; then
+  export DIRECT_URL
+else
+  unset DIRECT_URL
+fi
 
 prisma generate
 
