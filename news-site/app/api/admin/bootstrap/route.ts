@@ -106,16 +106,68 @@ export async function GET(req: Request): Promise<NextResponse> {
     const users = await prisma.user.count();
     return NextResponse.json({
       database: "reachable",
+      connection: describeConnection(),
       users,
       // Credentials may be supplied in the POST body, so their absence from the
       // environment does not block anything — only an existing account does.
       adminEnvVarsSet: Boolean(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD),
       canBootstrap: users === 0,
     });
-  } catch {
+  } catch (e) {
+    // Report enough to identify the fault WITHOUT ever echoing the credentials:
+    // whether the variable exists, which host it names, and Prisma's error code.
+    // "unreachable" alone cannot distinguish a missing variable from a typo in
+    // the hostname from a database that is genuinely down.
+    const code = typeof e === "object" && e && "code" in e ? String((e as { code: unknown }).code) : null;
     return NextResponse.json(
-      { database: "unreachable", hint: "Check DATABASE_URL and DIRECT_URL." },
+      {
+        database: "unreachable",
+        connection: describeConnection(),
+        errorCode: code,
+        meaning: explain(code),
+      },
       { status: 503 },
     );
+  }
+}
+
+/** Describe DATABASE_URL without leaking it: presence, scheme, host, db name.
+ *  Never the user or password. */
+function describeConnection(): Record<string, unknown> {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) {
+    return { databaseUrlSet: false, note: "DATABASE_URL is not set in this environment." };
+  }
+  try {
+    const u = new URL(raw);
+    return {
+      databaseUrlSet: true,
+      scheme: u.protocol.replace(":", ""),
+      host: u.hostname,
+      database: u.pathname.replace(/^\//, "") || null,
+      pooled: u.hostname.includes("-pooler") || u.searchParams.has("pgbouncer"),
+    };
+  } catch {
+    return { databaseUrlSet: true, note: "DATABASE_URL is set but is not a valid URL." };
+  }
+}
+
+/** Plain-language meaning for the Prisma error codes seen at connection time. */
+function explain(code: string | null): string {
+  switch (code) {
+    case "P1001":
+      return "Reached the network but the database server did not answer — wrong host, or the database is paused/stopped.";
+    case "P1000":
+      return "Host answered but rejected the credentials — the user or password in DATABASE_URL is wrong.";
+    case "P1003":
+      return "Connected, but that database name does not exist on the server.";
+    case "P1017":
+      return "The server closed the connection — often a pooler limit or a sleeping instance.";
+    case "P2021":
+      return "Connected, but the tables do not exist — migrations have not run yet.";
+    default:
+      return code
+        ? "Unrecognised Prisma error code; the code above is the thing to search for."
+        : "No Prisma error code — most often DATABASE_URL is missing or malformed.";
   }
 }
