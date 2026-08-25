@@ -71,20 +71,29 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
       // One transaction per migration: a failure rolls back cleanly rather than
       // leaving half a schema for the next attempt to trip over.
-      await prisma.$transaction(async (tx) => {
-        for (const statement of m.statements) {
-          await tx.$executeRawUnsafe(statement);
-        }
-        await tx.$executeRawUnsafe(
-          `INSERT INTO "_prisma_migrations"
-             (id, checksum, migration_name, started_at, finished_at, applied_steps_count)
-           VALUES ($1, $2, $3, now(), now(), $4)`,
-          crypto.randomUUID(),
-          m.checksum,
-          m.name,
-          m.statements.length,
-        );
-      });
+      await prisma.$transaction(
+        async (tx) => {
+          for (const statement of m.statements) {
+            await tx.$executeRawUnsafe(statement);
+          }
+          await tx.$executeRawUnsafe(
+            `INSERT INTO "_prisma_migrations"
+               (id, checksum, migration_name, started_at, finished_at, applied_steps_count)
+             VALUES ($1, $2, $3, now(), now(), $4)`,
+            crypto.randomUUID(),
+            m.checksum,
+            m.name,
+            m.statements.length,
+          );
+        },
+        // Prisma's default interactive-transaction timeout is 5s. The initial
+        // migration is 22 statements, and each one is a separate round trip —
+        // trivial against localhost, but against a pooled connection several
+        // regions away it is close enough to 5s to fail intermittently. That is
+        // precisely the kind of fault that only appears in production, where
+        // the log is hardest to read, so give it real headroom.
+        { maxWait: 15_000, timeout: 50_000 },
+      );
       applied.push(m.name);
     }
 

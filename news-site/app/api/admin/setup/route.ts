@@ -171,7 +171,10 @@ ${
       }
       show(o1, "Failed on: " + (r.data.failedOn || "unknown") + "\\n\\n" + (r.data.error || JSON.stringify(r.data)));
     } catch (e) {
-      show(o1, "Request failed: " + e.message);
+      // A timeout mid-run is survivable: the migrations that committed stay
+      // committed, and the endpoint skips them next time. Say so, rather than
+      // leaving a bare network error that reads like a dead end.
+      show(o1, "Request failed: " + e.message + "\n\nTap again — anything already applied is skipped, so it picks up where it stopped.");
     }
     b1.disabled = false; b1.textContent = label;
   };
