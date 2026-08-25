@@ -72,6 +72,7 @@ export async function GET(req: Request): Promise<Response> {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="data:,">
 <title>Site setup</title>
 <style>
   :root { color-scheme: light dark; }
@@ -174,7 +175,7 @@ ${
       // A timeout mid-run is survivable: the migrations that committed stay
       // committed, and the endpoint skips them next time. Say so, rather than
       // leaving a bare network error that reads like a dead end.
-      show(o1, "Request failed: " + e.message + "\n\nTap again — anything already applied is skipped, so it picks up where it stopped.");
+      show(o1, "Request failed: " + e.message + "\\n\\nTap again — anything already applied is skipped, so it picks up where it stopped.");
     }
     b1.disabled = false; b1.textContent = label;
   };
