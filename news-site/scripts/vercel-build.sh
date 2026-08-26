@@ -61,6 +61,21 @@ else
   unset DIRECT_URL
 fi
 
+# Keep the runtime migration bundle in step with prisma/migrations. Generating
+# it here means a new migration can never ship with a stale bundle, no matter
+# whether anyone remembered to run the script by hand.
+#
+# Non-fatal, like the migrate step below and for the same reason: the bundle is
+# committed, so a regeneration failure falls back to a working file rather than
+# nothing. Under `set -e` this would otherwise be a NEW way for the deploy to
+# die — the opposite of the point, which is that the site should always deploy
+# and then report its own state.
+if node scripts/gen-migrations.mjs; then
+  :
+else
+  echo "WARNING: could not regenerate the migration bundle; using the committed one."
+fi
+
 prisma generate
 
 # Migrations must not take the whole deployment down with them.
