@@ -2,6 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import {
+  invalidatePublicArticles,
+  invalidatePublicComments,
+  invalidatePublicTaxonomy,
+} from "@/lib/publicCache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, clearSessionCookie } from "@/lib/auth";
 import { slugify, uniqueArticleSlug } from "@/lib/slug";
@@ -155,6 +160,11 @@ export async function saveArticle(formData: FormData) {
     });
   }
 
+  // Drop the cached public reads for this article and for every list it can
+  // appear in. Must run BEFORE the redirects below — redirect() throws, so
+  // anything after it never executes.
+  invalidatePublicArticles(slug);
+
   // Scheduled → the queue; published → the Articles list with the Share panel
   // auto-opened; drafts just return to the list.
   if (effStatus === "scheduled") {
@@ -169,7 +179,12 @@ export async function saveArticle(formData: FormData) {
 export async function deleteArticle(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  if (id) await prisma.article.delete({ where: { id } });
+  if (id) {
+    // Read the slug BEFORE deleting — afterwards there is no row to read it
+    // from, and its cached page would linger until the revalidate window ended.
+    const gone = await prisma.article.delete({ where: { id }, select: { slug: true } });
+    invalidatePublicArticles(gone.slug);
+  }
   redirect("/admin/articles");
 }
 
@@ -224,6 +239,7 @@ export async function bulkArticleAction(
     if (action === "delete") {
       const res = await prisma.article.deleteMany({ where: { id: { in: clean } } });
       revalidatePath("/admin/articles");
+      invalidatePublicArticles();
       return { ok: true, count: res.count };
     }
 
@@ -233,6 +249,7 @@ export async function bulkArticleAction(
         data: { status: "draft", publishedAt: null },
       });
       revalidatePath("/admin/articles");
+      invalidatePublicArticles();
       return { ok: true, count: res.count };
     }
 
@@ -251,6 +268,7 @@ export async function bulkArticleAction(
       ),
     );
     revalidatePath("/admin/articles");
+      invalidatePublicArticles();
     return { ok: true, count: toPublish.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Bulk action failed." };
@@ -259,6 +277,7 @@ export async function bulkArticleAction(
 
 export async function createCategory(formData: FormData) {
   await requireAdmin();
+  invalidatePublicTaxonomy();
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   if (!name) throw new Error("Category name is required.");
@@ -273,6 +292,7 @@ export async function createCategory(formData: FormData) {
 
 export async function deleteCategory(formData: FormData) {
   await requireAdmin();
+  invalidatePublicTaxonomy();
   const id = String(formData.get("id") ?? "");
   if (id) await prisma.category.delete({ where: { id } });
   redirect("/admin/categories");
@@ -280,6 +300,7 @@ export async function deleteCategory(formData: FormData) {
 
 export async function createTag(formData: FormData) {
   await requireAdmin();
+  invalidatePublicTaxonomy();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Tag name is required.");
   const slug = slugify(name);
@@ -293,6 +314,7 @@ export async function createTag(formData: FormData) {
 
 export async function deleteTag(formData: FormData) {
   await requireAdmin();
+  invalidatePublicTaxonomy();
   const id = String(formData.get("id") ?? "");
   if (id) await prisma.tag.delete({ where: { id } });
   redirect("/admin/categories");
@@ -301,7 +323,14 @@ export async function deleteTag(formData: FormData) {
 export async function approveComment(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  if (id) await prisma.comment.update({ where: { id }, data: { approved: true } });
+  if (id) {
+    const c = await prisma.comment.update({
+      where: { id },
+      data: { approved: true },
+      select: { articleId: true },
+    });
+    invalidatePublicComments(c.articleId);
+  }
   redirect("/admin/comments");
 }
 
@@ -309,7 +338,12 @@ export async function unapproveComment(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (id) {
-    await prisma.comment.update({ where: { id }, data: { approved: false } });
+    const c = await prisma.comment.update({
+      where: { id },
+      data: { approved: false },
+      select: { articleId: true },
+    });
+    invalidatePublicComments(c.articleId);
   }
   redirect("/admin/comments");
 }
@@ -317,6 +351,9 @@ export async function unapproveComment(formData: FormData) {
 export async function deleteComment(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  if (id) await prisma.comment.delete({ where: { id } });
+  if (id) {
+    const gone = await prisma.comment.delete({ where: { id }, select: { articleId: true } });
+    invalidatePublicComments(gone.articleId);
+  }
   redirect("/admin/comments");
 }

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
+import { cachedPublicQuery, TAG } from "./publicCache";
 import type { Article, Category } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { normalizeDevice } from "@/lib/devices";
@@ -85,7 +86,7 @@ export const getTrendingCached = unstable_cache(
 );
 
 /** Homepage payload: a featured hero, the latest grid, and per-category sections. */
-export async function getHomepage() {
+async function getHomepageUncached() {
   const recent = await prisma.article.findMany({
     where: published,
     orderBy: { publishedAt: "desc" },
@@ -133,12 +134,39 @@ export async function getHomepage() {
   return { featured: featured ?? null, latest, categories, feed, tabCategories };
 }
 
-/** Cached so the article page and its generateMetadata share one query. */
-export const getArticleBySlug = cache((slug: string) =>
-  prisma.article.findFirst({
+/**
+ * The homepage payload, CACHED. Four queries — one of them a categories fetch
+ * with a nested per-category article include — ran on every single landing.
+ * Invalidated by tag whenever an article or the taxonomy changes, so a publish
+ * is visible immediately; the timer is only a backstop.
+ */
+export const getHomepage = cachedPublicQuery(getHomepageUncached, ["homepage-v1"], {
+  revalidate: 300,
+  tags: [TAG.articles, TAG.categories],
+});
+
+function getArticleBySlugUncached(slug: string) {
+  return prisma.article.findFirst({
     where: { slug, ...published },
     include: { category: true, tags: true },
-  }),
+  });
+}
+
+/**
+ * One published article by slug.
+ *
+ * Two layers, doing different jobs. React `cache` dedupes WITHIN a request, so
+ * the page and its `generateMetadata` still share a single call. Around that,
+ * `cachedPublicQuery` dedupes ACROSS requests, so the hundredth reader of a
+ * story costs no database read at all — which is the whole point.
+ *
+ * Tagged per slug, so editing one article never drops the others.
+ */
+export const getArticleBySlug = cache((slug: string) =>
+  cachedPublicQuery(getArticleBySlugUncached, ["article-by-slug-v1", slug], {
+    revalidate: 300,
+    tags: [TAG.articles, TAG.article(slug)],
+  })(slug),
 );
 
 export function getRelatedArticles(args: {
@@ -159,7 +187,7 @@ export function getRelatedArticles(args: {
 /** "Read next": same-category articles first (newest first), then backfilled with
  *  the newest from any category so it always returns a full set even when the
  *  category is sparse. Excludes the current article. */
-export async function getReadNext(args: {
+async function getReadNextUncached(args: {
   categoryId: string | null;
   excludeId: string;
   take?: number;
@@ -183,6 +211,15 @@ export async function getReadNext(args: {
   });
   return [...sameCat, ...fill];
 }
+
+/** "Read next", CACHED per (category, excluded article, size) — the same three
+ *  suggestions for every reader of a given article until something publishes. */
+export const getReadNext = cachedPublicQuery(
+  (args: { categoryId: string | null; excludeId: string; take?: number }) =>
+    getReadNextUncached(args),
+  ["read-next-v1"],
+  { revalidate: 300, tags: [TAG.articles] },
+);
 
 export type MostReadItem = { id: string; title: string; slug: string; category: string | null };
 
@@ -378,11 +415,20 @@ export async function getAudienceArticles(): Promise<{ id: string; title: string
   return ids.filter((id) => byId.has(id)).map((id) => ({ id, title: byId.get(id)! }));
 }
 
+function getCategoryBySlugUncached(slug: string) {
+  return prisma.category.findUnique({ where: { slug } });
+}
+
+/** One category by slug. React `cache` dedupes within a request (the page and
+ *  its generateMetadata both need it); the tag cache dedupes across requests. */
 export const getCategoryBySlug = cache((slug: string) =>
-  prisma.category.findUnique({ where: { slug } }),
+  cachedPublicQuery(getCategoryBySlugUncached, ["category-by-slug-v1", slug], {
+    revalidate: 300,
+    tags: [TAG.categories],
+  })(slug),
 );
 
-export async function getCategoryArticles(categoryId: string, page: number) {
+async function getCategoryArticlesUncached(categoryId: string, page: number) {
   const skip = (page - 1) * ARTICLES_PER_PAGE;
   const [articles, total] = await Promise.all([
     prisma.article.findMany({
@@ -401,9 +447,16 @@ export async function getCategoryArticles(categoryId: string, page: number) {
   };
 }
 
+/** A category page of articles, CACHED per (category, page). */
+export const getCategoryArticles = cachedPublicQuery(
+  getCategoryArticlesUncached,
+  ["category-articles-v1"],
+  { revalidate: 300, tags: [TAG.articles] },
+);
+
 /** A skip/take slice of a category's articles + the total — powers the client
  *  "Load more" button (12 at a time) without changing ARTICLES_PER_PAGE. */
-export async function getCategoryArticlesRange(categoryId: string, skip: number, take = 12) {
+async function getCategoryArticlesRangeUncached(categoryId: string, skip: number, take = 12) {
   const [articles, total] = await Promise.all([
     prisma.article.findMany({
       where: { ...published, categoryId },
@@ -416,6 +469,14 @@ export async function getCategoryArticlesRange(categoryId: string, skip: number,
   ]);
   return { articles, total };
 }
+
+/** The category page's actual query, CACHED per (category, skip, take). This —
+ *  not getCategoryArticles — is what the page and its "Load more" both call. */
+export const getCategoryArticlesRange = cachedPublicQuery(
+  getCategoryArticlesRangeUncached,
+  ["category-articles-range-v1"],
+  { revalidate: 300, tags: [TAG.articles] },
+);
 
 /** Server-side search over title, excerpt, and content (case-insensitive on SQLite). */
 export async function searchArticles(query: string) {
@@ -437,11 +498,28 @@ export async function searchArticles(query: string) {
 }
 
 /** Approved comments for an article, newest first. */
-export function getApprovedComments(articleId: string) {
+function getApprovedCommentsUncached(articleId: string) {
   return prisma.comment.findMany({
     where: { articleId, approved: true },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/**
+ * Approved comments, CACHED per article. A visitor posting a comment does not
+ * change this (new comments are stored unapproved and hidden), so only
+ * moderation invalidates it.
+ *
+ * The cache is built PER articleId because `unstable_cache` fixes its tags at
+ * creation — a single shared tag would make moderating one comment drop every
+ * article's cached comments. Same keyParts → same entry, so building the
+ * wrapper per call costs nothing.
+ */
+export function getApprovedComments(articleId: string) {
+  return cachedPublicQuery(getApprovedCommentsUncached, ["approved-comments-v1", articleId], {
+    revalidate: 300,
+    tags: [TAG.comments(articleId)],
+  })(articleId);
 }
 
 /* ── Admin dashboard analytics ─────────────────────────────────────────────
