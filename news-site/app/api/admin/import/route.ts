@@ -169,12 +169,32 @@ export async function GET(): Promise<Response> {
     show("Checking…");
     var r = await post({ sourceUrl: url(), dryRun: true });
     if (!r.ok) { show(r.data.error || JSON.stringify(r.data)); return; }
-    var lines = r.data.rows.map(function (x) {
-      return "  " + x.table.padEnd(24) + String(x.source).padStart(7) + " old" +
-             String(x.target).padStart(8) + " here";
+
+    var n = function (v) { return v === null ? "error" : String(v); };
+    var lines = (r.data.rows || []).map(function (x) {
+      return "  " + x.table.padEnd(24) + n(x.source).padStart(7) + " old" +
+             n(x.target).padStart(8) + " here";
     });
-    show(lines.length ? "table                      old      here\\n" + lines.join("\\n")
-                      : "Connected, but the old database looks empty.");
+    var head = "connected to database: " + (r.data.database || "?") + "\\n\\n" +
+               "table                      old      here\\n";
+
+    if (r.data.foundNothing) {
+      // The whole point of checking first: say WHY there is nothing, and give
+      // the one fact that separates "wrong database" from "genuinely empty".
+      var why = "\\nNothing of yours was found in that database.\\n";
+      if (r.data.sourceTables && r.data.sourceTables.length) {
+        why += "\\nWhat IS in there:\\n  " + r.data.sourceTables.join("\\n  ") +
+               "\\n\\nThose are not this site's tables, so this is the wrong database or the" +
+               "\\nwrong project. Go back to Neon and pick the project holding your articles.";
+      } else {
+        why += "\\nIt has no tables at all — an empty or newly created project." +
+               "\\nGo back to Neon and pick the project holding your articles.";
+      }
+      if (r.data.error) why += "\\n\\nDatabase said: " + r.data.error;
+      show(head + lines.join("\\n") + "\\n" + why);
+      return;
+    }
+    show(head + lines.join("\\n"));
   };
 
   document.getElementById("go").onclick = async function () {
