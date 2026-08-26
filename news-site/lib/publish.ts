@@ -1,6 +1,7 @@
 import "server-only";
 
 import { revalidatePath } from "next/cache";
+import { invalidatePublicArticles } from "./publicCache";
 import { prisma } from "@/lib/db";
 import { publishArticleNow } from "@/app/admin/facebook-actions";
 import { generateKeyPoints, isAiConfigured } from "@/lib/aiAssist";
@@ -124,6 +125,11 @@ export async function publishScheduledArticleById(id: string, opts?: { logActivi
   revalidatePath(`/news/${a.slug}`);
   revalidatePath("/admin/articles");
   revalidatePath("/admin/scheduled");
+  // revalidatePath does not touch unstable_cache entries, so the cached
+  // homepage and article payloads need their tags dropped explicitly. Without
+  // this a story published by the cron would not appear until the revalidate
+  // window expired — the exact failure that makes caching feel unreliable.
+  invalidatePublicArticles(a.slug);
 
   if (opts?.logActivity) {
     await addAction({
