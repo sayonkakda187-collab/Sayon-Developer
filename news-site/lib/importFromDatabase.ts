@@ -193,22 +193,44 @@ export async function importFromDatabase(opts: {
   }
 }
 
-/** Row counts on both sides, so progress is visible without copying anything. */
+/**
+ * Row counts on both sides, so what is there is visible before anything moves.
+ *
+ * Counts are `number | null`, where null means the query FAILED — a table that
+ * is not there, or a connection that is not working. An earlier version
+ * collapsed both into `-1`, which told the operator a number instead of a
+ * reason and hid every table that was empty on both sides. When nothing
+ * expected is found, this reports the database name and the tables that DO
+ * exist, which answers "am I even pointed at the right database?" directly.
+ */
 export async function compareDatabases(sourceUrl: string): Promise<{
   ok: boolean;
-  rows: { table: string; source: number; target: number }[];
+  rows: { table: string; source: number | null; target: number | null }[];
+  database?: string;
+  foundNothing?: boolean;
+  sourceTables?: string[];
   error?: string;
 }> {
   const source = new PrismaClient({ datasources: { db: { url: sourceUrl } } });
   try {
     await source.$connect();
+
+    // Which database did we actually land in? A connection string pointing at
+    // the wrong database succeeds and then finds nothing, which looks identical
+    // to an empty one until you can see the name.
+    const who = await source.$queryRawUnsafe<{ db: string }[]>(
+      `SELECT current_database() AS db`,
+    );
+    const database = who[0]?.db ?? "?";
+
     const tables = [
       ...GROUPS.content,
       ...(await joinTables(source)),
       ...GROUPS.analytics,
       ...GROUPS.integrations,
     ];
-    const rows: { table: string; source: number; target: number }[] = [];
+    const rows: { table: string; source: number | null; target: number | null }[] = [];
+    let firstError: string | null = null;
     for (const table of tables) {
       const count = async (c: PrismaClient) => {
         try {
@@ -216,14 +238,36 @@ export async function compareDatabases(sourceUrl: string): Promise<{
             `SELECT count(*)::bigint AS n FROM ${q(table)}`,
           );
           return Number(r[0]?.n ?? 0);
-        } catch {
-          return -1; // table absent on that side
+        } catch (e) {
+          if (!firstError && e instanceof Error) firstError = e.message.slice(0, 200);
+          return null;
         }
       };
       const [s, t] = await Promise.all([count(source), count(prisma)]);
-      if (s > 0 || t > 0) rows.push({ table, source: s, target: t });
+      // Show every table, including ones empty on both sides. Hiding them is
+      // what made a broken connection look like a one-line result.
+      rows.push({ table, source: s, target: t });
     }
-    return { ok: true, rows };
+
+    const anyOnSource = rows.some((r) => (r.source ?? 0) > 0);
+    if (!anyOnSource) {
+      // Nothing expected was found. List what IS in there — the fastest way to
+      // tell "wrong database" from "right database, genuinely empty".
+      const actual = await source
+        .$queryRawUnsafe<{ tablename: string }[]>(
+          `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename LIMIT 40`,
+        )
+        .catch(() => [] as { tablename: string }[]);
+      return {
+        ok: true,
+        rows,
+        database,
+        foundNothing: true,
+        sourceTables: actual.map((r) => r.tablename),
+        error: firstError ?? undefined,
+      };
+    }
+    return { ok: true, rows, database };
   } catch (e) {
     return {
       ok: false,
