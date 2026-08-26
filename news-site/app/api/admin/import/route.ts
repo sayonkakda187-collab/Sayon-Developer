@@ -187,8 +187,19 @@ export async function GET(): Promise<Response> {
                "\\n\\nThose are not this site's tables, so this is the wrong database or the" +
                "\\nwrong project. Go back to Neon and pick the project holding your articles.";
       } else {
-        why += "\\nIt has no tables at all — an empty or newly created project." +
-               "\\nGo back to Neon and pick the project holding your articles.";
+        why += "\\nIt has no tables at all — an empty or newly created project.";
+      }
+      if (r.data.otherDatabases && r.data.otherDatabases.length) {
+        why += "\\n\\nOther databases on this same server:\\n  " +
+               r.data.otherDatabases.join("\\n  ") +
+               "\\n\\nIf one of those is yours, change the name at the END of the" +
+               "\\nconnection string (the part after the last \\"/\\", before any \\"?\\")" +
+               "\\nand check again.";
+      } else {
+        why += "\\n\\nThis server holds no other databases either, so the articles are" +
+               "\\nnot on this endpoint at all. In Neon, check the BRANCH selector in the" +
+               "\\nconnection dialog — each branch has its own data and its own hostname —" +
+               "\\nand check the project list for the project that was suspended.";
       }
       if (r.data.error) why += "\\n\\nDatabase said: " + r.data.error;
       show(head + lines.join("\\n") + "\\n" + why);

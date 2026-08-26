@@ -209,6 +209,7 @@ export async function compareDatabases(sourceUrl: string): Promise<{
   database?: string;
   foundNothing?: boolean;
   sourceTables?: string[];
+  otherDatabases?: string[];
   error?: string;
 }> {
   const source = new PrismaClient({ datasources: { db: { url: sourceUrl } } });
@@ -258,12 +259,26 @@ export async function compareDatabases(sourceUrl: string): Promise<{
           `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename LIMIT 40`,
         )
         .catch(() => [] as { tablename: string }[]);
+      // One more thing worth ruling out before sending someone back to the
+      // dashboard: the right server, the wrong database ON it. Neon's connection
+      // dialog lets you pick the database as well as the branch, so landing in
+      // an empty `neondb` while the content sits in another one is easy to do
+      // and impossible to see from the connection string.
+      const others = await source
+        .$queryRawUnsafe<{ datname: string }[]>(
+          `SELECT datname FROM pg_database
+            WHERE datistemplate = false AND datname <> current_database()
+            ORDER BY datname LIMIT 20`,
+        )
+        .catch(() => [] as { datname: string }[]);
+
       return {
         ok: true,
         rows,
         database,
         foundNothing: true,
         sourceTables: actual.map((r) => r.tablename),
+        otherDatabases: others.map((r) => r.datname),
         error: firstError ?? undefined,
       };
     }
