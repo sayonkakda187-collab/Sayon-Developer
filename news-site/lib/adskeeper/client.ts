@@ -131,27 +131,52 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs = 15000): Pro
 }
 
 // ── direct-token mode: call the report with the saved token, NO auth step ─────
-type HeaderVariant = "bearer" | "raw";
+type HeaderVariant = "bearer" | "raw" | "query";
 function authHeader(token: string, v: HeaderVariant): string {
   return v === "bearer" ? `Bearer ${token}` : token;
 }
-// AdsKeeper's docs are vague on the header format, so we try "Bearer <token>"
-// first, then the raw token on a 401/403, and remember whichever the API accepts.
+function withTokenParam(url: string, token: string): string {
+  const u = new URL(url);
+  u.searchParams.set("token", token);
+  return u.toString();
+}
+function describeVariant(v: HeaderVariant): string {
+  return v === "bearer" ? "Bearer header" : v === "raw" ? "raw header" : "?token= query";
+}
+// AdsKeeper's docs are vague about how the token travels, so we try each way and
+// remember whichever the API accepts.
 let workingTokenHeader: HeaderVariant | null = null;
 
+/**
+ * GET the report, trying every transport the token might need.
+ *
+ * Header first ("Bearer <token>", then the raw token), then the token as a
+ * `?token=` QUERY PARAMETER. That last one matters: MGID-family APIs commonly
+ * authenticate by query parameter, and when the token is absent from where the
+ * API looks, it answers {"errors":"The token is not valid"} — the very same
+ * message it gives for a genuinely bad token. Trying all three turns that
+ * ambiguous reply into a definite one: if the query form ALSO fails, the token
+ * itself is wrong or expired, and no amount of reshaping the request will help.
+ */
 async function tokenGet(url: string, token: string): Promise<FetchResult & { variant: HeaderVariant; triedBoth: boolean }> {
-  const primary: HeaderVariant = workingTokenHeader ?? "bearer";
-  const secondary: HeaderVariant = primary === "bearer" ? "raw" : "bearer";
-  const a = await fetchJson(url, { method: "GET", headers: { Authorization: authHeader(token, primary), Accept: "application/json" } });
-  if (a.status !== 401 && a.status !== 403) {
-    if (a.ok) workingTokenHeader = primary;
-    return { ...a, variant: primary, triedBoth: false };
+  const order: HeaderVariant[] = workingTokenHeader
+    ? [workingTokenHeader, ...(["bearer", "raw", "query"] as HeaderVariant[]).filter((v) => v !== workingTokenHeader)]
+    : ["bearer", "raw", "query"];
+
+  let first: (FetchResult & { variant: HeaderVariant }) | null = null;
+  for (const v of order) {
+    const res =
+      v === "query"
+        ? await fetchJson(withTokenParam(url, token), { method: "GET", headers: { Accept: "application/json" } })
+        : await fetchJson(url, { method: "GET", headers: { Authorization: authHeader(token, v), Accept: "application/json" } });
+    first ??= { ...res, variant: v };
+    if (res.status !== 401 && res.status !== 403) {
+      if (res.ok) workingTokenHeader = v;
+      return { ...res, variant: v, triedBoth: v !== order[0] };
+    }
   }
-  // 401/403 with the primary header → try the other variant.
-  const b = await fetchJson(url, { method: "GET", headers: { Authorization: authHeader(token, secondary), Accept: "application/json" } });
-  if (b.ok) workingTokenHeader = secondary;
-  if (b.status !== 401 && b.status !== 403) return { ...b, variant: secondary, triedBoth: true };
-  return { ...a, variant: primary, triedBoth: true }; // both rejected → report the primary (documented) attempt
+  // Every transport rejected → report the first attempt, flagged as exhaustive.
+  return { ...(first as FetchResult & { variant: HeaderVariant }), triedBoth: true };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -317,7 +342,9 @@ function ensureReportOk(res: FetchResult & { variant?: HeaderVariant; triedBoth?
   }
   // Surface the EXACT status + response body (don't swallow) so a failing call
   // can be forwarded to AdsKeeper support.
-  const variantNote = res.variant ? ` [header: ${res.variant === "bearer" ? "Bearer" : "raw"}${res.triedBoth ? ", both tried" : ""}]` : "";
+  const variantNote = res.variant
+    ? ` [sent as: ${describeVariant(res.variant)}${res.triedBoth ? "; header and ?token= query both tried" : ""}]`
+    : "";
   throw new AdskeeperError(
     `AdsKeeper report failed — HTTP ${res.status}${variantNote}${body ? `: ${body}` : ""}`,
     { expired: res.status === 401 || res.status === 403, status: res.status, body },
@@ -471,7 +498,7 @@ export async function probeAuth(): Promise<AuthProbe> {
       return {
         ok: false,
         mode: "token",
-        error: `AdsKeeper returned HTTP ${probe.status}${probe.triedBoth ? " (both header formats tried)" : ""}.`,
+        error: `AdsKeeper returned HTTP ${probe.status}${probe.triedBoth ? " (Bearer header, raw header and ?token= query all tried)" : ""}.`,
         httpStatus: probe.status,
         responseBody: (probe.text || "").trim().slice(0, 1500) || "(empty response body)",
         headerVariant: probe.variant,
