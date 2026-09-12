@@ -27,27 +27,43 @@ const REPORT_PATH = process.env.ADSKEEPER_REPORT_PATH || "publishers/{authId}/wi
 const TIMEZONE = process.env.ADSKEEPER_TIMEZONE || "Asia/Phnom_Penh";
 // Default metric set (sent first). If the account rejects it with
 // VALIDATION_WRONG_PARAM_METRICS we negotiate the accepted names (negotiateMetrics).
-// Names taken from the published metric list in AdsKeeper's "REST API Adskeeper
-// for publishers" doc: adRequests, impressions, visibilityRate, clicks, wages,
-// cpm, eCpm, cpc, ctr (shows / realShows / pageViews / vCpm are deprecated).
-// Revenue is "wages", PLURAL — the singular "wage" we sent before is not a
-// valid metric, so revenue could never have come back.
-const DEFAULT_METRICS = "impressions,clicks,ctr,wages,eCpm,cpc";
+// The documented name of each metric, taken from AdsKeeper's published list:
+// adRequests, impressions, visibilityRate, clicks, wages, cpm, eCpm, cpc, ctr
+// (shows / realShows / pageViews / vCpm are deprecated). Revenue is "wages",
+// PLURAL — the singular "wage" we sent before is not a valid metric, so revenue
+// could never have come back. Derived from METRIC_ALIASES below so the set we
+// send is always the set we know how to read.
 // Per metric: ordered candidate API names/casings to probe. The API returns a
 // generic "wrong metrics" error (not which one), so we confirm a baseline then
 // add one group at a time, keeping the first variant that returns 200. CTR/eCPM/
 // CPC are bonus — buildEarnings recomputes them from totals.
-// Documented name FIRST in each row; the rest are fallbacks kept in case an
-// account's API differs from the doc. "wages" was missing from the revenue row
-// entirely, so no amount of probing could have found it.
-const METRIC_CANDIDATES: string[][] = [
-  ["impressions", "adRequests", "realShows", "shows", "views", "imps"],
-  ["clicks", "click"],
-  ["ctr", "CTR"],
-  ["wages", "wage", "revenue", "earnings", "income", "amount", "payout", "profit"],
-  ["eCpm", "ecpm", "eCPM"],
-  ["cpc", "avgCpc", "CPC"],
-];
+/**
+ * One alias list per metric — the SINGLE source for both what we ask the API
+ * for and what we read back out of its rows.
+ *
+ * Keeping those two lists apart is what produced the "wages" bug: the request
+ * said one thing, the parsers looked for another, and revenue silently read as
+ * zero. Deriving both from this table makes that class of bug impossible —
+ * anything we can negotiate, we can also parse.
+ *
+ * Documented name FIRST in each row (AdsKeeper's published list); the rest are
+ * fallbacks for accounts whose API predates the doc. Only true ALIASES belong
+ * here: "adRequests" is a real metric but counts ad REQUESTS, not impressions
+ * shown, so listing it as an impressions fallback would overstate impressions
+ * and understate the CTR and eCPM computed from them.
+ */
+const METRIC_ALIASES = {
+  impressions: ["impressions", "realShows", "shows", "views", "imps", "pageViews"],
+  clicks: ["clicks", "click"],
+  ctr: ["ctr", "CTR"],
+  revenue: ["wages", "wage", "revenue", "earnings", "income", "amount", "payout", "profit", "earned"],
+  eCpm: ["eCpm", "ecpm", "eCPM"],
+  cpc: ["cpc", "avgCpc", "CPC"],
+} as const;
+
+const METRIC_CANDIDATES: string[][] = Object.values(METRIC_ALIASES).map((a) => [...a]);
+
+const DEFAULT_METRICS = Object.values(METRIC_ALIASES).map((a) => a[0]).join(",");
 let cachedMetrics: string | null = null;
 
 const RANGE_LABEL: Record<EarningsRange, string> = {
@@ -431,8 +447,8 @@ function buildEarnings(
 
   for (const row of dateRows) {
     if (!row || typeof row !== "object") continue;
-    const w = num(pick(row, ["wages", "wage", "revenue", "income", "earnings", "earned"]));
-    const imp = num(pick(row, ["impressions", "imps", "pageViews", "views"]));
+    const w = num(pick(row, [...METRIC_ALIASES.revenue]));
+    const imp = num(pick(row, [...METRIC_ALIASES.impressions]));
     const clk = num(pick(row, ["clicks", "click"]));
     revenue += w;
     impressions += imp;
@@ -445,8 +461,8 @@ function buildEarnings(
   const sites = siteRows
     .map((row) => ({
       name: String(pick(row, ["domain", "website", "widgetName", "site", "widget"]) ?? "").trim(),
-      revenue: num(pick(row, ["wages", "wage", "revenue", "income", "earnings"])),
-      impressions: num(pick(row, ["impressions", "imps", "pageViews"])),
+      revenue: num(pick(row, [...METRIC_ALIASES.revenue])),
+      impressions: num(pick(row, [...METRIC_ALIASES.impressions])),
       clicks: num(pick(row, ["clicks", "click"])),
     }))
     .filter((s) => s.name)
@@ -499,8 +515,8 @@ export async function probeAuth(): Promise<AuthProbe> {
       const probe = await tokenGet(reportUrl(authId, "date", "today", metrics, "10"), creds.apiKey);
       if (probe.ok) {
         const rows = rowsOf(probe.json);
-        const sampleRevenue = rows.reduce((s, r) => s + num(pick(r, ["wages", "wage", "revenue", "income", "earnings", "amount", "payout", "profit"])), 0);
-        const sampleImpressions = rows.reduce((s, r) => s + num(pick(r, ["impressions", "realShows", "shows", "views", "imps"])), 0);
+        const sampleRevenue = rows.reduce((s, r) => s + num(pick(r, [...METRIC_ALIASES.revenue])), 0);
+        const sampleImpressions = rows.reduce((s, r) => s + num(pick(r, [...METRIC_ALIASES.impressions])), 0);
         return { ok: true, mode: "token", headerVariant: probe.variant, authId, sampleRevenue, sampleImpressions, metricsUsed: metrics, currency: process.env.ADSKEEPER_CURRENCY || "USD" };
       }
       if (isMetricsError(probe) && cachedMetrics !== DEFAULT_METRICS) cachedMetrics = null; // re-negotiate next time
