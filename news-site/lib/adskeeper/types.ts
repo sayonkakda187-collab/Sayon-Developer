@@ -44,7 +44,9 @@ export type AuthProbe =
       mode: "login" | "token";
       authPath?: string;
       authId: string | null;
-      headerVariant?: "bearer" | "raw"; // token mode: which Authorization header worked
+      // token mode: how the token travelled — "query" means it went as a
+      // ?token= parameter rather than an Authorization header.
+      headerVariant?: "bearer" | "raw" | "query";
       sampleRevenue?: number; // token mode: revenue from the small probe report
       sampleImpressions?: number; // token mode: impressions from the probe report
       metricsUsed?: string; // token mode: the accepted metrics that were sent
@@ -57,7 +59,7 @@ export type AuthProbe =
       tried?: string[]; // login mode: auth endpoints tried
       httpStatus?: number; // token mode: exact HTTP status AdsKeeper returned
       responseBody?: string; // token mode: exact response body (for support)
-      headerVariant?: "bearer" | "raw";
+      headerVariant?: "bearer" | "raw" | "query";
       authId?: string | null;
       metricsUsed?: string; // token mode: the metrics that were sent
     };
