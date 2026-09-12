@@ -17,7 +17,7 @@ import type { AdskeeperEarnings, EarningsRange, EarningsResult, AuthProbe } from
 //   GET /v1/publishers/{authId}/widget-custom-report
 //     ?dateInterval=<today|lastSeven|last30Days|thisMonth|…>
 //     &dimensions=<date|domain|…>
-//     &metrics=impressions,clicks,ctr,wage,eCpm,cpc   (wage == revenue)
+//     &metrics=impressions,clicks,ctr,wages,eCpm,cpc  (wages == revenue)
 //     &perPage=1000&timeZone=<tz>
 // We call it twice per range: dimensions=date (daily chart + totals) and
 // dimensions=domain (per-website breakdown). Results cached 30 min.
@@ -27,16 +27,24 @@ const REPORT_PATH = process.env.ADSKEEPER_REPORT_PATH || "publishers/{authId}/wi
 const TIMEZONE = process.env.ADSKEEPER_TIMEZONE || "Asia/Phnom_Penh";
 // Default metric set (sent first). If the account rejects it with
 // VALIDATION_WRONG_PARAM_METRICS we negotiate the accepted names (negotiateMetrics).
-const DEFAULT_METRICS = "impressions,clicks,ctr,wage,eCpm,cpc";
+// Names taken from the published metric list in AdsKeeper's "REST API Adskeeper
+// for publishers" doc: adRequests, impressions, visibilityRate, clicks, wages,
+// cpm, eCpm, cpc, ctr (shows / realShows / pageViews / vCpm are deprecated).
+// Revenue is "wages", PLURAL — the singular "wage" we sent before is not a
+// valid metric, so revenue could never have come back.
+const DEFAULT_METRICS = "impressions,clicks,ctr,wages,eCpm,cpc";
 // Per metric: ordered candidate API names/casings to probe. The API returns a
 // generic "wrong metrics" error (not which one), so we confirm a baseline then
 // add one group at a time, keeping the first variant that returns 200. CTR/eCPM/
 // CPC are bonus — buildEarnings recomputes them from totals.
+// Documented name FIRST in each row; the rest are fallbacks kept in case an
+// account's API differs from the doc. "wages" was missing from the revenue row
+// entirely, so no amount of probing could have found it.
 const METRIC_CANDIDATES: string[][] = [
-  ["impressions", "realShows", "shows", "views", "imps"],
+  ["impressions", "adRequests", "realShows", "shows", "views", "imps"],
   ["clicks", "click"],
   ["ctr", "CTR"],
-  ["wage", "revenue", "earnings", "income", "amount", "payout", "profit"],
+  ["wages", "wage", "revenue", "earnings", "income", "amount", "payout", "profit"],
   ["eCpm", "ecpm", "eCPM"],
   ["cpc", "avgCpc", "CPC"],
 ];
@@ -407,8 +415,9 @@ async function fetchReport(range: EarningsRange): Promise<AdskeeperEarnings> {
   return buildEarnings(range, rowsOf(dateRes.json), siteRows, dateRes.json);
 }
 
-/** Assemble totals + daily series + per-site from the two reports. `wage` is the
- *  revenue metric; CTR/eCPM/CPC are recomputed from summed totals for accuracy. */
+/** Assemble totals + daily series + per-site from the two reports. `wages` is
+ *  the revenue metric (plural, per AdsKeeper's published metric list); CTR/eCPM/
+ *  CPC are recomputed from summed totals for accuracy. */
 function buildEarnings(
   range: EarningsRange,
   dateRows: Record<string, unknown>[],
@@ -422,7 +431,7 @@ function buildEarnings(
 
   for (const row of dateRows) {
     if (!row || typeof row !== "object") continue;
-    const w = num(pick(row, ["wage", "revenue", "income", "earnings", "earned"]));
+    const w = num(pick(row, ["wages", "wage", "revenue", "income", "earnings", "earned"]));
     const imp = num(pick(row, ["impressions", "imps", "pageViews", "views"]));
     const clk = num(pick(row, ["clicks", "click"]));
     revenue += w;
@@ -436,7 +445,7 @@ function buildEarnings(
   const sites = siteRows
     .map((row) => ({
       name: String(pick(row, ["domain", "website", "widgetName", "site", "widget"]) ?? "").trim(),
-      revenue: num(pick(row, ["wage", "revenue", "income", "earnings"])),
+      revenue: num(pick(row, ["wages", "wage", "revenue", "income", "earnings"])),
       impressions: num(pick(row, ["impressions", "imps", "pageViews"])),
       clicks: num(pick(row, ["clicks", "click"])),
     }))
@@ -490,7 +499,7 @@ export async function probeAuth(): Promise<AuthProbe> {
       const probe = await tokenGet(reportUrl(authId, "date", "today", metrics, "10"), creds.apiKey);
       if (probe.ok) {
         const rows = rowsOf(probe.json);
-        const sampleRevenue = rows.reduce((s, r) => s + num(pick(r, ["wage", "revenue", "income", "earnings", "amount", "payout", "profit"])), 0);
+        const sampleRevenue = rows.reduce((s, r) => s + num(pick(r, ["wages", "wage", "revenue", "income", "earnings", "amount", "payout", "profit"])), 0);
         const sampleImpressions = rows.reduce((s, r) => s + num(pick(r, ["impressions", "realShows", "shows", "views", "imps"])), 0);
         return { ok: true, mode: "token", headerVariant: probe.variant, authId, sampleRevenue, sampleImpressions, metricsUsed: metrics, currency: process.env.ADSKEEPER_CURRENCY || "USD" };
       }
