@@ -368,8 +368,12 @@ export async function resolveFeaturedImage(hit: ImageHit): Promise<FeaturedImage
  *  taking only hits[0], so one un-re-hostable Pixabay result at the top no
  *  longer costs the article its cover — there is usually a Pexels, Unsplash or
  *  Wikimedia hit right behind it that hotlinks cleanly. Capped so a broken Blob
- *  token cannot turn one draft into a long run of failing uploads. */
-async function firstUsable(hits: ImageHit[]): Promise<FeaturedImage | null> {
+ *  token cannot turn one draft into a long run of failing uploads.
+ *
+ *  Exported because the editor's AUTO-suggest needs the same walk. It must not
+ *  be used for a MANUAL pick: there the reader chose a specific photo, and
+ *  quietly substituting a different one would be worse than saying no. */
+export async function resolveFirstUsable(hits: ImageHit[]): Promise<FeaturedImage | null> {
   for (const hit of hits.slice(0, 5)) {
     const resolved = await resolveFeaturedImage(hit);
     if (resolved) return resolved;
@@ -385,10 +389,10 @@ export async function pickFeaturedImage(title: string, category?: string): Promi
     if (hits.length === 0 && category) {
       // Retry without the category for a broader match.
       const broad = await searchImages({ query: base || title.slice(0, 60) });
-      return await firstUsable(broad.hits);
+      return await resolveFirstUsable(broad.hits);
     }
     if (hits.length === 0) return null;
-    return await firstUsable(hits);
+    return await resolveFirstUsable(hits);
   } catch {
     return null;
   }

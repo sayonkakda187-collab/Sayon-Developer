@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { searchImages, resolveFeaturedImage, type ImageHit } from "@/lib/imageSearch";
+import { searchImages, resolveFeaturedImage, resolveFirstUsable, type ImageHit } from "@/lib/imageSearch";
 import { suggestQueryFromArticle } from "@/lib/stockPhotos";
 
 export const dynamic = "force-dynamic";
@@ -33,12 +33,42 @@ export async function GET(req: Request) {
 // it picked from GET.
 export async function POST(req: Request) {
   await requireAdmin();
-  let body: { hit?: Partial<ImageHit> };
+  // `hit` = one manual pick; `hits` = the auto-suggest candidate list.
+  let body: { hit?: Partial<ImageHit>; hits?: Partial<ImageHit>[] };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
   }
+  // Two different intents, deliberately handled differently.
+  //
+  // `hits` (a list) is the editor's AUTO-suggest: nobody chose anything, so walk
+  // the list and take the first image that can actually be used.
+  //
+  // `hit` (one) is a MANUAL pick: the admin clicked that specific photo. If it
+  // cannot be used, say so — silently substituting a different image would give
+  // them a cover they never selected.
+  const many = Array.isArray(body.hits) ? (body.hits as ImageHit[]) : null;
+  if (many) {
+    const usable = many.filter((h) => h && typeof h.full === "string" && typeof h.source === "string");
+    if (usable.length === 0) {
+      return NextResponse.json({ ok: false, error: "Missing image." }, { status: 400 });
+    }
+    try {
+      const cover = await resolveFirstUsable(usable);
+      if (!cover) {
+        return NextResponse.json(
+          { ok: false, error: "None of those images could be used." },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({ ok: true, cover });
+    } catch (e) {
+      console.error("Image resolve failed:", e);
+      return NextResponse.json({ ok: false, error: "Couldn’t set that image. Please try another." }, { status: 500 });
+    }
+  }
+
   const hit = body.hit;
   if (!hit || typeof hit.full !== "string" || typeof hit.source !== "string") {
     return NextResponse.json({ ok: false, error: "Missing image." }, { status: 400 });
