@@ -30,18 +30,117 @@ async function denied(): Promise<NextResponse | null> {
   return user ? null : NextResponse.json({ error: "Sign in to /admin first." }, { status: 401 });
 }
 
-type Broken = { id: string; title: string; slug: string; coverImage: string | null; categoryId: string | null };
+type Broken = {
+  id: string;
+  title: string;
+  slug: string;
+  coverImage: string | null;
+  categoryId: string | null;
+  /** Why it is broken — the two causes need different explanations. */
+  reason: "host" | "missing";
+};
 
-/** Articles whose stored cover cannot be rendered. Filtered in JS because the
- *  test is a URL-shape question the database cannot express. */
-async function findBroken(limit = 500): Promise<Broken[]> {
+/** A probe is cheap but not free; bound it so a wall of dead URLs cannot eat the
+ *  whole request. */
+const PROBE_TIMEOUT_MS = 4000;
+const PROBE_CONCURRENCY = 8;
+
+/**
+ * Is the image DEFINITELY not there any more?
+ *
+ * Phrased as absence on purpose. The repair deletes covers, so the question it
+ * must answer is "am I certain this is gone?", not "did the request succeed?".
+ * An earlier version returned `head.ok`, which made a 403, a 429 or a 503 look
+ * exactly like a deleted file — so a CDN rate-limiting us mid-repair would have
+ * cleared working covers across the site. Only 404 and 410 mean gone; every
+ * other answer, and every network error, means leave it alone.
+ *
+ * A 405/501 means the host refuses HEAD, not that the file is absent, so that
+ * falls back to a ranged GET of the first byte.
+ */
+async function imageMissing(url: string): Promise<boolean> {
+  const GONE = new Set([404, 410]);
+  const check = async (init: RequestInit) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: ctl.signal, cache: "no-store", redirect: "follow" });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    const head = await check({ method: "HEAD" });
+    if (head.status === 405 || head.status === 501) {
+      const get = await check({ method: "GET", headers: { Range: "bytes=0-0" } });
+      return GONE.has(get.status);
+    }
+    return GONE.has(head.status);
+  } catch {
+    return false; // timeout or network trouble on our side — never a reason to delete
+  }
+}
+
+/** Run `fn` over `items` with limited concurrency, stopping at `deadline`.
+ *  Items not reached are reported so the caller can say so honestly rather than
+ *  silently treating "not checked" as "fine". */
+async function mapLimitUntil<T, R>(
+  items: T[],
+  limit: number,
+  deadline: number,
+  fn: (item: T) => Promise<R>,
+): Promise<{ results: (R | undefined)[]; checked: number }> {
+  const results: (R | undefined)[] = new Array(items.length);
+  let next = 0;
+  let checked = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      for (;;) {
+        if (Date.now() > deadline) return;
+        const i = next++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i]);
+        checked++;
+      }
+    }),
+  );
+  return { results, checked };
+}
+
+/** Articles whose stored cover cannot be displayed — wrong host, or the file is
+ *  no longer there. */
+async function findBroken(
+  limit = 500,
+  budgetMs = 20_000,
+): Promise<{ broken: Broken[]; scanned: number; total: number }> {
   const rows = await prisma.article.findMany({
     where: { coverImage: { not: null } },
     select: { id: true, title: true, slug: true, coverImage: true, categoryId: true },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
-  return rows.filter((a) => !isRenderableImageUrl(a.coverImage));
+
+  const wrongHost = rows.filter((a) => !isRenderableImageUrl(a.coverImage));
+  const rightHost = rows.filter((a) => isRenderableImageUrl(a.coverImage));
+
+  // Only allowed-host covers need a network probe; the rest are already known
+  // unusable. The scan gets its own budget so the caller keeps time to do the
+  // actual repair and return a response — the route's maxDuration is 60s, and a
+  // wall of timing-out URLs would otherwise consume all of it.
+  const deadline = Date.now() + budgetMs;
+  const { results, checked } = await mapLimitUntil(rightHost, PROBE_CONCURRENCY, deadline, (a) =>
+    imageMissing(a.coverImage as string),
+  );
+
+  return {
+    broken: [
+      ...wrongHost.map((a) => ({ ...a, reason: "host" as const })),
+      // `undefined` means "not reached before the budget ran out" — not broken.
+      ...rightHost.filter((_, i) => results[i] === true).map((a) => ({ ...a, reason: "missing" as const })),
+    ],
+    scanned: wrongHost.length + checked,
+    total: rows.length,
+  };
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -50,17 +149,26 @@ export async function GET(req: Request): Promise<Response> {
 
   const url = new URL(req.url);
   if (url.searchParams.get("json") === "1") {
-    const broken = await findBroken();
+    const { broken, scanned, total } = await findBroken();
     return NextResponse.json({
       broken: broken.length,
-      sample: broken.slice(0, 5).map((a) => ({ title: a.title, cover: a.coverImage })),
+      scanned,
+      total,
+      wrongHost: broken.filter((b) => b.reason === "host").length,
+      missingFile: broken.filter((b) => b.reason === "missing").length,
+      sample: broken.slice(0, 8).map((a) => ({ title: a.title, cover: a.coverImage, reason: a.reason })),
     });
   }
 
-  const broken = await findBroken();
+  const { broken, scanned, total } = await findBroken();
+  const wrongHost = broken.filter((b) => b.reason === "host").length;
+  const missingFile = broken.filter((b) => b.reason === "missing").length;
   const hosts = [...new Set(broken.map((a) => {
     try { return new URL(a.coverImage!).hostname; } catch { return "(not a URL)"; }
   }))];
+  // Show real stored addresses. Every wrong guess in this investigation came
+  // from not being able to see one.
+  const samples = broken.slice(0, 3).map((a) => a.coverImage ?? "");
 
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 
@@ -86,10 +194,21 @@ export async function GET(req: Request): Promise<Response> {
 
 <div class="card">
   <p class="big">${broken.length}</p>
-  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} with an unusable cover${
-    hosts.length ? ` &middot; from: ${hosts.map((h) => `<code>${esc(h)}</code>`).join(", ")}` : ""
+  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} with a cover that cannot be displayed${
+    scanned < total ? ` &middot; checked ${scanned} of ${total} so far` : ""
   }</p>
-  ${broken.length === 0 ? '<p class="ok" style="margin-top:14px">Nothing to fix — every cover can be displayed.</p>' : ""}
+  ${
+    broken.length
+      ? `<p class="sub" style="margin:10px 0 0">
+           ${missingFile} because the image file is gone &middot;
+           ${wrongHost} because the host is not allowed
+         </p>
+         <p class="sub" style="margin:10px 0 0">Host${hosts.length === 1 ? "" : "s"}: ${hosts
+             .map((h) => `<code>${esc(h)}</code>`)
+             .join(", ")}</p>
+         <pre style="display:block;margin-top:12px">${samples.map((u) => esc(u)).join("\n")}</pre>`
+      : '<p class="ok" style="margin-top:14px">Nothing to fix — every cover loads.</p>'
+  }
 </div>
 
 ${broken.length ? `<div class="card">
@@ -141,17 +260,22 @@ export async function POST(): Promise<NextResponse> {
   const no = await denied();
   if (no) return no;
 
-  const broken = await findBroken();
-  if (broken.length === 0) return NextResponse.json({ done: true, replaced: 0, cleared: 0 });
+  // Split the 60s budget: scan, then repair, then still have time to answer.
+  // The scan used to be unbounded and ran BEFORE the repair deadline was even
+  // set, so a wall of slow URLs could get the request killed with nothing
+  // returned — no progress, no error, nothing to resume from.
+  const started = Date.now();
+  const { broken, scanned, total } = await findBroken(500, 20_000);
+  if (broken.length === 0) {
+    return NextResponse.json({ done: scanned >= total, replaced: 0, cleared: 0, scanned, total });
+  }
 
-  // Leave room to serialize the response inside maxDuration; the page calls
-  // again until done, and repaired articles drop out of findBroken().
-  const deadline = Date.now() + 45_000;
+  const deadline = started + 45_000;
   let replaced = 0;
   let cleared = 0;
 
   for (const a of broken) {
-    if (Date.now() > deadline) return NextResponse.json({ done: false, replaced, cleared });
+    if (Date.now() > deadline) return NextResponse.json({ done: false, replaced, cleared, scanned, total });
 
     let category: string | undefined;
     if (a.categoryId) {
@@ -183,5 +307,6 @@ export async function POST(): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ done: true, replaced, cleared });
+  // Not done while part of the list went unscanned — the page calls again.
+  return NextResponse.json({ done: scanned >= total, replaced, cleared, scanned, total });
 }
