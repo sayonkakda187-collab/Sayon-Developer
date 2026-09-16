@@ -1,3 +1,5 @@
+import { IMAGE_HOSTS } from "./lib/imageHosts.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // The branded OG-image routes (next/og) read the vendored Playfair font from
@@ -9,19 +11,10 @@ const nextConfig = {
     },
   },
   images: {
-    // Seed cover images come from Picsum (which redirects to its Fastly CDN).
-    // Locally uploaded images (Phase 3) live under /public and need no entry here.
-    remotePatterns: [
-      { protocol: "https", hostname: "picsum.photos" },
-      { protocol: "https", hostname: "fastly.picsum.photos" },
-      // Vercel Blob public URLs (admin image uploads + re-hosted Pixabay covers).
-      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
-      // Hotlinked featured-image sources (Pexels, Unsplash, Wikimedia). Pixabay is
-      // re-hosted to Blob (its terms disallow hotlinking), so it isn't listed here.
-      { protocol: "https", hostname: "images.pexels.com" },
-      { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "upload.wikimedia.org" },
-    ],
+    // Built from lib/imageHosts.mjs so the optimizer's allowlist and the server's
+    // "can this cover be rendered?" check can never drift apart. Locally uploaded
+    // images live under /public and need no entry here.
+    remotePatterns: IMAGE_HOSTS.map((hostname) => ({ protocol: "https", hostname })),
   },
 };
 
