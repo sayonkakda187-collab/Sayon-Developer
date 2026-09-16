@@ -45,6 +45,20 @@ export async function POST(req: Request) {
   }
   try {
     const cover = await resolveFeaturedImage(hit as ImageHit);
+    if (!cover) {
+      // Only reachable for a Pixabay hit that could not be copied to Blob.
+      // Hotlinking it would breach Pixabay's terms AND next/image would refuse
+      // the host, so say so plainly instead of returning a null cover the
+      // editor would quietly accept.
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Couldn’t copy that Pixabay image to storage, and it can’t be linked directly. Pick another image.",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ ok: true, cover });
   } catch (e) {
     console.error("Image resolve failed:", e);

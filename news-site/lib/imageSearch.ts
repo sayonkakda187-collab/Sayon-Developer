@@ -337,14 +337,24 @@ function composeCredit(hit: ImageHit): string {
 /**
  * Turn a chosen hit into the stored FeaturedImage, honoring each source's terms:
  * Pixabay is re-hosted; Unsplash is hotlinked + its download is triggered; Pexels
- * and Wikimedia are hotlinked. Falls back to the hotlink if re-hosting fails.
+ * and Wikimedia are hotlinked.
+ *
+ * Returns NULL when a Pixabay image cannot be re-hosted. The previous behaviour
+ * was to fall back to the hotlink, which was wrong twice over: pixabay.com is
+ * deliberately absent from next.config's remotePatterns (hotlinking it breaks
+ * their terms — the very reason we re-host), so next/image REFUSES the URL and
+ * the article ships with a permanently broken cover. Storing an address the site
+ * cannot render, in violation of the source's licence, is worse than having no
+ * cover at all — the branded OG card already covers that case.
  */
-export async function resolveFeaturedImage(hit: ImageHit): Promise<FeaturedImage> {
+export async function resolveFeaturedImage(hit: ImageHit): Promise<FeaturedImage | null> {
   let url = hit.full;
   if (hit.source === "unsplash") {
     await triggerUnsplashDownload(hit.downloadLocation);
   } else if (hit.source === "pixabay") {
-    url = (await rehostToBlob(hit.full)) ?? hit.full;
+    const hosted = await rehostToBlob(hit.full);
+    if (!hosted) return null; // cannot be used legally or rendered — skip it
+    url = hosted;
   }
   return { url, credit: composeCredit(hit), creditUrl: hit.authorUrl || hit.pageUrl || "", source: hit.sourceLabel || "Web" };
 }
@@ -354,6 +364,19 @@ export async function resolveFeaturedImage(hit: ImageHit): Promise<FeaturedImage
  * Returns the stored FeaturedImage or null (caller keeps the branded fallback).
  * Never throws — image failures must never block draft creation.
  */
+/** First hit that actually yields a usable image. Walks the list rather than
+ *  taking only hits[0], so one un-re-hostable Pixabay result at the top no
+ *  longer costs the article its cover — there is usually a Pexels, Unsplash or
+ *  Wikimedia hit right behind it that hotlinks cleanly. Capped so a broken Blob
+ *  token cannot turn one draft into a long run of failing uploads. */
+async function firstUsable(hits: ImageHit[]): Promise<FeaturedImage | null> {
+  for (const hit of hits.slice(0, 5)) {
+    const resolved = await resolveFeaturedImage(hit);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 export async function pickFeaturedImage(title: string, category?: string): Promise<FeaturedImage | null> {
   try {
     const base = suggestQueryFromArticle(title);
@@ -362,10 +385,10 @@ export async function pickFeaturedImage(title: string, category?: string): Promi
     if (hits.length === 0 && category) {
       // Retry without the category for a broader match.
       const broad = await searchImages({ query: base || title.slice(0, 60) });
-      if (broad.hits[0]) return resolveFeaturedImage(broad.hits[0]);
+      return await firstUsable(broad.hits);
     }
     if (hits.length === 0) return null;
-    return await resolveFeaturedImage(hits[0]);
+    return await firstUsable(hits);
   } catch {
     return null;
   }
