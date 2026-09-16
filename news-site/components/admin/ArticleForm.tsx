@@ -415,7 +415,10 @@ export function ArticleForm({
       const pres = await fetch("/api/admin/image-search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ hit: data.hits[0] }),
+        // Send several, not just hits[0]: the top result can be a Pixabay image
+        // that cannot be re-hosted, and giving up there would cost the draft a
+        // cover when a usable Pexels or Wikimedia hit sits right behind it.
+        body: JSON.stringify({ hits: data.hits.slice(0, 5) }),
       });
       const pdata = (await pres.json().catch(() => ({}))) as { ok?: boolean; cover?: { url: string; credit: string; creditUrl: string; source: string } };
       if (!pres.ok || !pdata.ok || !pdata.cover) return;
