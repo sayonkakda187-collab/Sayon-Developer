@@ -30,10 +30,69 @@ async function denied(): Promise<NextResponse | null> {
   return user ? null : NextResponse.json({ error: "Sign in to /admin first." }, { status: 401 });
 }
 
-type Broken = { id: string; title: string; slug: string; coverImage: string | null; categoryId: string | null };
+type Broken = {
+  id: string;
+  title: string;
+  slug: string;
+  coverImage: string | null;
+  categoryId: string | null;
+  /** Why it is broken — the two causes need different explanations. */
+  reason: "host" | "missing";
+};
 
-/** Articles whose stored cover cannot be rendered. Filtered in JS because the
- *  test is a URL-shape question the database cannot express. */
+/**
+ * Does the image actually exist at that address?
+ *
+ * The host check alone is not enough, and assuming it was cost a whole round of
+ * diagnosis: a cover can sit on a perfectly allowed host — a Vercel Blob URL
+ * whose file was deleted, a stock photo since withdrawn — and still render an
+ * empty box. Allowed host, dead link. So ask the server.
+ *
+ * HEAD first because it is cheap; some CDNs refuse HEAD, so a 405/501 falls back
+ * to a ranged GET that pulls only the first byte. A network error is treated as
+ * REACHABLE, deliberately: a transient blip must never cause a working cover to
+ * be cleared.
+ */
+async function imageExists(url: string): Promise<boolean> {
+  const check = async (init: RequestInit) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    try {
+      return await fetch(url, { ...init, signal: ctl.signal, cache: "no-store", redirect: "follow" });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    const head = await check({ method: "HEAD" });
+    if (head.status === 405 || head.status === 501) {
+      const get = await check({ method: "GET", headers: { Range: "bytes=0-0" } });
+      return get.ok || get.status === 206;
+    }
+    return head.ok;
+  } catch {
+    return true; // network trouble on our side — do not punish the article
+  }
+}
+
+/** Run `fn` over `items` with limited concurrency. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= items.length) return;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
+}
+
+/** Articles whose stored cover cannot be displayed — wrong host, or the file is
+ *  no longer there. */
 async function findBroken(limit = 500): Promise<Broken[]> {
   const rows = await prisma.article.findMany({
     where: { coverImage: { not: null } },
@@ -41,7 +100,18 @@ async function findBroken(limit = 500): Promise<Broken[]> {
     orderBy: { createdAt: "desc" },
     take: limit,
   });
-  return rows.filter((a) => !isRenderableImageUrl(a.coverImage));
+
+  const wrongHost = rows.filter((a) => !isRenderableImageUrl(a.coverImage));
+  const rightHost = rows.filter((a) => isRenderableImageUrl(a.coverImage));
+
+  // Only the allowed-host ones need a network check; the rest are already known
+  // to be unusable.
+  const alive = await mapLimit(rightHost, 8, (a) => imageExists(a.coverImage as string));
+
+  return [
+    ...wrongHost.map((a) => ({ ...a, reason: "host" as const })),
+    ...rightHost.filter((_, i) => !alive[i]).map((a) => ({ ...a, reason: "missing" as const })),
+  ];
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -53,14 +123,21 @@ export async function GET(req: Request): Promise<Response> {
     const broken = await findBroken();
     return NextResponse.json({
       broken: broken.length,
-      sample: broken.slice(0, 5).map((a) => ({ title: a.title, cover: a.coverImage })),
+      wrongHost: broken.filter((b) => b.reason === "host").length,
+      missingFile: broken.filter((b) => b.reason === "missing").length,
+      sample: broken.slice(0, 8).map((a) => ({ title: a.title, cover: a.coverImage, reason: a.reason })),
     });
   }
 
   const broken = await findBroken();
+  const wrongHost = broken.filter((b) => b.reason === "host").length;
+  const missingFile = broken.filter((b) => b.reason === "missing").length;
   const hosts = [...new Set(broken.map((a) => {
     try { return new URL(a.coverImage!).hostname; } catch { return "(not a URL)"; }
   }))];
+  // Show real stored addresses. Every wrong guess in this investigation came
+  // from not being able to see one.
+  const samples = broken.slice(0, 3).map((a) => a.coverImage ?? "");
 
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 
@@ -86,10 +163,19 @@ export async function GET(req: Request): Promise<Response> {
 
 <div class="card">
   <p class="big">${broken.length}</p>
-  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} with an unusable cover${
-    hosts.length ? ` &middot; from: ${hosts.map((h) => `<code>${esc(h)}</code>`).join(", ")}` : ""
-  }</p>
-  ${broken.length === 0 ? '<p class="ok" style="margin-top:14px">Nothing to fix — every cover can be displayed.</p>' : ""}
+  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} with a cover that cannot be displayed</p>
+  ${
+    broken.length
+      ? `<p class="sub" style="margin:10px 0 0">
+           ${missingFile} because the image file is gone &middot;
+           ${wrongHost} because the host is not allowed
+         </p>
+         <p class="sub" style="margin:10px 0 0">Host${hosts.length === 1 ? "" : "s"}: ${hosts
+             .map((h) => `<code>${esc(h)}</code>`)
+             .join(", ")}</p>
+         <pre style="display:block;margin-top:12px">${samples.map((u) => esc(u)).join("\n")}</pre>`
+      : '<p class="ok" style="margin-top:14px">Nothing to fix — every cover loads.</p>'
+  }
 </div>
 
 ${broken.length ? `<div class="card">
