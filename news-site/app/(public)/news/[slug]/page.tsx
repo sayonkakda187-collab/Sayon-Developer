@@ -14,6 +14,7 @@ import { isNonHumanView } from "@/lib/botDetect";
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
+import { AdsterraNativeBanner } from "@/components/AdsterraNativeBanner";
 import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
@@ -257,10 +258,6 @@ export default async function ArticlePage({ params }: Props) {
               </aside>
             )}
 
-            {/* Ad directly below the Key Points box. Deliberately OUTSIDE the
-                keyPoints check — an article with no key points still shows it here,
-                in the same spot right after the standfirst. */}
-
             <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
             <Markdown content={article.content} />
@@ -283,7 +280,10 @@ export default async function ArticlePage({ params }: Props) {
             </div>
           </div>
 
-
+          {/* Native banner: directly after the article body, before comments.
+              Collapses to zero height (and zero margin) until the unit fills,
+              so an unfilled ad never leaves a gap here. */}
+          <AdsterraNativeBanner />
 
           <section
             id="comments"
@@ -330,8 +330,6 @@ export default async function ArticlePage({ params }: Props) {
               <CommentForm articleId={article.id} />
             </div>
           </section>
-
-          {/* Reserved Google AdSense slot — end of article, above Related Stories. */}
 
           {related.length > 0 && (
             <section className="mt-16 border-t border-border pt-10">
