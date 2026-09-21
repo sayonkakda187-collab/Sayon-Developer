@@ -2,7 +2,7 @@ import "server-only";
 
 import type {
   WpConfigStatus, WpFailure, WpPage, WpPost, WpPostDetail, WpPostInput,
-  WpResult, WpStatus, WpTerm, WpUser,
+  WpMedia, WpResult, WpStatus, WpTerm, WpUser,
 } from "./types";
 import { describeError, normalizeBaseUrl, plain } from "./format";
 
@@ -23,6 +23,8 @@ export { describeError, normalizeBaseUrl } from "./format";
  */
 
 const TIMEOUT_MS = 15_000;
+/** Uploads carry a file body, so they get longer than a JSON round trip. */
+const UPLOAD_TIMEOUT_MS = 45_000;
 const DEFAULT_PER_PAGE = 10;
 
 // ── configuration ────────────────────────────────────────────────────────────
@@ -290,3 +292,102 @@ async function listTerms(kind: "categories" | "tags"): Promise<WpResult<WpTerm[]
 
 export const listCategories = () => listTerms("categories");
 export const listTags = () => listTerms("tags");
+
+// ── media ────────────────────────────────────────────────────────────────────
+
+/**
+ * Uploads an image to the WordPress media library and returns its attachment.
+ *
+ * This is what makes a featured image possible: `featured_media` takes a
+ * WordPress ATTACHMENT ID, so the bytes have to live in WordPress. Uploading to
+ * Vercel Blob (as the local article editor does) would produce a URL WordPress
+ * has no id for.
+ *
+ * Sent as a RAW body with `Content-Disposition`, which is the documented shape
+ * for this endpoint and the one most widely accepted — multipart also works on
+ * core but is more often mangled by security plugins and reverse proxies.
+ */
+export async function uploadMedia(input: {
+  data: ArrayBuffer | Uint8Array;
+  filename: string;
+  contentType: string;
+}): Promise<WpResult<WpMedia>> {
+  const config = readConfig();
+  if (!config) return NOT_CONFIGURED;
+
+  // Keep the extension but strip anything that could break the header or be
+  // read as a path. WordPress derives the attachment slug from this.
+  const safeName =
+    input.filename.replace(/[^\w.-]+/g, "-").replace(/^[-.]+/, "").slice(0, 120) || "upload.jpg";
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}/wp-json/wp/v2/media`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(config),
+        Accept: "application/json",
+        "Content-Type": input.contentType,
+        "Content-Disposition": `attachment; filename="${safeName}"`,
+      },
+      body: input.data as BodyInit,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (e) {
+    const aborted = e instanceof Error && e.name === "AbortError";
+    return {
+      ok: false, kind: "network",
+      message: aborted
+        ? `The upload did not finish within ${UPLOAD_TIMEOUT_MS / 1000}s. Try a smaller image.`
+        : `Could not reach ${config.baseUrl} to upload the image.`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const text = await response.text();
+  const contentTypeHeader = response.headers.get("content-type") ?? "";
+  if (!contentTypeHeader.includes("json")) {
+    return {
+      ok: false, kind: "not_json", status: response.status,
+      message:
+        `WordPress answered the upload with ${contentTypeHeader || "a non-JSON response"}. ` +
+        `That is usually a security plugin, an upload size limit at the server, or mod_security.`,
+    };
+  }
+
+  let parsed: unknown = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch {
+    return { ok: false, kind: "not_json", status: response.status, message: "WordPress sent a malformed upload response." };
+  }
+
+  if (!response.ok) {
+    const failure = describeError(response.status, parsed as { code?: string; message?: string }, config.baseUrl);
+    // The generic 403 advice is about posts; for uploads the missing capability
+    // is upload_files, which Contributor does not have.
+    if (failure.status === 403) {
+      return { ...failure, message: `WordPress refused the upload (403). The account needs the upload_files capability — Author or above; a Contributor cannot upload media.` };
+    }
+    return failure;
+  }
+
+  const m = parsed as {
+    id: number; source_url?: string; mime_type?: string;
+    title?: { rendered?: string }; media_details?: { width?: number; height?: number };
+  };
+  return {
+    ok: true,
+    data: {
+      id: m.id,
+      url: m.source_url ?? "",
+      title: plain(m.title?.rendered ?? safeName),
+      mimeType: m.mime_type ?? input.contentType,
+      width: m.media_details?.width ?? null,
+      height: m.media_details?.height ?? null,
+    },
+  };
+}
