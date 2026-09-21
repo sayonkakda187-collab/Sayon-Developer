@@ -15,6 +15,8 @@ import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
 import { AdsterraNativeBanner } from "@/components/AdsterraNativeBanner";
+import { AdsterraBanner300x250 } from "@/components/AdsterraBanner300x250";
+import { splitArticleForAd } from "@/lib/articleSplit";
 import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
@@ -99,6 +101,11 @@ export default async function ArticlePage({ params }: Props) {
   ]);
 
   const shareUrl = `${siteConfig.url}/news/${article.slug}`;
+
+  // Where the in-article 300x250 banner goes. `after` comes back empty when the
+  // article has fewer than two paragraphs, which means the ad lands at the end
+  // of the body instead of inside it.
+  const body = splitArticleForAd(article.content, 2);
 
   // NewsArticle structured data (schema.org) — helps Google News/Search render
   // the story with headline, image, dates, author, and publisher logo. Server-
@@ -260,7 +267,11 @@ export default async function ArticlePage({ params }: Props) {
 
             <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
-            <Markdown content={article.content} />
+            <Markdown content={body.before} />
+
+            <AdsterraBanner300x250 />
+
+            {body.after ? <Markdown content={body.after} /> : null}
 
             {article.tags.length > 0 && (
               <div className="mt-12 flex flex-wrap gap-2">
