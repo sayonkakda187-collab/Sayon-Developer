@@ -2091,7 +2091,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   transition:color .2s,background .25s; }
 .tl-filter:hover { color:var(--tl-ink); }
 .tl-filter.tl-on { color:#fff; background:var(--tl-accent); }
-.tl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--tl-gridmin),1fr)); gap:var(--tl-rowgap) var(--tl-colgap); }
+.tl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(var(--tl-gridmin),100%),1fr)); gap:var(--tl-rowgap) var(--tl-colgap); }
 .tl-card { display:flex; flex-direction:column; }
 .tl-card-media { position:relative; display:block; overflow:hidden; border-radius:var(--tl-radius); margin-bottom:16px; transition:box-shadow .35s ease; }
 .tl-card-media:hover { box-shadow:var(--tl-shadow); }
@@ -2113,7 +2113,7 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
 /* ── newsletter ── */
 .tl-news { background:var(--tl-accent); color:#fff; }
 .tl-news-inner { max-width:var(--tl-maxw); margin:0 auto; padding:72px var(--tl-pad);
-  display:grid; grid-template-columns:1.1fr 1fr; gap:48px; align-items:center; }
+  display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:48px; align-items:center; }
 .tl-news-eyebrow { font-size:11px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.72); }
 .tl-news-title { font-family:var(--font-head); font-weight:var(--tl-headw); font-size:clamp(24px,2.6vw,34px);
   line-height:1.12; letter-spacing:-.01em; margin:14px 0 12px; max-width:18ch; color:#fff; }
@@ -2170,11 +2170,20 @@ textarea.adm-dragover { border-color: var(--adm-green) !important; box-shadow: 0
   .tl-hero { grid-template-columns:1fr; gap:40px; }
   .tl-hero-side { flex-direction:row; padding-left:0; border-left:0; border-top:1px solid var(--tl-hair); padding-top:34px; }
   .tl-side-story { flex:1; padding-bottom:0; border-bottom:0; }
-  .tl-news-inner,.tl-footer-top { grid-template-columns:1fr; gap:28px; }
+  .tl-news-inner,.tl-footer-top { grid-template-columns:minmax(0,1fr); gap:28px; }
   .tl-masthead-rail { grid-template-columns:auto 1fr; gap:12px; }
   .tl-mh-left { display:none; }
   .tl-mh-util-c { display:none; }
   .tl-mh-util-inner { grid-template-columns:1fr auto; }
+}
+@media (max-width: 344px) {
+  /* The rail needs wordmark (154) + Subscribe & Search (139) + 12px gap = 305px
+     of content box. With 20px padding a side that fits from ~345px up; below it
+     the row pushed the whole page wider than the screen. Search is the more
+     useful of the two, so the Subscribe shortcut goes on the very narrowest
+     phones — the newsletter section it links to is on every page regardless.
+     (Same approach the 680px breakpoint already takes with the util links.) */
+  .tl-mh-sub { display:none; }
 }
 @media (max-width: 680px) {
   .tl-wrap,.tl-mh-util-inner,.tl-masthead-rail,.tl-mh-nav,.tl-news-inner,.tl-footer { --tl-pad:20px; }

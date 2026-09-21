@@ -166,9 +166,9 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   brightens accents (`--sa → --sa-on`, AA) and lifts tints to ~16/22%. **Don't
   hardcode section hexes in components — reference the `--section-*` tokens.**
 
-## Ads (Adsterra: Social Bar + Popunder + Native Banner + 300x250)
+## Ads (Adsterra: Social Bar + Popunder + Native + 300x250 + sticky bottom)
 
-**Four Adsterra units, nothing else.** Every other ad network was removed at the owner's
+**Five Adsterra units, nothing else.** Every other ad network was removed at the owner's
 request — the AdsKeeper placements, the Adsterra banner / popunder / in-page-push
 units, and the reserved AdSense slots are all gone. `lib/ads.ts` is now a single
 constant (the AdSense publisher id, below), and `AdSlot`, `AdOverlay`,
@@ -289,6 +289,39 @@ self-executing loader with no container — and loaded the same way
   2. If a **link-reference or footnote definition** (`[id]: url`, `[^1]: note`)
      would end up below the cut, the article is left whole — otherwise references
      above the ad silently lose their targets.
+
+### Adsterra sticky bottom banner (all public pages)
+
+`components/AdsterraStickyAd.tsx` (shell + unit) → `AdsterraStickyBanner.tsx`
+(the dismissible client shell) → `AdsterraIframeBanner.tsx` (the unit).
+
+- **Shared iframe primitive.** `AdsterraIframeBanner` now backs BOTH this and the
+  in-article 300x250. It exists because invoke.js renders with `document.write()`,
+  which wipes the page if run after load — see the 300x250 section. It is also
+  what makes two `atOptions` units on one page possible at all: that global is
+  page-level in Adsterra's design, and each iframe has its own `window`.
+- **Rendering split.** The ad is server-rendered and passed as `children` into the
+  client shell, so no ad markup ships through client JavaScript — only the ~60
+  lines that position and dismiss it.
+- **Three-state render.** Dismissal lives in `sessionStorage`, which does not
+  exist during SSR, so reading it in a `useState` initialiser would desync server
+  and client. Both start in `checking` (identical markup, no mismatch) and an
+  effect decides. While checking the bar is laid out but `opacity: 0` — not
+  `display: none`, because ad loaders size themselves from their container and a
+  hidden one reports zero width.
+- **Body padding is measured, not hard-coded.** The bar is `position: fixed` and
+  out of flow, so a `ResizeObserver` applies its real height as `padding-bottom`
+  on `<body>` and removes it on dismiss/unmount. An unfilled unit is shorter than
+  a filled one, so a fixed value would be wrong half the time.
+- **Dismissal lasts the browser session** (`sessionStorage`). Change that key's
+  store to make it return per page load.
+- ⚠️ **It reuses the in-article 300x250's key.** Networks serve one impression per
+  placement per page view, so on an article the second slot will usually come back
+  empty, and duplicate requests for one placement can be counted as invalid
+  traffic. Create a second 300x250 unit in the Adsterra dashboard and paste its
+  key into `STICKY_AD_KEY` — that single edit is the whole fix.
+- ⚠️ At 300x250 the bar occupies **~38% of a 700px-tall phone viewport**. That is
+  what the supplied unit is; a 320x50 or 320x100 unit would be far less intrusive.
 
 ### Google AdSense (verification signals only — no ad units)
 
@@ -925,6 +958,31 @@ data model + admin scaffolding.
   Facebook Pages**. When adding a second live site, wire public queries through
   `articleWhereForSite` (resolved from the host), and split ads/FB config per
   site — none of that is done here.
+
+## Mobile horizontal overflow (fixed — do not reintroduce)
+
+The public site used to be **383px wide on a 320px screen**, so every phone could
+scroll sideways. Three CSS grids were the cause, all the same bug: a grid track
+whose *automatic minimum* is `min-content` cannot shrink below its content, so it
+pushes the whole page wider than the viewport.
+
+| rule | was | now |
+|---|---|---|
+| `.tl-grid` (card grid) | `minmax(var(--tl-gridmin),1fr)` | `minmax(min(var(--tl-gridmin),100%),1fr)` |
+| `.tl-news-inner` (newsletter) | `1.1fr 1fr` / `1fr` | `minmax(0,1.1fr) minmax(0,1fr)` / `minmax(0,1fr)` |
+| `.tl-masthead-rail` @320px | wordmark 154 + links 139 + 12 gap = 305 in a 280px box | `.tl-mh-sub` (Subscribe) hidden below 345px |
+
+The masthead could not be fixed by letting its tracks shrink — that collapsed
+`.tl-mh-right` to 0px and hid **both** Subscribe and Search. Below ~345px the row
+genuinely cannot hold all three, so the Subscribe shortcut goes and Search stays
+(the same approach the 680px breakpoint already takes with the util links, and the
+newsletter section it links to is on every page).
+
+Verified 320/344/345/360/375/393/430/768/1280: `scrollWidth` equals the viewport
+at every width, Search is always on screen, and nothing is clipped or collapsed.
+**Anything that makes the page wider than the viewport also breaks the sticky ad
+bar**, which is `position: fixed; width: 100%` and therefore spans the *layout*
+viewport — when the page overflows, its ✕ ends up off-screen.
 
 ## Site extras (Key Points · Breaking banner · Markets ticker)
 
