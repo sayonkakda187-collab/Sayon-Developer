@@ -5,9 +5,10 @@ import {
   createPost, deletePost, getPost, listCategories, listPosts, listTags,
   testConnection, updatePost, wordpressStatus,
 } from "@/lib/wordpress/client";
+import { markdownToHtml } from "@/lib/wordpress/markdown";
 import type {
-  WpConfigStatus, WpPage, WpPost, WpPostDetail, WpPostInput, WpResult,
-  WpStatus, WpTerm, WpUser,
+  WpConfigStatus, WpContentFormat, WpPage, WpPost, WpPostDetail, WpPostInput,
+  WpResult, WpStatus, WpTerm, WpUser,
 } from "@/lib/wordpress/types";
 
 /**
@@ -56,7 +57,27 @@ function asPostId(v: unknown): number | null {
 type PostForm = {
   title?: unknown; content?: unknown; status?: unknown; excerpt?: unknown;
   slug?: unknown; categories?: unknown; tags?: unknown; featuredMedia?: unknown;
+  /** "markdown" converts `content` before sending; anything else is sent as HTML. */
+  format?: unknown;
 };
+
+function asFormat(v: unknown): WpContentFormat {
+  return v === "markdown" ? "markdown" : "html";
+}
+
+/**
+ * Converts the content field when the editor was in Markdown mode.
+ *
+ * Done HERE rather than in the browser for two reasons: the conversion pipeline
+ * stays out of the client bundle, and the format is re-derived from the
+ * submitted value instead of trusting the client to have converted correctly.
+ */
+async function renderContent(
+  data: Partial<WpPostInput>, format: WpContentFormat,
+): Promise<Partial<WpPostInput>> {
+  if (format !== "markdown" || data.content === undefined) return data;
+  return { ...data, content: await markdownToHtml(data.content) };
+}
 
 function validate(form: PostForm, { partial = false } = {}): WpResult<Partial<WpPostInput>> {
   const out: Partial<WpPostInput> = {};
@@ -137,7 +158,8 @@ export async function createWordPressPost(form: PostForm): Promise<WpResult<WpPo
   await requireAdmin();
   const checked = validate(form);
   if (!checked.ok) return checked;
-  return createPost(checked.data as WpPostInput);
+  const body = await renderContent(checked.data, asFormat(form.format));
+  return createPost(body as WpPostInput);
 }
 
 export async function updateWordPressPost(id: unknown, form: PostForm): Promise<WpResult<WpPost>> {
@@ -147,7 +169,8 @@ export async function updateWordPressPost(id: unknown, form: PostForm): Promise<
   const checked = validate(form, { partial: true });
   if (!checked.ok) return checked;
   if (Object.keys(checked.data).length === 0) return invalid("Nothing to update.");
-  return updatePost(postId, checked.data);
+  const body = await renderContent(checked.data, asFormat(form.format));
+  return updatePost(postId, body);
 }
 
 /** Trashes by default. `force` deletes permanently and cannot be undone. */
@@ -167,4 +190,16 @@ export async function fetchWordPressTaxonomies(): Promise<
   if (!cats.ok) return cats;
   if (!tags.ok) return tags;
   return { ok: true, data: { categories: cats.data, tags: tags.data } };
+}
+
+/**
+ * Renders Markdown to the HTML that WordPress would receive, for the editor's
+ * preview. Admin-only like everything else here; it touches no credentials and
+ * makes no request to WordPress.
+ */
+export async function previewWordPressMarkdown(markdown: unknown): Promise<WpResult<string>> {
+  await requireAdmin();
+  if (typeof markdown !== "string") return invalid("Nothing to preview.");
+  if (markdown.length > MAX_CONTENT) return invalid("That content is too long to preview.");
+  return { ok: true, data: await markdownToHtml(markdown) };
 }
