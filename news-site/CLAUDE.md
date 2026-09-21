@@ -166,9 +166,9 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   brightens accents (`--sa → --sa-on`, AA) and lifts tints to ~16/22%. **Don't
   hardcode section hexes in components — reference the `--section-*` tokens.**
 
-## Ads (Adsterra: Social Bar + Native Banner)
+## Ads (Adsterra: Social Bar + Native Banner + 300x250)
 
-**Two Adsterra units, nothing else.** Every other ad network was removed at the owner's
+**Three Adsterra units, nothing else.** Every other ad network was removed at the owner's
 request — the AdsKeeper placements, the Adsterra banner / popunder / in-page-push
 units, and the reserved AdSense slots are all gone. `lib/ads.ts` is now a single
 constant (the AdSense publisher id, below), and `AdSlot`, `AdOverlay`,
@@ -226,6 +226,48 @@ component — see below). Don't reintroduce the old ones without asking.
   non-responsive creative is now cropped instead of widening the page.
 - The wrapper is never `display:none`: ad loaders measure their container to
   decide what to render, and a hidden container reports zero width.
+
+### Adsterra 300x250 in-article banner (article pages only)
+
+`components/AdsterraBanner300x250.tsx` + `lib/articleSplit.ts`. Verified by
+`npm run check:split` (37 assertions).
+
+- **It runs inside its own `srcDoc` iframe, and that is not optional.** This is
+  Adsterra's classic `atOptions` + `invoke.js` format, and invoke.js renders with
+  **`document.write()`**. During parsing that is fine; **after load — exactly when
+  `next/script`'s `afterInteractive` fires — `document.write()` opens a new
+  document and WIPES THE PAGE.** Loading this unit the way the Social Bar and
+  Native Banner are loaded would blank the article. Its own document makes the
+  write happen during that iframe's parse, where it is the intended behaviour.
+- Three things follow from the same decision: `atOptions` is a **page-level
+  global** in Adsterra's design (two banners on a page would overwrite each
+  other's config — each iframe has its own `window`), React never sees the ad's
+  DOM so **no hydration mismatch is possible**, and the component ships **zero
+  client JavaScript** (it is a server component rendering plain markup).
+- **Sandbox:** `allow-scripts allow-same-origin allow-popups
+  allow-popups-to-escape-sandbox`. **`allow-top-navigation` is deliberately
+  withheld**, so a misbehaving creative cannot redirect the reader away from the
+  article; clicks still open in a new tab.
+- **Layout:** fixed 300x250, so the exact height is reserved and the slot cannot
+  shift the page whether or not it fills — the *opposite* call from the Native
+  Banner, which collapses when unfilled because its height is unknown. 20px
+  vertical margins, centred, `overflow: hidden` so an oversized creative cannot
+  widen the page.
+- **Placement (`splitArticleForAd`):** after the **2nd paragraph**; fewer than two
+  paragraphs puts it at the end of the body. It splits on top-level Markdown
+  BLOCKS, not on `\n\n`, because a blank line inside a fenced code block is not a
+  block boundary — splitting there would cut a fence in half and turn the rest of
+  the article into one big code block. Headings, lists, quotes, tables, rules and
+  image-only blocks are not counted as paragraphs.
+- Two rules that exist because the naive version got them wrong:
+  1. The cut never lands **between a paragraph and the list/table/quote/code it
+     introduces** ("Three trends collided at once:"). It moves *past* that block,
+     keeping the pair together. Skipping to the next paragraph instead pushed the
+     ad to the very end of every list-heavy article — on the seeded content, all
+     six articles ended up with no in-body ad at all.
+  2. If a **link-reference or footnote definition** (`[id]: url`, `[^1]: note`)
+     would end up below the cut, the article is left whole — otherwise references
+     above the ad silently lose their targets.
 
 ### Google AdSense (verification signals only — no ad units)
 
