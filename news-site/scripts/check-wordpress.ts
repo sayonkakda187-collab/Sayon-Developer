@@ -169,6 +169,18 @@ console.log("\n=== trendingToItems: only rows the picker can use ===");
   eq(items[0].title, "Real story", "title trimmed");
   eq(items[0].source, "Reuters", "source trimmed");
   eq(items[0].publishedAt, "2026-09-01T00:00:00Z", "timestamp preserved");
+  // The card layout needs both of these; dropping them is what made the first
+  // version render as a plain list instead of matching the Trending News tab.
+  eq(items[0].image, null, "a missing image stays null rather than undefined");
+  eq(items[0].via, "gnews", "the provenance tag is carried through for the badge");
+  {
+    const withImage = trendingToItems([
+      { title: "Has art", description: "d", source: "AP", url: "https://a.test/3",
+        image: "https://img.test/a.jpg", publishedAt: null, via: "newsdata" },
+    ] as never);
+    eq(withImage[0].image, "https://img.test/a.jpg", "a cover image is carried through");
+    eq(withImage[0].via, "newsdata", "the source API is carried through");
+  }
   eq(trendingToItems(null).length, 0, "null feed is an empty list, not a crash");
   eq(trendingToItems([]).length, 0, "empty feed stays empty");
 }

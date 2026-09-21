@@ -104,6 +104,10 @@ export type WpTrendingItem = {
   source: string;
   url: string;
   publishedAt: string | null;
+  /** Cover image from the outlet, when it supplied one. */
+  image: string | null;
+  /** Which news API surfaced it — shown as the provenance badge. */
+  via: string;
 };
 
 /** An AI draft mapped onto the WordPress editor's fields. */

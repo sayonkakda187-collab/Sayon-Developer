@@ -456,6 +456,14 @@ so a story can go from headline to published post without leaving it.
   prompt, de-duplicates suggestions case-insensitively, and **falls back to the
   source headline** so a generation that produced a body but no usable headline
   never leaves the title box empty.
+- **The headline list uses the Trending News tab's own card markup** —
+  `.adm-trend-grid` / `.adm-trend-card`, thumbnail, source, time-ago, provenance
+  badge and snippet — so the two screens read identically. Every class is one the
+  tab already uses; none were invented. Note the stylesheet dresses the AI
+  button's disabled state with a `.disabled` CLASS, not `:disabled`, so the class
+  has to be set alongside the attribute or the button is unclickable while still
+  looking live. The provenance labels derive from `NEWS_SOURCES` rather than a
+  second hand-written map.
 - **Unconfigured keys are named, not hidden.** No `ANTHROPIC_API_KEY` → drafting
   is disabled with the variable named (trending still works, so a headline can be
   picked and written by hand). No news key → the four free options are listed.
