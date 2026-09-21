@@ -28,6 +28,7 @@ import {
   SparklesIcon,
   SettingsIcon,
   GlobeIcon,
+  ShareIcon,
   SitesIcon,
   AiImageIcon,
   ClockIcon,
@@ -50,6 +51,7 @@ const SECTION_ROUTES: [string, string][] = [
   ["ai-assistant", "/admin/ai-assistant"],
   ["ai-images", "/admin/ai-images"],
   ["scheduled", "/admin/scheduled"],
+  ["wordpress", "/admin/wordpress"],
   ["sites", "/admin/sites"],
   ["galleries", "/admin/galleries"],
   ["settings", "/admin/settings"],
@@ -246,6 +248,15 @@ export function AdminShell({
             >
               <GalleriesIcon />
               Galleries
+            </Link>
+            <Link
+              href="/admin/wordpress"
+              data-tab="wordpress"
+              className={`adm-navitem ${isActive("/admin/wordpress") ? "on" : ""}`}
+              aria-current={isActive("/admin/wordpress") ? "page" : undefined}
+            >
+              <ShareIcon />
+              WordPress
             </Link>
             <Link
               href="/admin/sites"

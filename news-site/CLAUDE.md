@@ -351,6 +351,64 @@ present**. They read revenue figures from the AdsKeeper publisher API and
 **display no advertising** — a reporting tool, not an ad unit. See its own
 section below.
 
+## WordPress publishing (external site, REST API)
+
+Publishes to a SEPARATE WordPress install from `/admin/wordpress` — unrelated to
+this site's own articles. Official REST API only; no XML-RPC, no scraping.
+Verified by `npm run check:wordpress` (44 assertions on the pure helpers).
+
+- **Credentials are env-only and server-only.** `WP_URL`, `WP_USERNAME`,
+  `WP_APPLICATION_PASSWORD` (see `.env.example`). `lib/wordpress/client.ts` opens
+  with **`import "server-only"`** — that is load-bearing, not decorative: it makes
+  importing the module from a client component a BUILD failure rather than a
+  credential shipped to a browser. Nothing returns the username or password, in a
+  value or an error message. Verified end to end: the password appears in none of
+  the responses the browser receives.
+- **Auth:** HTTP Basic with an **Application Password** (WordPress → Users →
+  Profile → Application Passwords), never the account's login password.
+  `WP_USERNAME` is the account's **login name**, not its display name or email.
+  WordPress strips the spaces in the generated password before comparing, so
+  either form works.
+- **Code map.** `lib/wordpress/format.ts` holds the pure helpers
+  (`normalizeBaseUrl`, `describeError`, `plain`) — they live OUTSIDE the
+  server-only module so a test runner can import them, which is why they can be
+  tested at all. `lib/wordpress/client.ts` is the REST client
+  (create / update / delete / get / list+pagination / taxonomies /
+  `testConnection`). `app/admin/wordpress-actions.ts` holds the server actions,
+  each re-checking `requireAdmin()` — a server action is a public HTTP endpoint,
+  so the page having rendered for an admin is not authorisation for the action.
+  `components/admin/WordPressManager.tsx` is the UI.
+- **Input is validated server-side**, not trusted from the form. `status` in
+  particular goes straight into WordPress: letting an arbitrary string through
+  would allow a crafted request to publish when the form said draft.
+- **Content is HTML**, because that is what WordPress stores in `post_content`.
+  A Markdown field would need a markdown→HTML converter; `rehype-stringify` is
+  not a dependency here and adding one needs asking first. The editor has a
+  **sandboxed** (`sandbox=""`, no scripts) iframe preview so the markup can be
+  checked without running it.
+- **`normalizeBaseUrl` rejects non-http(s)**, so a stray `WP_URL` cannot turn into
+  a request on another protocol — including `data:`, which a naive
+  "prepend https:// if there's no scheme" check would let through.
+- **Errors are mapped to advice, not dumped.** 401 and 403 are deliberately kept
+  apart: one means the credentials are wrong, the other means they are fine but
+  the user's role lacks the capability. Collapsing them sends people to the wrong
+  settings screen. A non-JSON response (a security plugin or WAF answering with
+  an HTML page) is detected and named, rather than surfacing as
+  "Unexpected token <".
+- **Delete trashes by default.** WordPress only deletes permanently with
+  `force=true`, which is irreversible, so it has to be asked for explicitly.
+- **Pagination** comes from the `X-WP-Total` / `X-WP-TotalPages` response headers,
+  not from counting rows.
+- **Posts and taxonomies load from the browser**, not the server render, so an
+  unreachable WordPress site surfaces as an error inside the panel instead of
+  stalling `/admin/wordpress`.
+- **WordPress-side requirements:** REST API reachable at `/wp-json/` (some
+  security plugins and WAFs block it), permalinks NOT set to "Plain", the
+  Authorization header reaching PHP (some Apache/CGI hosts strip it), HTTPS, and
+  a user with **Author or above** to publish — **Editor** to edit other people's
+  posts. `testConnection` reports the account and its capabilities, and the UI
+  disables Publish when the account lacks `publish_posts`.
+
 ## Facebook Pages integration (Graph API)
 
 Distribute published articles to Facebook Pages from the admin panel using the
