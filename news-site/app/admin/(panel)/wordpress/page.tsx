@@ -1,6 +1,10 @@
 import { ToastProvider } from "@/components/admin/Toast";
 import { WordPressManager } from "@/components/admin/WordPressManager";
 import { wordpressStatus } from "@/lib/wordpress/client";
+import { isAiConfigured } from "@/lib/aiAssist";
+import { sourceConfigMap } from "@/lib/news/aggregate";
+import { NEWS_SOURCES } from "@/lib/news/sources";
+import { TRENDING_CATEGORIES } from "@/lib/gnews";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +16,16 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminWordPressPage() {
   const status = wordpressStatus();
+
+  // Plain data only. These are env checks, not network calls — and no key value
+  // is ever serialized to the browser, only whether one is present.
+  const configured = sourceConfigMap();
+  const compose = {
+    aiConfigured: isAiConfigured(),
+    newsConfigured: NEWS_SOURCES.some((s) => configured[s.id]),
+  };
+  const categories = TRENDING_CATEGORIES.map((c) => ({ id: c.id, label: c.label }));
+
   return (
     <div>
       <div className="adm-page-h">
@@ -22,7 +36,7 @@ export default async function AdminWordPressPage() {
         </p>
       </div>
       <ToastProvider>
-        <WordPressManager status={status} />
+        <WordPressManager status={status} compose={compose} trendingCategories={categories} />
       </ToastProvider>
     </div>
   );

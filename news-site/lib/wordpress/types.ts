@@ -95,3 +95,34 @@ export type WpConfigStatus = {
   /** The normalized site URL, safe to display. Never the username/password. */
   baseUrl: string | null;
 };
+
+/** One headline from the trending feed, as the WordPress picker shows it. */
+export type WpTrendingItem = {
+  title: string;
+  description: string;
+  /** The outlet name, e.g. "Reuters". */
+  source: string;
+  url: string;
+  publishedAt: string | null;
+};
+
+/** An AI draft mapped onto the WordPress editor's fields. */
+export type WpAiDraft = {
+  /** The headline to put in the Title box. */
+  title: string;
+  /** Every usable headline the model suggested, so another can be chosen. */
+  headlines: string[];
+  /** The article body, as Markdown. */
+  content: string;
+  excerpt: string;
+  /** One-line summary of the story, shown as context — not sent to WordPress. */
+  brief: string;
+};
+
+/** What the compose panel can and cannot do right now. */
+export type WpComposeStatus = {
+  /** ANTHROPIC_API_KEY is set. */
+  aiConfigured: boolean;
+  /** At least one news source has a key set. */
+  newsConfigured: boolean;
+};
