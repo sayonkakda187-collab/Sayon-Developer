@@ -355,7 +355,8 @@ section below.
 
 Publishes to a SEPARATE WordPress install from `/admin/wordpress` — unrelated to
 this site's own articles. Official REST API only; no XML-RPC, no scraping.
-Verified by `npm run check:wordpress` (44 assertions on the pure helpers).
+Verified by `npm run check:wordpress` (65 assertions: URL handling, error
+mapping, and Markdown conversion).
 
 - **Credentials are env-only and server-only.** `WP_URL`, `WP_USERNAME`,
   `WP_APPLICATION_PASSWORD` (see `.env.example`). `lib/wordpress/client.ts` opens
@@ -381,11 +382,29 @@ Verified by `npm run check:wordpress` (44 assertions on the pure helpers).
 - **Input is validated server-side**, not trusted from the form. `status` in
   particular goes straight into WordPress: letting an arbitrary string through
   would allow a crafted request to publish when the form said draft.
-- **Content is HTML**, because that is what WordPress stores in `post_content`.
-  A Markdown field would need a markdown→HTML converter; `rehype-stringify` is
-  not a dependency here and adding one needs asking first. The editor has a
-  **sandboxed** (`sandbox=""`, no scripts) iframe preview so the markup can be
-  checked without running it.
+- **Content can be Markdown or HTML**, chosen per submit with a toggle. WordPress
+  stores `post_content` as HTML either way, so Markdown is converted server-side
+  in the action — posting it raw would publish literal `**bold**` and `## heading`.
+  The conversion lives in `lib/wordpress/markdown.ts` on the SAME remark pipeline
+  the public article renderer uses (`remark-gfm` is already a direct dependency),
+  so tables, task lists, strikethrough and autolinks behave identically in both
+  places. Completing the chain needed one new package, `rehype-stringify`
+  (3 packages with its deps); `unified`, `remark-parse` and `remark-rehype` were
+  already installed via `react-markdown` and are now declared directly rather
+  than relied on transitively.
+- **Raw HTML passes through the Markdown converter** (`allowDangerousHtml` at
+  both ends), deliberately: Markdown routinely carries embeds and WordPress block
+  comments, and silently dropping them would be worse than useless. The content is
+  written by the site's own administrator, and WordPress applies its own `wp_kses`
+  on arrival per the account's `unfiltered_html` capability. **This is not a
+  channel for untrusted input and must not become one.**
+- **A post loaded FROM WordPress opens in HTML mode**, with a note saying why.
+  WordPress returns HTML regardless of how the post was authored, so treating it
+  as Markdown and converting on save would mangle it.
+- The editor has a **sandboxed** (`sandbox=""`, no scripts) iframe preview. In
+  Markdown mode it previews the CONVERTED HTML — what WordPress will actually
+  store — via `previewWordPressMarkdown`, so the conversion stays out of the
+  client bundle.
 - **`normalizeBaseUrl` rejects non-http(s)**, so a stray `WP_URL` cannot turn into
   a request on another protocol — including `data:`, which a naive
   "prepend https:// if there's no scheme" check would let through.

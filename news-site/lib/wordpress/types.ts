@@ -8,6 +8,14 @@
 /** The post statuses this integration offers. WordPress supports more. */
 export type WpStatus = "publish" | "draft" | "pending" | "private";
 
+/**
+ * How the editor's content field is written. WordPress always receives HTML;
+ * `markdown` means "convert before sending". Stored per-submit rather than as a
+ * setting, because a post loaded FROM WordPress comes back as HTML regardless of
+ * how it was originally authored.
+ */
+export type WpContentFormat = "markdown" | "html";
+
 export type WpPostInput = {
   title: string;
   /** HTML — WordPress stores `post_content` as HTML, not Markdown. */

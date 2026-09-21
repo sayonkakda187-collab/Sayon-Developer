@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useToast } from "@/components/admin/Toast";
 import {
   createWordPressPost, deleteWordPressPost, fetchWordPressPost, fetchWordPressPosts,
-  fetchWordPressTaxonomies, testWordPressConnection, updateWordPressPost,
+  fetchWordPressTaxonomies, previewWordPressMarkdown, testWordPressConnection,
+  updateWordPressPost,
 } from "@/app/admin/wordpress-actions";
-import type { WpConfigStatus, WpPost, WpStatus, WpTerm } from "@/lib/wordpress/types";
+import type {
+  WpConfigStatus, WpContentFormat, WpPost, WpStatus, WpTerm,
+} from "@/lib/wordpress/types";
 import {
   CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, RefreshIcon, TrashIcon,
 } from "@/components/admin/icons";
@@ -138,7 +141,9 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
   const [tags, setTags] = useState<number[]>([]);
   const [featuredMedia, setFeaturedMedia] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [format, setFormat] = useState<WpContentFormat>("markdown");
   const [showPreview, setShowPreview] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
   const [loadingPost, setLoadingPost] = useState(false);
 
   // ── taxonomies + list ──────────────────────────────────────────────────────
@@ -184,7 +189,8 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
   function resetForm() {
     setEditingId(null); setTitle(""); setContent(""); setPostStatus("draft");
     setExcerpt(""); setSlug(""); setCategories([]); setTags([]); setFeaturedMedia("");
-    setFieldErrors({}); setShowPreview(false);
+    setFieldErrors({}); setShowPreview(false); setPreviewHtml("");
+    setFormat("markdown");
   }
 
   function validate(): boolean {
@@ -203,6 +209,10 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
     if (!res.ok) { error(res.message); return; }
     const p = res.data;
     setEditingId(p.id); setTitle(p.title); setContent(p.contentRaw);
+    // WordPress stores HTML, so that is what comes back — regardless of how the
+    // post was originally written. Treating it as Markdown and converting on
+    // save would mangle it, so the editor switches to HTML for a loaded post.
+    setFormat("html"); setShowPreview(false); setPreviewHtml("");
     setPostStatus((STATUS_OPTIONS.some((s) => s.id === p.status) ? p.status : "draft") as WpStatus);
     setExcerpt(p.excerptRaw); setSlug(p.slug);
     setCategories(p.categories); setTags(p.tags);
@@ -214,7 +224,7 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
   function submit() {
     if (!validate()) return;
     const form = {
-      title: title.trim(), content, status: postStatus,
+      title: title.trim(), content, format, status: postStatus,
       excerpt, slug: slug.trim(), categories, tags,
       featuredMedia: featuredMedia.trim() === "" ? null : Number(featuredMedia),
     };
@@ -353,23 +363,57 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
             {fieldErrors.title && <span style={{ color: "rgb(190,60,60)", fontSize: 12 }}>{fieldErrors.title}</span>}
           </label>
 
-          <label className="adm-field">
-            <span>
-              Content <span className="adm-field-hint" style={{ display: "inline" }}>(HTML — WordPress stores post content as HTML)</span>
+          <div className="adm-field">
+            <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: 1 }}>Content</span>
+              <span className="adm-seg" role="tablist" aria-label="Content format">
+                {(["markdown", "html"] as const).map((f) => (
+                  <button
+                    key={f} type="button" role="tab" aria-selected={format === f}
+                    className={`adm-seg-btn ${format === f ? "on" : ""}`}
+                    onClick={() => { setFormat(f); setShowPreview(false); setPreviewHtml(""); }}
+                  >
+                    {f === "markdown" ? "Markdown" : "HTML"}
+                  </button>
+                ))}
+              </span>
             </span>
             <textarea
+              data-field="content"
               className="adm-input" value={content} rows={12} spellCheck
               onChange={(e) => { setContent(e.target.value); if (fieldErrors.content) setFieldErrors((f) => ({ ...f, content: undefined })); }}
-              placeholder={"<p>Your opening paragraph.</p>\n\n<h2>A section</h2>\n<p>More text.</p>"}
+              placeholder={format === "markdown"
+                ? "Your opening paragraph.\n\n## A section\n\n- a point\n- another\n\n**Bold**, _italic_, [a link](https://example.com)."
+                : "<p>Your opening paragraph.</p>\n\n<h2>A section</h2>\n<p>More text.</p>"}
               style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13, lineHeight: 1.6 }}
               aria-invalid={!!fieldErrors.content}
             />
             {fieldErrors.content && <span style={{ color: "rgb(190,60,60)", fontSize: 12 }}>{fieldErrors.content}</span>}
-          </label>
+            <span className="adm-field-hint">
+              {editingId !== null && format === "html"
+                ? "This post was loaded from WordPress, which stores content as HTML — so it opens in HTML mode. Switch to Markdown only if you intend to rewrite the body."
+                : format === "markdown"
+                  ? "Converted to HTML before sending. Tables, task lists and strikethrough work (GFM); raw HTML passes through."
+                  : "Sent to WordPress exactly as typed."}
+            </span>
+          </div>
 
           <div>
-            <button type="button" className="adm-btn-ghost" onClick={() => setShowPreview((v) => !v)}>
-              {showPreview ? "Hide preview" : "Preview HTML"}
+            <button
+              type="button" className="adm-btn-ghost"
+              onClick={async () => {
+                if (showPreview) { setShowPreview(false); return; }
+                if (format === "markdown") {
+                  const res = await previewWordPressMarkdown(content);
+                  if (!res.ok) { error(res.message); return; }
+                  setPreviewHtml(res.data);
+                } else {
+                  setPreviewHtml(content);
+                }
+                setShowPreview(true);
+              }}
+            >
+              {showPreview ? "Hide preview" : format === "markdown" ? "Preview rendered HTML" : "Preview HTML"}
             </button>
             {showPreview && (
               // Sandboxed with no allow-scripts: the preview renders the markup
@@ -377,7 +421,7 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
               <iframe
                 title="Content preview"
                 sandbox=""
-                srcDoc={`<!doctype html><meta charset="utf-8"><style>body{font:15px/1.7 system-ui,sans-serif;margin:12px;color:#222}img{max-width:100%}</style>${content}`}
+                srcDoc={`<!doctype html><meta charset="utf-8"><style>body{font:15px/1.7 system-ui,sans-serif;margin:12px;color:#222}img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px}pre{background:#f4f4f4;padding:8px;overflow:auto}</style>${previewHtml}`}
                 style={{ width: "100%", height: 260, marginTop: 10, border: "1px solid var(--adm-bd)", borderRadius: 10, background: "#fff" }}
               />
             )}

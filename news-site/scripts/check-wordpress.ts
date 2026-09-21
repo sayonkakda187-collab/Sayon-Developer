@@ -1,4 +1,5 @@
 import { describeError, normalizeBaseUrl, plain } from "../lib/wordpress/format";
+import { markdownToHtml } from "../lib/wordpress/markdown";
 
 let pass = 0, fail = 0;
 const is = (c: boolean, m: string) => { c ? (pass++, console.log("  ✓ " + m)) : (fail++, console.log("  ✗ " + m)); };
@@ -85,5 +86,66 @@ eq(plain("&amp;lt;script&amp;gt;"), "&lt;script&gt;",
 eq(plain("  spaced  "), "spaced", "trims");
 eq(plain(""), "", "empty input");
 
-console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"} — ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+async function markdownChecks() {
+  console.log("\n=== markdownToHtml: the point of it ===");
+  {
+    // The bug this exists to prevent: Markdown posted straight to WordPress
+    // publishes as literal asterisks and hashes.
+    const html = await markdownToHtml("## Heading\n\nSome **bold** and _italic_ text.");
+    is(html.includes("<h2>Heading</h2>"), "heading becomes <h2>");
+    is(html.includes("<strong>bold</strong>"), "** becomes <strong>");
+    is(html.includes("<em>italic</em>"), "_ becomes <em>");
+    is(!/\*\*/.test(html) && !/^##/m.test(html), "no literal Markdown syntax survives");
+  }
+
+  console.log("\n=== markdownToHtml: GFM, same as the public renderer ===");
+  {
+    const table = await markdownToHtml("| a | b |\n|---|---|\n| 1 | 2 |");
+    is(table.includes("<table>") && table.includes("<td>1</td>"), "GFM tables render");
+    is((await markdownToHtml("~~gone~~")).includes("<del>gone</del>"), "strikethrough renders");
+    is((await markdownToHtml("- [x] done\n- [ ] todo")).includes('type="checkbox"'), "task lists render");
+    is((await markdownToHtml("See https://example.com for more.")).includes('<a href="https://example.com"'),
+       "bare URLs autolink");
+  }
+
+  console.log("\n=== markdownToHtml: structure that must survive ===");
+  {
+    const code = await markdownToHtml("```js\nconst a = 1;\n```");
+    is(code.includes("<pre>") && code.includes("const a = 1;"), "fenced code becomes <pre>");
+    is(code.includes("language-js"), "the code fence language is kept");
+    const list = await markdownToHtml("- one\n- two");
+    is(list.includes("<ul>") && (list.match(/<li>/g) || []).length === 2, "lists render with both items");
+    is((await markdownToHtml("[text](https://example.com)")).includes('href="https://example.com"'), "links render");
+    const img = await markdownToHtml("![alt](https://example.com/a.png)");
+    is(img.includes('<img src="https://example.com/a.png"') && img.includes('alt="alt"'), "images render");
+    is((await markdownToHtml("> quoted")).includes("<blockquote>"), "blockquotes render");
+  }
+
+  console.log("\n=== markdownToHtml: raw HTML passes through ===");
+  {
+    // Deliberate: Markdown routinely carries embeds, and silently dropping them
+    // would be worse than useless. WordPress applies its own wp_kses on arrival.
+    const embed = await markdownToHtml('Before\n\n<iframe src="https://example.com/e"></iframe>\n\nAfter');
+    is(embed.includes("<iframe"), "an iframe embed survives conversion");
+    is((await markdownToHtml('text <span class="x">inline</span> html')).includes('<span class="x">'),
+       "inline HTML survives");
+    is((await markdownToHtml("<!-- wp:paragraph -->\n<p>Block</p>\n<!-- /wp:paragraph -->")).includes("wp:paragraph"),
+       "WordPress block comments survive");
+  }
+
+  console.log("\n=== markdownToHtml: edges ===");
+  {
+    eq(await markdownToHtml(""), "", "empty string");
+    eq(await markdownToHtml("   \n  "), "", "whitespace only");
+    eq(await markdownToHtml(null as unknown as string), "", "null does not throw");
+    const amp = await markdownToHtml("Ben & Jerry's");
+    is(amp.includes("&#x26;") || amp.includes("&amp;"), "a bare ampersand is escaped, not left raw");
+  }
+}
+
+markdownChecks()
+  .catch((e) => { fail++; console.log("  \u2717 markdown checks threw: " + (e as Error).message); })
+  .then(() => {
+    console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"} — ${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  });
