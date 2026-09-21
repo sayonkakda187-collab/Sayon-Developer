@@ -14,7 +14,6 @@ import {
 import { saveAdskeeperApiKey, saveAdskeeperClientId, saveAdskeeperLoginCreds } from "@/lib/adskeeper/settings";
 import { clearEarningsCache } from "@/lib/adskeeper/client";
 import { setBreaking } from "@/lib/breaking";
-import { ADSENSE_SETTING_KEY } from "@/lib/adsense";
 
 // Server actions for the API Settings page. Each re-checks requireAdmin. Keys
 // arrive over POST, are encrypted at rest, and are NEVER returned to the client.
@@ -169,20 +168,3 @@ export async function saveBreakingBanner(input: {
   }
 }
 
-/** Enable/disable the reserved AdSense slot layout (separate from AdsKeeper). */
-export async function setAdSlotsEnabled(
-  on: boolean,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
-  try {
-    await prisma.appSetting.upsert({
-      where: { key: ADSENSE_SETTING_KEY },
-      update: { value: on ? "true" : "false", encrypted: false },
-      create: { key: ADSENSE_SETTING_KEY, value: on ? "true" : "false", encrypted: false },
-    });
-    revalidatePath("/admin/settings");
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn’t save the setting." };
-  }
-}

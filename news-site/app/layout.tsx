@@ -3,7 +3,6 @@ import { Newsreader, Schibsted_Grotesk, Playfair_Display } from "next/font/googl
 import "./globals.css";
 import { ViewTransitions } from "next-view-transitions";
 import { siteConfig } from "@/lib/site";
-import { AdSenseHead } from "@/components/AdSenseHead";
 import { ADSENSE_PUBLISHER_ID } from "@/lib/ads";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +83,6 @@ export default function RootLayout({
             <html>, and React treats that as a hydration mismatch — it warned on
             every page, admin included. next/script hoists it regardless, so the
             position in the JSX costs nothing. */}
-        <AdSenseHead />
         <ViewTransitions>{children}</ViewTransitions>
       </body>
     </html>

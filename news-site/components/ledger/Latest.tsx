@@ -5,8 +5,6 @@ import Image from "next/image";
 import { Link } from "next-view-transitions";
 import type { CSSProperties } from "react";
 import { deskClass, type LedgerStory } from "@/lib/ledger";
-import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
 import { Kicker } from "./Kicker";
 import { ArrowRight } from "./icons";
 
@@ -58,7 +56,6 @@ export function Latest({ stories, filters }: { stories: LedgerStory[]; filters: 
                   ad never lands with little/no content after it. */}
               {i === 5 && shown.length > 8 && (
                 <div className="tl-feed-ad" style={{ gridColumn: "1 / -1" }}>
-                  <AdSlot widgetId={ADS.HOME_FEED} minHeight={120} />
                 </div>
               )}
             </Fragment>

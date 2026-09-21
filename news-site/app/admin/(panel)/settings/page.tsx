@@ -3,19 +3,18 @@ import { NewsApiSettings } from "@/components/admin/NewsApiSettings";
 import { AdskeeperSettings } from "@/components/admin/AdskeeperSettings";
 import { SettingsProfile } from "@/components/admin/SettingsProfile";
 import { SettingsAiModel } from "@/components/admin/SettingsAiModel";
-import { SettingsBreakingBanner, SettingsAdSlots } from "@/components/admin/SettingsSiteExtras";
+import { SettingsBreakingBanner } from "@/components/admin/SettingsSiteExtras";
 import { getActiveProvider, getProviderStatuses } from "@/lib/newsSearch/settings";
 import { getAdskeeperStatus } from "@/lib/adskeeper/settings";
 import { getSessionUser } from "@/lib/auth";
 import { getDefaultAiModel } from "@/lib/aiSettings";
 import { getBreaking } from "@/lib/breaking";
-import { adsenseEnabled } from "@/lib/adsense";
 
 // Live, env/DB-dependent; never statically cache.
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const [statuses, activeProvider, user, defaultModel, adskeeperStatus, breaking, adsOn] =
+  const [statuses, activeProvider, user, defaultModel, adskeeperStatus, breaking] =
     await Promise.all([
       getProviderStatuses(),
       getActiveProvider(),
@@ -23,7 +22,6 @@ export default async function AdminSettingsPage() {
       getDefaultAiModel(),
       getAdskeeperStatus(),
       getBreaking(),
-      adsenseEnabled(),
     ]);
 
   const email = user?.email ?? "";
@@ -39,7 +37,6 @@ export default async function AdminSettingsPage() {
         <div className="adm-settings-stack">
           <SettingsProfile avatarUrl={user?.avatarUrl ?? null} initials={initials} />
           <SettingsBreakingBanner initial={breaking} />
-          <SettingsAdSlots initialEnabled={adsOn} />
           <SettingsAiModel defaultModel={defaultModel} />
           <NewsApiSettings
             statuses={statuses.map((s) => ({
