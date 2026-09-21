@@ -46,7 +46,7 @@ export function normalizeBaseUrl(raw: string): string | null {
  */
 export function describeError(
   status: number,
-  body: { code?: string; message?: string } | null,
+  body: { code?: string; message?: string; data?: { params?: Record<string, string> } } | null,
   baseUrl: string | null,
 ): WpFailure {
   const wpMessage = (body?.message ?? "").trim();
@@ -93,6 +93,24 @@ export function describeError(
       message: `WordPress returned a server error (${status}).` + (wpMessage ? ` ${wpMessage}` : ""),
     };
   }
+  // WordPress reports "you may not ask for drafts" as a PARAMETER error, not an
+  // auth error: the `status` sanitiser runs during request validation, before
+  // the permission check, and a failure there is wrapped as rest_invalid_param
+  // (400). Relaying that verbatim sends people hunting for a bad parameter when
+  // the real cause is that the request arrived unauthenticated, or the account
+  // cannot edit posts.
+  const paramDetail = body?.data?.params?.status;
+  if (code === "rest_invalid_param" && (paramDetail || /\bstatus\b/i.test(wpMessage))) {
+    return {
+      ok: false, kind: "unauthorized", status, code,
+      message:
+        "WordPress refused to list drafts, which means the request was not " +
+        "authenticated or the account cannot edit posts. Run Test connection: it " +
+        "checks the credentials directly and reports which account WordPress sees." +
+        (paramDetail ? ` WordPress said: ${paramDetail}` : tail),
+    };
+  }
+
   return {
     ok: false, kind: "invalid", status, code,
     message: wpMessage || `WordPress rejected the request (${status}).`,
