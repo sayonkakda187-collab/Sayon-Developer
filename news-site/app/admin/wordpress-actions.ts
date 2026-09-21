@@ -2,18 +2,19 @@
 
 import { requireAdmin } from "@/lib/auth";
 import {
-  createPost, deletePost, getPost, listCategories, listPosts, listTags,
+  createPost, deletePost, getMedia, getPost, listCategories, listPosts, listTags,
   testConnection, updatePost, wordpressStatus,
 } from "@/lib/wordpress/client";
 import { markdownToHtml } from "@/lib/wordpress/markdown";
 import { draftToEditorFields, trendingToItems } from "@/lib/wordpress/compose";
+import { buildWpCaption } from "@/lib/wordpress/share";
 import { generateAiAssist, isAiConfigured, AiAssistError } from "@/lib/aiAssist";
 import { aggregateTrending, sourceConfigMap } from "@/lib/news/aggregate";
 import { NEWS_SOURCES } from "@/lib/news/sources";
 import { isValidModel } from "@/lib/aiModels";
 import type {
   WpAiDraft, WpComposeStatus, WpConfigStatus, WpContentFormat, WpPage, WpPost,
-  WpPostDetail, WpPostInput, WpResult, WpStatus, WpTerm, WpTrendingItem, WpUser,
+  WpPostDetail, WpPostInput, WpResult, WpShareInfo, WpStatus, WpTerm, WpTrendingItem, WpUser,
 } from "@/lib/wordpress/types";
 
 /**
@@ -312,4 +313,53 @@ export async function draftWordPressArticle(input: {
     }
     return { ok: false, kind: "invalid", message: e instanceof Error ? e.message : "Drafting failed." };
   }
+}
+
+/**
+ * Everything the share panel needs for one published post.
+ *
+ * Only PUBLISHED posts have a working public link, so a draft is refused with
+ * a hint rather than handing back a URL that 404s for every reader — the same
+ * rule the article Share panel applies.
+ *
+ * The featured image is looked up BEST-EFFORT: a post's `featured_media` is
+ * just a number, and turning it into a URL is a second request that can fail on
+ * its own (a deleted attachment, an account without access to it). When it
+ * does, the panel simply shows no cover — losing the thumbnail should never
+ * cost you the link and caption you actually came for.
+ */
+export async function getWordPressShareInfo(postId: unknown): Promise<WpResult<WpShareInfo>> {
+  await requireAdmin();
+  const id = Number(postId);
+  if (!Number.isInteger(id) || id <= 0) return invalid("Which post? A valid post id is required.");
+
+  const res = await getPost(id);
+  if (!res.ok) return res;
+  const post = res.data;
+
+  if (post.status !== "publish") {
+    return invalid(
+      post.status === "private"
+        ? "This post is private, so it has no public link to share yet."
+        : `This post is a ${post.status}. Publish it first to get its public link.`,
+    );
+  }
+  if (!post.link) return invalid("WordPress did not return a public link for this post.");
+
+  let image: string | null = null;
+  if (post.featuredMedia) {
+    const media = await getMedia(post.featuredMedia);
+    if (media.ok && media.data.url) image = media.data.url;
+  }
+
+  return {
+    ok: true,
+    data: {
+      id: post.id,
+      title: post.title,
+      url: post.link,
+      image,
+      caption: buildWpCaption(post.title, post.excerptRaw, post.link),
+    },
+  };
 }

@@ -141,3 +141,18 @@ export type WpComposeStatus = {
   /** At least one news source has a key set. */
   newsConfigured: boolean;
 };
+
+/**
+ * Everything the share panel needs about a published WordPress post. Shaped to
+ * match the article panel's `ShareInfo` so one component can render both.
+ */
+export type WpShareInfo = {
+  id: number;
+  title: string;
+  /** The post's public permalink on the WordPress site. */
+  url: string;
+  /** The featured image's URL, or null when the post has none (or it could not be read). */
+  image: string | null;
+  /** Editable, pre-filled caption: headline + excerpt + link. */
+  caption: string;
+};

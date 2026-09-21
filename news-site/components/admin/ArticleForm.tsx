@@ -926,7 +926,7 @@ export function ArticleForm({
     </form>
 
     {shareOpen && article?.id && (
-      <SharePromoteModal articleId={article.id} onClose={() => setShareOpen(false)} />
+      <SharePromoteModal source={{ kind: "article", id: article.id }} onClose={() => setShareOpen(false)} />
     )}
 
     {aiEditOpen && (

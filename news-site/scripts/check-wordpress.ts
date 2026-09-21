@@ -1,6 +1,7 @@
 import { describeError, normalizeBaseUrl, plain } from "../lib/wordpress/format";
 import { markdownToHtml } from "../lib/wordpress/markdown";
 import { draftToEditorFields, trendingToItems } from "../lib/wordpress/compose";
+import { buildWpCaption, captionWithLink, siteLabelFromUrl } from "../lib/wordpress/share";
 
 let pass = 0, fail = 0;
 const is = (c: boolean, m: string) => { c ? (pass++, console.log("  ✓ " + m)) : (fail++, console.log("  ✗ " + m)); };
@@ -183,6 +184,44 @@ console.log("\n=== trendingToItems: only rows the picker can use ===");
   }
   eq(trendingToItems(null).length, 0, "null feed is an empty list, not a crash");
   eq(trendingToItems([]).length, 0, "empty feed stays empty");
+}
+
+console.log("\n=== siteLabelFromUrl: names the WordPress site, not this one ===");
+eq(siteLabelFromUrl("https://thedialynews.com/hello"), "thedialynews.com", "plain host");
+eq(siteLabelFromUrl("https://www.thedialynews.com/hello"), "thedialynews.com", "drops a www. prefix");
+eq(siteLabelFromUrl("http://localhost:4099/?p=12"), "localhost", "host without the port");
+eq(siteLabelFromUrl("not a url"), "", "unparseable input yields no label, not a crash");
+eq(siteLabelFromUrl(""), "", "empty input");
+
+console.log("\n=== buildWpCaption: ready to paste ===");
+{
+  const link = "https://thedialynews.com/markets-hold";
+  const withHook = buildWpCaption("Markets hold steady", "Traders shrugged off the news.", link);
+  is(withHook.startsWith("Markets hold steady"), "opens with the headline");
+  is(withHook.includes("Traders shrugged off the news."), "keeps the excerpt as the hook");
+  is(withHook.endsWith(link), "ends with the link, so a paste carries it");
+  is(withHook.includes("thedialynews.com"), "credits the WordPress site");
+  is(!withHook.includes("Daily Ledger"), "never credits THIS site for a post on another one");
+
+  const noHook = buildWpCaption("Markets hold steady", "", link);
+  is(!noHook.includes("\n\n\n"), "an empty excerpt leaves no double gap");
+  is(noHook.endsWith(link), "still ends with the link");
+  eq(buildWpCaption("T", null, link).includes("Read the full story on thedialynews.com:"), true,
+     "a null excerpt is handled");
+  is(buildWpCaption("T", undefined, "not a url").includes("Read the full story:"),
+     "an unusable link drops the site name rather than printing an empty one");
+  is(buildWpCaption("  Padded  ", "", link).startsWith("Padded"), "trims the headline");
+}
+
+console.log("\n=== captionWithLink: never pastes the URL twice ===");
+{
+  const link = "https://thedialynews.com/markets-hold";
+  const full = buildWpCaption("Markets hold steady", "", link);
+  eq(captionWithLink(full, link), full.trim(), "an unedited caption already ends with the link");
+  eq(captionWithLink("Just a thought", link), `Just a thought\n\n${link}`,
+     "an edited caption that dropped the link gets it back");
+  eq((captionWithLink(full, link).match(/https:\/\/thedialynews\.com\/markets-hold/g) ?? []).length, 1,
+     "exactly one copy of the link");
 }
 
 async function markdownChecks() {

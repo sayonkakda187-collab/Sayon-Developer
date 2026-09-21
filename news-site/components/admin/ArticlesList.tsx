@@ -324,7 +324,7 @@ export function ArticlesList({
 
       {shareTarget && (
         <SharePromoteModal
-          articleId={shareTarget.id}
+          source={{ kind: "article", id: shareTarget.id }}
           celebrate={shareTarget.celebrate}
           onClose={() => setShareTarget(null)}
         />
