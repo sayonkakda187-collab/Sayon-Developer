@@ -9,6 +9,7 @@ import { LedgerNewsletter } from "@/components/ledger/LedgerNewsletter";
 import { LedgerFooter } from "@/components/ledger/LedgerFooter";
 import { AdsterraSocialBar } from "@/components/AdsterraSocialBar";
 import { AdsterraPopunder } from "@/components/AdsterraPopunder";
+import { AdsterraStickyAd } from "@/components/AdsterraStickyAd";
 
 export default async function PublicLayout({
   children,
@@ -52,6 +53,9 @@ export default async function PublicLayout({
           both load afterInteractive — neither blocks the initial render. */}
       <AdsterraSocialBar />
       <AdsterraPopunder />
+      {/* Dismissible sticky bar pinned to the bottom of the viewport. It pads
+          <body> by its own measured height so it never covers the footer. */}
+      <AdsterraStickyAd />
     </>
   );
 }
