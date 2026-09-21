@@ -7,7 +7,16 @@ import {
 import type { WpAiDraft, WpComposeStatus, WpTrendingItem } from "@/lib/wordpress/types";
 import { AI_MODELS } from "@/lib/aiModels";
 import { useAiModel } from "@/lib/useAiModel";
-import { SparklesIcon, TrendingIcon, RefreshIcon } from "@/components/admin/icons";
+import { timeAgo } from "@/lib/site";
+import { NEWS_SOURCES } from "@/lib/news/sources";
+import {
+  ExternalLinkIcon, RefreshIcon, SparklesIcon, TrendingIcon,
+} from "@/components/admin/icons";
+
+/** Provenance labels, derived from the source registry so they cannot drift. */
+const VIA_LABEL: Record<string, string> = Object.fromEntries(
+  NEWS_SOURCES.map((s) => [s.id, s.label]),
+);
 
 /**
  * "Find a story" — trending headlines plus AI drafting, feeding the WordPress
@@ -217,34 +226,75 @@ export function WordPressCompose({
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* The same card markup and classes as the Trending News tab, so the
+                two screens read identically — thumbnail, source, time-ago, the
+                provenance badge and a snippet. */}
+            <div className="adm-trend-grid">
               {items.map((it) => (
-                <div key={it.url} style={{
-                  display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
-                  border: "1px solid var(--adm-bd)", borderRadius: 12, background: "var(--adm-card)",
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.4 }}>{it.title}</div>
-                    <div className="adm-card-sub" style={{ marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {it.source && <span>{it.source}</span>}
-                      {it.publishedAt && <span>{new Date(it.publishedAt).toLocaleString()}</span>}
-                      <a className="adm-link" href={it.url} target="_blank" rel="noopener noreferrer">
-                        Read the original
+                <article key={it.url} className="adm-card adm-trend-card">
+                  <div className="adm-trend-thumb">
+                    <span className="adm-trend-thumb-fallback" aria-hidden>
+                      <TrendingIcon className="h-7 w-7" />
+                    </span>
+                    {it.image && (
+                      // News images come from many outlet domains; a plain <img>
+                      // avoids configuring next/image remotePatterns for each.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={it.image} alt="" loading="lazy" referrerPolicy="no-referrer"
+                        className="adm-trend-img"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="adm-trend-body">
+                    <div className="adm-trend-meta">
+                      <span className="adm-trend-src">{it.source}</span>
+                      {it.publishedAt && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span>{timeAgo(it.publishedAt)}</span>
+                        </>
+                      )}
+                      {it.via && (
+                        <span className="adm-trend-via" title={`Found via ${VIA_LABEL[it.via] ?? it.via}`}>
+                          {VIA_LABEL[it.via] ?? it.via}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="adm-trend-title">{it.title}</h3>
+                    {it.description && <p className="adm-trend-snippet">{it.description}</p>}
+
+                    <div className="adm-trend-foot">
+                      <a className="adm-trend-read" href={it.url} target="_blank" rel="noopener noreferrer">
+                        Read original
+                        <ExternalLinkIcon className="h-[14px] w-[14px]" />
                       </a>
+                      <div className="adm-trend-actions">
+                        <button
+                          type="button"
+                          // The stylesheet dresses the disabled state with a
+                          // `.disabled` CLASS, not :disabled — without it the
+                          // button would be unclickable but still look live,
+                          // hover included.
+                          className={`adm-trend-ai ${disabled || !status.aiConfigured ? "disabled" : ""}`}
+                          disabled={disabled || !status.aiConfigured}
+                          onClick={() => void draft(it.title, it.url)}
+                          title={status.aiConfigured
+                            ? "Draft an original article about this, into the editor above"
+                            : "Set ANTHROPIC_API_KEY to enable drafting"}
+                        >
+                          {drafting === it.title
+                            ? <span className="adm-spinner" aria-hidden />
+                            : <SparklesIcon className="h-[15px] w-[15px]" />}
+                          Write with AI
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <button
-                    type="button" className="adm-btn-ghost" style={{ flex: "none" }}
-                    disabled={disabled || !status.aiConfigured}
-                    onClick={() => void draft(it.title, it.url)}
-                    title={status.aiConfigured ? "Draft an original article about this" : "Set ANTHROPIC_API_KEY to enable drafting"}
-                  >
-                    {drafting === it.title
-                      ? <span className="adm-spinner" aria-hidden />
-                      : <SparklesIcon className="h-4 w-4" />}
-                    Write with AI
-                  </button>
-                </div>
+                </article>
               ))}
             </div>
 

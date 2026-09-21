@@ -67,5 +67,7 @@ export function trendingToItems(items: NormalizedItem[] | null | undefined): WpT
       source: (i.source ?? "").trim(),
       url: i.url,
       publishedAt: i.publishedAt ?? null,
+      image: i.image ?? null,
+      via: i.via ?? "",
     }));
 }
