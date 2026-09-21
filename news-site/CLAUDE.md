@@ -166,15 +166,16 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   brightens accents (`--sa → --sa-on`, AA) and lifts tints to ~16/22%. **Don't
   hardcode section hexes in components — reference the `--section-*` tokens.**
 
-## Ads (Adsterra Social Bar)
+## Ads (Adsterra: Social Bar + Native Banner)
 
-**One ad unit, site-wide.** Every other ad network was removed at the owner's
+**Two Adsterra units, nothing else.** Every other ad network was removed at the owner's
 request — the AdsKeeper placements, the Adsterra banner / popunder / in-page-push
 units, and the reserved AdSense slots are all gone. `lib/ads.ts` is now a single
 constant (the AdSense publisher id, below), and `AdSlot`, `AdOverlay`,
 `AdStickyFooter`, `AdRail`, `AdsHead`, `AdSenseSlot`, `AdSenseHead`,
 `AdsterraBanner`, `AdsterraNative`, `AdsterraScripts`, `lib/adsterra.ts` and
-`lib/adsense.ts` **no longer exist**. Don't reintroduce them without asking.
+`lib/adsense.ts` **no longer exist** (the current native unit is a new, separate
+component — see below). Don't reintroduce the old ones without asking.
 
 - **The unit:** Adsterra **Social Bar** — a self-displaying format. One loader
   script positions and triggers itself per the unit's dashboard settings, so
@@ -195,6 +196,36 @@ constant (the AdSense publisher id, below), and `AdSlot`, `AdOverlay`,
 - **To change or remove:** edit `SOCIAL_BAR_SRC` in
   `components/AdsterraSocialBar.tsx`, or delete the single `<AdsterraSocialBar />`
   line from the public layout. No config file, no env var, no DB setting.
+
+### Adsterra Native Banner (article pages only)
+
+- **The unit:** `invoke.js` + a `<div>` whose id the loader looks up
+  (`container-5ef91e…`). Both live in `components/AdsterraNativeBanner.tsx`, a
+  client component. The div is server-rendered and the script is
+  `afterInteractive`, so the container is always in the DOM before the loader
+  looks for it.
+- **Where:** `app/(public)/news/[slug]/page.tsx`, directly after the article body
+  and **before the comments section** (and therefore before Related Stories).
+  Article pages only — not the homepage, categories or search.
+- **Margins are conditional, and that is the point.** An element with vertical
+  margins occupies flow **even when empty** — the exact dead-space bug removed in
+  #237, where ad wrappers outlived their ads and left ~48px gaps. The 25px
+  margins are applied ONLY once the loader has put something in the container
+  (tracked with a `MutationObserver`). Unfilled, the wrapper is 0px tall with 0px
+  margins: no gap between the article and the comments.
+- **No reserved height, deliberately.** A native banner's height varies with how
+  many cards the network returns, so a guessed reservation shifts the page anyway
+  — and when the unit does not fill, the reservation becomes a visible hole that
+  then collapses, a second shift. The slot sits below the whole article body, so
+  it fills within ~1s of hydration while the reader is still near the top; the
+  growth happens outside the viewport and costs no measurable CLS.
+- **`overflow: hidden` on the wrapper is load-bearing.** `max-width` does not
+  constrain a child the loader injects. Measured at 320/375/393px, a
+  non-responsive 970px creative took document `scrollWidth` to **986px** — a
+  horizontal scrollbar on every phone — until the wrapper clipped it. A
+  non-responsive creative is now cropped instead of widening the page.
+- The wrapper is never `display:none`: ad loaders measure their container to
+  decide what to render, and a hidden container reports zero width.
 
 ### Google AdSense (verification signals only — no ad units)
 
