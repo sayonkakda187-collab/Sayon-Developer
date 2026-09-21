@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { getShareInfo, type ShareInfo } from "@/app/admin/share-actions";
+import { getWordPressShareInfo } from "@/app/admin/wordpress-actions";
+import { captionWithLink } from "@/lib/wordpress/share";
 import {
   ShareIcon,
   CloseIcon,
@@ -17,19 +19,30 @@ import {
 type Phase = "loading" | "ready" | "error";
 
 /**
- * Share / Promote panel for a PUBLISHED article. Fetches the canonical URL +
- * cover image + a ready-made caption (server action — single source of truth,
- * matches the page's Open Graph tags), then offers copy / download / "Share to
- * Facebook" tools. No automation: the Facebook button just opens the official
- * sharer dialog with the link. All clipboard/download paths degrade gracefully.
+ * Which published thing is being shared. The two live in different places — one
+ * in this site's own database, one on an external WordPress install — but they
+ * yield the same four facts, so they share this panel rather than getting a
+ * second one that would drift out of step with it.
+ */
+export type ShareSource =
+  | { kind: "article"; id: string }
+  | { kind: "wordpress"; id: number };
+
+/**
+ * Share / Promote panel for a PUBLISHED article or WordPress post. Fetches the
+ * canonical URL + cover image + a ready-made caption (server action — single
+ * source of truth, matches the page's Open Graph tags), then offers copy /
+ * download / "Share to Facebook" tools. No automation: the Facebook button just
+ * opens the official sharer dialog with the link. All clipboard/download paths
+ * degrade gracefully.
  */
 export function SharePromoteModal({
-  articleId,
+  source,
   celebrate = false,
   onClose,
 }: {
-  articleId: string;
-  /** Show the post-publish "Article published! 🎉" celebratory header. */
+  source: ShareSource;
+  /** Show the post-publish "Published! 🎉" celebratory header. */
   celebrate?: boolean;
   onClose: () => void;
 }) {
@@ -39,10 +52,24 @@ export function SharePromoteModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [caption, setCaption] = useState("");
 
+  const sourceKind = source.kind;
+  const sourceId = source.id;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await getShareInfo(articleId);
+      // Two different backends, one shape. The WordPress action returns the
+      // project's WpResult envelope rather than this one's {ok,info}, so it is
+      // normalised here instead of bending either API to match the other.
+      const res =
+        sourceKind === "wordpress"
+          ? await getWordPressShareInfo(sourceId)
+              .then((r) =>
+                r.ok
+                  ? ({ ok: true, info: { ...r.data, id: String(r.data.id) } } as const)
+                  : ({ ok: false, error: r.message } as const),
+              )
+          : await getShareInfo(String(sourceId));
       if (cancelled) return;
       if (!res.ok) {
         setErrorMsg(res.error);
@@ -56,7 +83,7 @@ export function SharePromoteModal({
     return () => {
       cancelled = true;
     };
-  }, [articleId]);
+  }, [sourceKind, sourceId]);
 
   // Close on Escape; lock background scroll while open.
   useEffect(() => {
@@ -107,12 +134,16 @@ export function SharePromoteModal({
 
   return (
     <div className="adm-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="adm-modal adm-share-modal" role="dialog" aria-modal="true" aria-label="Share or promote article">
+      <div className="adm-modal adm-share-modal" role="dialog" aria-modal="true" aria-label={sourceKind === "wordpress" ? "Share or promote WordPress post" : "Share or promote article"}>
         <div className="adm-modal-head">
           <div className="adm-share-title">
             <span className="adm-share-spark" aria-hidden><ShareIcon className="h-[18px] w-[18px]" /></span>
             <div>
-              <h2 className="adm-serif" style={{ margin: 0 }}>{celebrate ? "Article published! 🎉" : "Share & promote"}</h2>
+              <h2 className="adm-serif" style={{ margin: 0 }}>
+                {celebrate
+                  ? (sourceKind === "wordpress" ? "Post published! 🎉" : "Article published! 🎉")
+                  : "Share & promote"}
+              </h2>
               <p className="adm-share-sub">{celebrate ? "Now share it to drive traffic." : "Post this story to Facebook and beyond."}</p>
             </div>
           </div>
@@ -178,7 +209,7 @@ export function SharePromoteModal({
             <button
               type="button"
               className="adm-btn-ghost"
-              onClick={() => copyText(everything(caption, info.url), "Caption + link")}
+              onClick={() => copyText(captionWithLink(caption, info.url), "Caption + link")}
               title="Copy the caption and link together, ready to paste"
             >
               <CopyIcon className="h-4 w-4" />
@@ -193,13 +224,6 @@ export function SharePromoteModal({
       </div>
     </div>
   );
-}
-
-/** Caption + link, ready to paste. The default caption already ends with the
- *  link; only append it if an edited caption dropped it, to avoid duplicates. */
-function everything(caption: string, url: string): string {
-  const text = caption.trim();
-  return text.includes(url) ? text : `${text}\n\n${url}`;
 }
 
 function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {

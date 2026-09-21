@@ -391,3 +391,31 @@ export async function uploadMedia(input: {
     },
   };
 }
+
+/**
+ * One media item, by attachment id — used to turn a post's `featured_media`
+ * number into a URL the share panel can show.
+ *
+ * `context: "edit"` is deliberately NOT sent: reading an attachment only needs
+ * the default context, and asking for edit would make this fail for an account
+ * that can publish but not edit that particular attachment.
+ */
+export async function getMedia(id: number): Promise<WpResult<WpMedia>> {
+  const res = await wpFetch<{
+    id: number; source_url?: string; mime_type?: string;
+    title?: { rendered?: string }; media_details?: { width?: number; height?: number };
+  }>(`/media/${id}`);
+  if (!res.ok) return res;
+  const m = res.data.data;
+  return {
+    ok: true,
+    data: {
+      id: m.id,
+      url: m.source_url ?? "",
+      title: plain(m.title?.rendered ?? ""),
+      mimeType: m.mime_type ?? "",
+      width: m.media_details?.width ?? null,
+      height: m.media_details?.height ?? null,
+    },
+  };
+}

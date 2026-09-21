@@ -355,8 +355,8 @@ section below.
 
 Publishes to a SEPARATE WordPress install from `/admin/wordpress` — unrelated to
 this site's own articles. Official REST API only; no XML-RPC, no scraping.
-Verified by `npm run check:wordpress` (65 assertions: URL handling, error
-mapping, and Markdown conversion).
+Verified by `npm run check:wordpress` (114 assertions: URL handling, error
+mapping, Markdown conversion, and the share-panel helpers).
 
 - **Credentials are env-only and server-only.** `WP_URL`, `WP_USERNAME`,
   `WP_APPLICATION_PASSWORD` (see `.env.example`). `lib/wordpress/client.ts` opens
@@ -457,6 +457,37 @@ mapping, and Markdown conversion).
   still accepts an id directly — the only way to reuse an image already in the
   library. A post loaded from WordPress shows the id without a thumbnail, because
   the panel has the id but has not fetched that media's URL.
+
+### Share / promote a published post (WordPress panel)
+
+The same panel the Articles tab opens after publishing — reached by publishing
+from the WordPress editor, or by the **Share** action on any published row.
+Verified by `verify-share.mjs` (36 assertions).
+
+- **It is literally the same component.** `SharePromoteModal` now takes a
+  `source` discriminant (`{kind:"article"|"wordpress", id}`) and picks its
+  loader from it. A second, parallel panel would have drifted out of step with
+  the first — and the type change caught a call site in `ArticleForm.tsx` that a
+  copied component never would have.
+- **The caption credits the WORDPRESS site, not this one.** `siteLabelFromUrl`
+  derives the publication from the POST'S OWN permalink. Reusing `siteConfig.name`
+  — which the article panel legitimately does — would put "The Daily Ledger" on
+  the bottom of every caption for posts that live somewhere else entirely.
+- **Only published posts offer it.** Drafts, pending and private posts have no
+  public URL, so the row action is hidden and a draft save opens nothing — rather
+  than a panel whose only content would be an explanation of why it is empty.
+- **Only a NEW post celebrates.** The panel opens on every save of a live post
+  (matching the Articles tab), but "Post published! 🎉" appears only when the post
+  was just created. Saving an edit is not a publication, and saying so would be
+  telling the user something that did not happen.
+- **The cover is best-effort.** `featured_media` is only a number, so turning it
+  into an image needs a second request (`getMedia`) that can fail on its own — a
+  deleted attachment, an account without access. When it does, the panel shows no
+  cover and keeps the link and caption, which are the part you came for.
+- `lib/wordpress/share.ts` holds the pure helpers (`siteLabelFromUrl`,
+  `buildWpCaption`, `captionWithLink`) OUTSIDE the `server-only` client, which is
+  the only reason `npm run check:wordpress` can cover them. `captionWithLink`
+  replaced a duplicate of the same logic that lived inside the modal.
 
 ### Find a story: trending headlines + AI drafting (in the WordPress panel)
 

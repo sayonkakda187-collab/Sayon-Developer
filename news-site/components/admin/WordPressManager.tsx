@@ -12,8 +12,9 @@ import type {
 } from "@/lib/wordpress/types";
 import { WordPressCompose } from "@/components/admin/WordPressCompose";
 import { WordPressFeaturedImage } from "@/components/admin/WordPressFeaturedImage";
+import { SharePromoteModal } from "@/components/admin/SharePromoteModal";
 import {
-  CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, RefreshIcon, TrashIcon,
+  CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, RefreshIcon, ShareIcon, TrashIcon,
 } from "@/components/admin/icons";
 
 /**
@@ -200,6 +201,11 @@ export function WordPressManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.configured]);
 
+  // The Share / promote panel's target. `celebrate` turns on the post-publish
+  // header — the same panel the Articles tab opens after publishing, so the two
+  // screens behave identically once a story is live.
+  const [shareTarget, setShareTarget] = useState<{ id: number; celebrate: boolean } | null>(null);
+
   function resetForm() {
     setEditingId(null); setTitle(""); setContent(""); setPostStatus("draft");
     setExcerpt(""); setSlug(""); setCategories([]); setTags([]);
@@ -271,6 +277,19 @@ export function WordPressManager({
           ? `Created “${res.data.title}” as ${res.data.status}.`
           : `Updated “${res.data.title}”.`,
       );
+      // A post that is now live gets the share panel straight away — the moment
+      // you have a link worth handing out is the moment you saved it live. This
+      // matches the Articles tab, which opens its panel on every save of a
+      // published article. Drafts, pending and private posts have no public URL,
+      // so they get nothing rather than a panel that could only explain why it
+      // is empty.
+      //
+      // Only a NEW post celebrates. Saving an edit to a post that was already
+      // live is not a publication, and "Post published!" would be telling you
+      // something that did not happen.
+      if (res.data.status === "publish") {
+        setShareTarget({ id: res.data.id, celebrate: editingId === null });
+      }
       resetForm();
       void loadPosts({ page: 1 });
       setPage(1);
@@ -404,6 +423,7 @@ export function WordPressManager({
           <label className="adm-field">
             <span>Title</span>
             <input
+              data-field="title"
               className="adm-input" value={title} maxLength={320}
               onChange={(e) => { setTitle(e.target.value); if (fieldErrors.title) setFieldErrors((f) => ({ ...f, title: undefined })); }}
               placeholder="Post title"
@@ -595,6 +615,13 @@ export function WordPressManager({
                   {p.modified && <span>edited {new Date(p.modified).toLocaleString()}</span>}
                 </div>
               </div>
+              {p.status === "publish" && (
+                <button type="button" className="adm-btn-ghost adm-fb-act"
+                        onClick={() => setShareTarget({ id: p.id, celebrate: false })}
+                        aria-label={`Share ${p.title}`} title="Share / promote">
+                  <ShareIcon className="h-4 w-4" />
+                </button>
+              )}
               <button type="button" className="adm-btn-ghost adm-fb-act" onClick={() => void openForEdit(p.id)}
                       disabled={pending || loadingPost} title="Edit in this dashboard">
                 <PencilIcon className="h-4 w-4" />
@@ -624,6 +651,14 @@ export function WordPressManager({
           </div>
         )}
       </div>
+
+      {shareTarget && (
+        <SharePromoteModal
+          source={{ kind: "wordpress", id: shareTarget.id }}
+          celebrate={shareTarget.celebrate}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
     </div>
   );
 }
