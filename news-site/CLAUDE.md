@@ -428,6 +428,36 @@ mapping, and Markdown conversion).
   posts. `testConnection` reports the account and its capabilities, and the UI
   disables Publish when the account lacks `publish_posts`.
 
+### Featured image: upload / drag-and-drop (WordPress panel)
+
+`components/admin/WordPressFeaturedImage.tsx` +
+`app/api/admin/wordpress/media/route.ts` + `uploadMedia()` in the client.
+
+- **The bytes go to WORDPRESS, not Vercel Blob.** `featured_media` takes a
+  WordPress ATTACHMENT ID, which only WordPress can mint — so unlike
+  `/api/admin/upload` (which serves this site's own articles via Blob), this
+  posts to `/wp-json/wp/v2/media` and keeps the returned id.
+- **A route, not a server action**: server actions carry a small default body
+  limit and are awkward for binary payloads. Auth is `getSessionUser()`
+  directly, matching the other admin routes (`requireAdmin()` is for server
+  components).
+- **Sent as a RAW body with `Content-Disposition`**, the documented shape for
+  that endpoint. Multipart works on core WordPress but is more often mangled by
+  security plugins and reverse proxies.
+- **The browser downscales first** (longest edge 1600, JPEG q0.85, only when the
+  image exceeds that or ~1.5 MB). Not cosmetic: a serverless request body over
+  **~4.5 MB is rejected by the platform before it reaches the route**, which
+  would surface as an opaque failure rather than "too big", and phone photos
+  routinely exceed it. GIFs are never re-encoded — a canvas round trip would drop
+  every frame but the first. The route still enforces a 4 MB cap as the backstop.
+- **403 on upload gets its own message**: the generic 403 advice names post
+  capabilities, but the one missing here is `upload_files`, which a Contributor
+  does not have.
+- The attachment id stays visible next to the thumbnail, and a collapsed field
+  still accepts an id directly — the only way to reuse an image already in the
+  library. A post loaded from WordPress shows the id without a thumbnail, because
+  the panel has the id but has not fetched that media's URL.
+
 ### Find a story: trending headlines + AI drafting (in the WordPress panel)
 
 `components/admin/WordPressCompose.tsx`, above the editor. Reuses the pipelines

@@ -11,6 +11,7 @@ import type {
   WpAiDraft, WpComposeStatus, WpConfigStatus, WpContentFormat, WpPost, WpStatus, WpTerm,
 } from "@/lib/wordpress/types";
 import { WordPressCompose } from "@/components/admin/WordPressCompose";
+import { WordPressFeaturedImage } from "@/components/admin/WordPressFeaturedImage";
 import {
   CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, RefreshIcon, TrashIcon,
 } from "@/components/admin/icons";
@@ -148,6 +149,9 @@ export function WordPressManager({
   const [categories, setCategories] = useState<number[]>([]);
   const [tags, setTags] = useState<number[]>([]);
   const [featuredMedia, setFeaturedMedia] = useState("");
+  /** Thumbnail for a just-uploaded image. Null for one loaded from a post,
+   *  where WordPress gives an id but this panel has not fetched the URL. */
+  const [featuredPreview, setFeaturedPreview] = useState<{ url: string; title: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [format, setFormat] = useState<WpContentFormat>("markdown");
   const [showPreview, setShowPreview] = useState(false);
@@ -198,7 +202,8 @@ export function WordPressManager({
 
   function resetForm() {
     setEditingId(null); setTitle(""); setContent(""); setPostStatus("draft");
-    setExcerpt(""); setSlug(""); setCategories([]); setTags([]); setFeaturedMedia("");
+    setExcerpt(""); setSlug(""); setCategories([]); setTags([]);
+    setFeaturedMedia(""); setFeaturedPreview(null);
     setFieldErrors({}); setShowPreview(false); setPreviewHtml("");
     setFormat("markdown"); setSourceLink(null);
   }
@@ -225,6 +230,7 @@ export function WordPressManager({
     setShowPreview(false);
     setPreviewHtml("");
     setSourceLink(sourceUrl ?? null);
+    setFeaturedMedia(""); setFeaturedPreview(null);
     document.getElementById("wp-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -243,6 +249,7 @@ export function WordPressManager({
     setExcerpt(p.excerptRaw); setSlug(p.slug);
     setCategories(p.categories); setTags(p.tags);
     setFeaturedMedia(p.featuredMedia ? String(p.featuredMedia) : "");
+    setFeaturedPreview(null);   // the id came from WordPress; no URL fetched
     setFieldErrors({});
     document.getElementById("wp-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -499,14 +506,12 @@ export function WordPressManager({
           </div>
 
           <div className="adm-settings-grid">
-            <label className="adm-field">
-              <span>Featured media <span className="adm-field-hint" style={{ display: "inline" }}>(WordPress media ID — blank for none)</span></span>
-              <input
-                className="adm-input" value={featuredMedia} inputMode="numeric"
-                onChange={(e) => setFeaturedMedia(e.target.value.replace(/[^\d]/g, ""))}
-                placeholder="e.g. 1234"
-              />
-            </label>
+            <WordPressFeaturedImage
+              mediaId={featuredMedia}
+              preview={featuredPreview}
+              disabled={pending || loadingPost}
+              onChange={(id, p) => { setFeaturedMedia(id); setFeaturedPreview(p); }}
+            />
             <label className="adm-field">
               <span>Slug <span className="adm-field-hint" style={{ display: "inline" }}>(optional)</span></span>
               <input className="adm-input" value={slug} onChange={(e) => setSlug(e.target.value)}

@@ -48,6 +48,17 @@ export type WpPostDetail = WpPost & { contentRaw: string; excerptRaw: string; sl
 
 export type WpTerm = { id: number; name: string; count: number };
 
+/** An image in the WordPress media library, after upload. */
+export type WpMedia = {
+  /** The attachment id — this is what `featured_media` wants. */
+  id: number;
+  url: string;
+  title: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+};
+
 export type WpPage<T> = {
   items: T[];
   page: number;
