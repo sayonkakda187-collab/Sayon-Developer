@@ -210,13 +210,12 @@ self-executing loader with no container — and loaded the same way
 - **Public pages only, never `/admin`** — a popunder firing while the owner
   clicks around the editor would be disruptive, and self-generated popunder
   traffic is exactly what ad networks class as invalid.
-- ⚠️ **Popunders are incompatible with Google AdSense.** AdSense policy
-  prohibits serving its ads on pages carrying pop-unders that interfere with
-  navigation. The site currently ships only the AdSense **verification** signals
-  and no AdSense units, so nothing is violating policy today — but this unit is
-  very likely to sink the pending application, and the two cannot both run later.
-  Kept at the owner's explicit request; remove the one line from the public
-  layout to disable it.
+- ⚠️ **Popunders are incompatible with Google AdSense**, whose policy prohibits
+  serving its ads on pages carrying pop-unders that interfere with navigation.
+  **The owner has confirmed this site is not applying for or using AdSense**, so
+  this is settled rather than open: the Popunder stays. (The AdSense verification
+  meta and `ads.txt` remain only because removing them gains nothing.) Remove the
+  one line from the public layout if that ever changes.
 
 ### Adsterra Native Banner (article pages only)
 
@@ -315,13 +314,15 @@ self-executing loader with no container — and loaded the same way
   a filled one, so a fixed value would be wrong half the time.
 - **Dismissal lasts the browser session** (`sessionStorage`). Change that key's
   store to make it return per page load.
-- ⚠️ **It reuses the in-article 300x250's key.** Networks serve one impression per
-  placement per page view, so on an article the second slot will usually come back
-  empty, and duplicate requests for one placement can be counted as invalid
-  traffic. Create a second 300x250 unit in the Adsterra dashboard and paste its
-  key into `STICKY_AD_KEY` — that single edit is the whole fix.
-- ⚠️ At 300x250 the bar occupies **~38% of a 700px-tall phone viewport**. That is
-  what the supplied unit is; a 320x50 or 320x100 unit would be far less intrusive.
+- **Its own dedicated 320x50 unit**, deliberately not the in-article 300x250's key
+  — sharing one would leave a slot empty on every article (one impression per
+  placement per page view) and risk the duplicate requests counting as invalid
+  traffic.
+- **The close button lives in a 30px top strip, not in the bar's corner.** A
+  320-wide unit is full-bleed on a 320px phone, so a ✕ in the corner would sit on
+  the creative. Measured at 320/375/393: **0px² overlap**. The whole bar is
+  **86px** (30px strip + 50px ad + 6px + safe-area inset) — 12% of a 700px phone
+  viewport, down from 38% when this was a 300x250.
 
 ### Google AdSense (verification signals only — no ad units)
 
