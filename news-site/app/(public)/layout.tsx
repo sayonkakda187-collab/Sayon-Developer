@@ -8,6 +8,7 @@ import { Masthead } from "@/components/ledger/Masthead";
 import { LedgerNewsletter } from "@/components/ledger/LedgerNewsletter";
 import { LedgerFooter } from "@/components/ledger/LedgerFooter";
 import { AdsterraSocialBar } from "@/components/AdsterraSocialBar";
+import { AdsterraPopunder } from "@/components/AdsterraPopunder";
 
 export default async function PublicLayout({
   children,
@@ -46,10 +47,11 @@ export default async function PublicLayout({
       <div className="flex-1">{children}</div>
       <LedgerNewsletter />
       <LedgerFooter sections={sections} />
-      {/* Last child of the layout, so it is the final thing in <body>. Adsterra
-          Social Bar is self-positioning and loads afterInteractive — it never
-          blocks the initial render. */}
+      {/* Last children of the layout, so they are the final things in <body>.
+          Both are self-displaying Adsterra units with no container to place, and
+          both load afterInteractive — neither blocks the initial render. */}
       <AdsterraSocialBar />
+      <AdsterraPopunder />
     </>
   );
 }
