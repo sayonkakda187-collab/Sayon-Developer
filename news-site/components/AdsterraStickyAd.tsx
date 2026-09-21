@@ -7,18 +7,18 @@ import { AdsterraIframeBanner } from "./AdsterraIframeBanner";
  * Mounted once from the public layout, so it persists across every public page
  * and survives client-side navigation without reloading the ad.
  *
- * ⚠️ THIS KEY IS THE SAME UNIT AS THE IN-ARTICLE 300x250.
- * On an article page both slots therefore request the same Adsterra placement.
- * Networks serve one impression per placement per page view, so the second one
- * will usually come back empty — and duplicate requests for one placement are
- * the kind of thing that gets counted as invalid traffic. Create a SECOND
- * 300x250 unit in the Adsterra dashboard and paste its key here; that one edit
- * is the entire fix. Left as supplied so nothing silently differs from what was
- * asked for.
+ * Its own dedicated 320x50 unit — deliberately NOT the in-article 300x250's key.
+ * Networks serve one impression per placement per page view, so sharing a key
+ * would leave one of the two slots empty on every article and risk the duplicate
+ * requests being counted as invalid traffic.
+ *
+ * 320x50 is also the right shape for a sticky bar: at 300x250 this bar took
+ * ~38% of a phone viewport; at 50px tall the whole bar is ~86px including the
+ * close-button strip and the safe-area inset.
  */
-const STICKY_AD_KEY = "1ce7df5a6fe903c1855de1e1365ce08d";
-const STICKY_AD_WIDTH = 300;
-const STICKY_AD_HEIGHT = 250;
+const STICKY_AD_KEY = "10f231c9c9d4bd9f6ce53142686d202f";
+const STICKY_AD_WIDTH = 320;
+const STICKY_AD_HEIGHT = 50;
 
 export function AdsterraStickyAd() {
   return (

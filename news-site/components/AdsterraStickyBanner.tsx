@@ -21,7 +21,9 @@ import { useEffect, useRef, useState } from "react";
  * reports zero width.
  *
  * BODY PADDING. The bar is `position: fixed`, so it is out of flow and would sit
- * on top of the footer. The real rendered height is measured (`ResizeObserver`,
+ * on top of the footer. This is why the padding is measured rather than derived
+ * from the ad's declared height: the bar is the ad plus the close-button strip,
+ * the bottom inset and the safe-area inset. The real rendered height is measured (`ResizeObserver`,
  * so it stays right if the creative resizes) and applied as `padding-bottom` on
  * `<body>`, then removed again on dismiss or unmount. Measuring rather than
  * hard-coding matters because an unfilled unit is shorter than a filled one.
@@ -90,7 +92,11 @@ export function AdsterraStickyBanner({ children }: { children: React.ReactNode }
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
+        // The top strip exists so the ✕ has somewhere to live that is NOT on top
+        // of the ad. A 320-wide unit is full-bleed on a 320px phone, so a button
+        // in the bar's corner would otherwise cover the creative. 30px clears
+        // the 28px button; the bottom inset keeps it off the home indicator.
+        padding: "30px 0 calc(6px + env(safe-area-inset-bottom, 0px))",
         background: "rgba(var(--bg), 0.96)",
         boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.14)",
         backdropFilter: "blur(6px)",
@@ -110,8 +116,8 @@ export function AdsterraStickyBanner({ children }: { children: React.ReactNode }
         title="Close advertisement"
         style={{
           position: "absolute",
-          top: 4,
-          right: 4,
+          top: 1,
+          right: 8,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
