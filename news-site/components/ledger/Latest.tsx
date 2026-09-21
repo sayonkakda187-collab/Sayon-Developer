@@ -51,13 +51,6 @@ export function Latest({ stories, filters }: { stories: LedgerStory[]; filters: 
           {shown.map((s, i) => (
             <Fragment key={s.href + i}>
               <Card s={s} i={i} />
-              {/* In-feed AdsKeeper unit: a native card band spanning the full
-                  grid width after the 6th story — but only on a long feed, so an
-                  ad never lands with little/no content after it. */}
-              {i === 5 && shown.length > 8 && (
-                <div className="tl-feed-ad" style={{ gridColumn: "1 / -1" }}>
-                </div>
-              )}
             </Fragment>
           ))}
         </div>

@@ -84,8 +84,6 @@ export function GalleryView({
         <p className="py-16 text-center text-fg-muted">This gallery is empty.</p>
       ) : null}
 
-      <div className="mt-6">
-      </div>
 
       {/* Tap-to-enlarge viewer */}
       {active !== null && images[active] ? (
