@@ -166,9 +166,9 @@ Environment: copy `.env.example` → `.env` (defaults point at the local Docker 
   brightens accents (`--sa → --sa-on`, AA) and lifts tints to ~16/22%. **Don't
   hardcode section hexes in components — reference the `--section-*` tokens.**
 
-## Ads (Adsterra: Social Bar + Native Banner + 300x250)
+## Ads (Adsterra: Social Bar + Popunder + Native Banner + 300x250)
 
-**Three Adsterra units, nothing else.** Every other ad network was removed at the owner's
+**Four Adsterra units, nothing else.** Every other ad network was removed at the owner's
 request — the AdsKeeper placements, the Adsterra banner / popunder / in-page-push
 units, and the reserved AdSense slots are all gone. `lib/ads.ts` is now a single
 constant (the AdSense publisher id, below), and `AdSlot`, `AdOverlay`,
@@ -196,6 +196,27 @@ component — see below). Don't reintroduce the old ones without asking.
 - **To change or remove:** edit `SOCIAL_BAR_SRC` in
   `components/AdsterraSocialBar.tsx`, or delete the single `<AdsterraSocialBar />`
   line from the public layout. No config file, no env var, no DB setting.
+
+### Adsterra Popunder (all public pages)
+
+`components/AdsterraPopunder.tsx`, mounted beside the Social Bar as the last
+child of `app/(public)/layout.tsx`. Same shape as the Social Bar — a single
+self-executing loader with no container — and loaded the same way
+(`afterInteractive` + `async`), so it never blocks the initial render.
+
+- **It must run in the PAGE's own context**, not in a sandboxed iframe like the
+  300x250 banner. A popunder works by intercepting real clicks on the document;
+  an iframe sees none of them.
+- **Public pages only, never `/admin`** — a popunder firing while the owner
+  clicks around the editor would be disruptive, and self-generated popunder
+  traffic is exactly what ad networks class as invalid.
+- ⚠️ **Popunders are incompatible with Google AdSense.** AdSense policy
+  prohibits serving its ads on pages carrying pop-unders that interfere with
+  navigation. The site currently ships only the AdSense **verification** signals
+  and no AdSense units, so nothing is violating policy today — but this unit is
+  very likely to sink the pending application, and the two cannot both run later.
+  Kept at the owner's explicit request; remove the one line from the public
+  layout to disable it.
 
 ### Adsterra Native Banner (article pages only)
 
