@@ -50,9 +50,11 @@ console.log("\n=== describeError: 401 and 403 give DIFFERENT advice ===");
 
 console.log("\n=== describeError: the rest of the statuses ===");
 {
-  const bad = describeError(400, { code: "rest_invalid_param", message: "Invalid parameter(s): status" }, null);
+  // Deliberately NOT `status`: WordPress uses that one to report an auth
+  // failure, so it is special-cased below.
+  const bad = describeError(400, { code: "rest_invalid_param", message: "Invalid parameter(s): slug" }, null);
   is(bad.kind === "invalid", "400 → invalid");
-  is(bad.message === "Invalid parameter(s): status", "400 surfaces WordPress's message verbatim");
+  is(bad.message === "Invalid parameter(s): slug", "400 surfaces WordPress's message verbatim");
 
   const missing = describeError(404, null, "https://x.test");
   is(missing.kind === "not_found", "404 → not_found");
@@ -66,6 +68,35 @@ console.log("\n=== describeError: the rest of the statuses ===");
   is(describeError(400, null, null).message.includes("400"),
      "a 400 with no body still names the status");
   is(describeError(500, { message: "db down" }, null).message.includes("db down"), "5xx relays WP's message");
+}
+
+console.log("\n=== describeError: WordPress's misleading status error ===");
+{
+  // Unauthenticated, WordPress refuses to list drafts via the `status`
+  // sanitiser, which runs during request VALIDATION — so it comes back as
+  // rest_invalid_param (400), not 401/403. Relaying that verbatim sends people
+  // hunting for a bad parameter.
+  const wrapped = describeError(400, {
+    code: "rest_invalid_param",
+    message: "Invalid parameter(s): status",
+    data: { params: { status: "Status is forbidden." } },
+  }, "https://x.test");
+  is(wrapped.kind === "unauthorized", "a status rest_invalid_param is reported as an auth problem");
+  is(/not authenticated|cannot edit posts/i.test(wrapped.message), "and says so plainly");
+  is(/Test connection/i.test(wrapped.message), "and points at the button that actually diagnoses it");
+  is(wrapped.message.includes("Status is forbidden."), "while still relaying WordPress's own detail");
+
+  // Without the params detail, the message text alone is enough to recognise it.
+  const textOnly = describeError(400, { code: "rest_invalid_param", message: "Invalid parameter(s): status" }, null);
+  is(textOnly.kind === "unauthorized", "recognised from the message when no params detail is sent");
+
+  // A DIFFERENT invalid parameter must not be mislabelled as an auth failure.
+  const other = describeError(400, {
+    code: "rest_invalid_param", message: "Invalid parameter(s): featured_media",
+    data: { params: { featured_media: "Invalid media ID." } },
+  }, null);
+  is(other.kind === "invalid", "an unrelated invalid parameter stays 'invalid'");
+  is(other.message.includes("featured_media"), "and still names the field WordPress rejected");
 }
 
 console.log("\n=== describeError never leaks credentials ===");
