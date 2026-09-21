@@ -458,6 +458,30 @@ mapping, Markdown conversion, and the share-panel helpers).
   library. A post loaded from WordPress shows the id without a thumbnail, because
   the panel has the id but has not fetched that media's URL.
 
+### Publishing: two buttons, not one that changes its name
+
+The editor has an explicit **Save draft** and **Publish to WordPress**, side by
+side. Verified by `verify-publish-buttons.mjs` (29 assertions).
+
+- **Why it changed.** There used to be ONE button whose label followed the
+  Status segmented control — it read "Save draft to WordPress" until you found
+  that row and switched it to Publish. The owner asked where the publish button
+  was, which is the whole argument: the way to publish was invisible unless you
+  already knew.
+- **The buttons decide, the control follows.** `submit(as?)` overrides Status,
+  and sets it, so what you pressed is what happened and the row agrees
+  afterwards. Pending and Private keep no button — they are rare — but the Status
+  row still sets them and the secondary button then NAMES the status it will
+  save ("Save as pending"), so it can never silently do something else.
+- **Publish disappears only when the post is already live**, where it would be a
+  no-op next to "Save changes". A loaded DRAFT still offers it: that is how you
+  take an existing draft live.
+- An account without `publish_posts` gets Publish **disabled with the reason**,
+  and Save draft still enabled — drafting is still permitted.
+- `data-action="save"` / `data-action="publish"` are deliberate test hooks:
+  `#wp-editor` holds four `.adm-btn-ghost` buttons (Test connection, Cancel edit,
+  Preview, Save), so class alone selects the wrong one.
+
 ### Share / promote a published post (WordPress panel)
 
 The same panel the Articles tab opens after publishing — reached by publishing
