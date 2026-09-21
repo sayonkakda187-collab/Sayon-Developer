@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "check:split": "tsx scripts/check-article-split.ts",
+    "check:wordpress": "tsx scripts/check-wordpress.ts",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
