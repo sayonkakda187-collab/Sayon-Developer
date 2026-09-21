@@ -1,5 +1,6 @@
 import { describeError, normalizeBaseUrl, plain } from "../lib/wordpress/format";
 import { markdownToHtml } from "../lib/wordpress/markdown";
+import { draftToEditorFields, trendingToItems } from "../lib/wordpress/compose";
 
 let pass = 0, fail = 0;
 const is = (c: boolean, m: string) => { c ? (pass++, console.log("  ✓ " + m)) : (fail++, console.log("  ✗ " + m)); };
@@ -116,6 +117,61 @@ eq(plain("&amp;lt;script&amp;gt;"), "&lt;script&gt;",
    "decodes &amp; LAST, so double-escaped markup does not become a tag");
 eq(plain("  spaced  "), "spaced", "trims");
 eq(plain(""), "", "empty input");
+
+console.log("\n=== draftToEditorFields: what lands in the editor ===");
+{
+  const r = draftToEditorFields({
+    headlines: ["A Clear Headline", "Another Option"],
+    draft: "## Section\n\nBody text.",
+    excerpt: "A short summary.",
+    brief: "What the story is.",
+  }, "Original wire headline");
+  eq(r.title, "A Clear Headline", "title takes the first suggested headline");
+  eq(r.content, "## Section\n\nBody text.", "content is the draft, unchanged");
+  eq(r.excerpt, "A short summary.", "excerpt carries over");
+  eq(r.headlines.length, 2, "all suggestions are kept so another can be picked");
+}
+{
+  // The model is told not to, but sometimes labels or quotes its headlines.
+  const r = draftToEditorFields({ headlines: ['Headline: "The Real Title"'], draft: "x" }, "");
+  eq(r.title, "The Real Title", "a 'Headline:' prefix and wrapping quotes are stripped");
+  eq(draftToEditorFields({ headlines: ["  Title — Spaced   Out  "], draft: "x" }, "").title,
+     "Title — Spaced Out", "internal whitespace is collapsed and ends trimmed");
+  eq(draftToEditorFields({ headlines: ["\u201cCurly quoted\u201d"], draft: "x" }, "").title,
+     "Curly quoted", "curly quotes are stripped too");
+}
+{
+  const r = draftToEditorFields({ headlines: ["Same One", "same one", "Different"], draft: "x" }, "");
+  eq(r.headlines.length, 2, "case-insensitive duplicates are dropped");
+  eq(r.headlines[0], "Same One", "the first spelling offered is the one kept");
+}
+console.log("\n=== draftToEditorFields: never leaves the title empty ===");
+{
+  // A generation that produced a body but no usable headline must still be
+  // usable — otherwise the editor silently ends up with content and no title.
+  eq(draftToEditorFields({ headlines: [], draft: "Body." }, "The source headline").title,
+     "The source headline", "falls back to the headline it was asked to write about");
+  eq(draftToEditorFields({ headlines: ["", "   "], draft: "Body." }, "Fallback").title,
+     "Fallback", "blank suggestions do not count as a headline");
+  eq(draftToEditorFields(null, "Fallback").title, "Fallback", "a null result still yields the fallback");
+  eq(draftToEditorFields(null, "").title, "", "no result and no fallback is empty, not a crash");
+  eq(draftToEditorFields({ draft: "  spaced  " }, "").content, "spaced", "content is trimmed");
+}
+
+console.log("\n=== trendingToItems: only rows the picker can use ===");
+{
+  const items = trendingToItems([
+    { title: " Real story ", description: " desc ", source: " Reuters ", url: "https://a.test/1", image: null, publishedAt: "2026-09-01T00:00:00Z", via: "gnews" },
+    { title: "", description: "", source: "X", url: "https://a.test/2", image: null, publishedAt: null, via: "gnews" },
+    { title: "No url", description: "", source: "X", url: "", image: null, publishedAt: null, via: "gnews" },
+  ] as never);
+  eq(items.length, 1, "rows without a title or url are dropped");
+  eq(items[0].title, "Real story", "title trimmed");
+  eq(items[0].source, "Reuters", "source trimmed");
+  eq(items[0].publishedAt, "2026-09-01T00:00:00Z", "timestamp preserved");
+  eq(trendingToItems(null).length, 0, "null feed is an empty list, not a crash");
+  eq(trendingToItems([]).length, 0, "empty feed stays empty");
+}
 
 async function markdownChecks() {
   console.log("\n=== markdownToHtml: the point of it ===");

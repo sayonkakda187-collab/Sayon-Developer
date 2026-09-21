@@ -6,9 +6,14 @@ import {
   testConnection, updatePost, wordpressStatus,
 } from "@/lib/wordpress/client";
 import { markdownToHtml } from "@/lib/wordpress/markdown";
+import { draftToEditorFields, trendingToItems } from "@/lib/wordpress/compose";
+import { generateAiAssist, isAiConfigured, AiAssistError } from "@/lib/aiAssist";
+import { aggregateTrending, sourceConfigMap } from "@/lib/news/aggregate";
+import { NEWS_SOURCES } from "@/lib/news/sources";
+import { isValidModel } from "@/lib/aiModels";
 import type {
-  WpConfigStatus, WpContentFormat, WpPage, WpPost, WpPostDetail, WpPostInput,
-  WpResult, WpStatus, WpTerm, WpUser,
+  WpAiDraft, WpComposeStatus, WpConfigStatus, WpContentFormat, WpPage, WpPost,
+  WpPostDetail, WpPostInput, WpResult, WpStatus, WpTerm, WpTrendingItem, WpUser,
 } from "@/lib/wordpress/types";
 
 /**
@@ -202,4 +207,109 @@ export async function previewWordPressMarkdown(markdown: unknown): Promise<WpRes
   if (typeof markdown !== "string") return invalid("Nothing to preview.");
   if (markdown.length > MAX_CONTENT) return invalid("That content is too long to preview.");
   return { ok: true, data: await markdownToHtml(markdown) };
+}
+
+// ── composing a post: trending headlines + AI drafting ───────────────────────
+//
+// These reuse the pipelines that already power /admin/trending and the article
+// editor's AI Assist — the same keys, the same prompts, the same originality
+// guardrails. Nothing new talks to an external service; this only makes the two
+// reachable from the WordPress panel so a story can go from headline to
+// published post without leaving it.
+
+/** Which of the two pipelines have keys. Neither value is a key. */
+export async function getWordPressComposeStatus(): Promise<WpComposeStatus> {
+  await requireAdmin();
+  const configured = sourceConfigMap();
+  return {
+    aiConfigured: isAiConfigured(),
+    newsConfigured: NEWS_SOURCES.some((s) => configured[s.id]),
+  };
+}
+
+export async function fetchWordPressTrending(opts: {
+  category?: unknown; query?: unknown; page?: unknown;
+} = {}): Promise<WpResult<WpTrendingItem[]>> {
+  await requireAdmin();
+
+  const configured = sourceConfigMap();
+  const enabled = NEWS_SOURCES.filter((s) => configured[s.id]).map((s) => s.id);
+  if (enabled.length === 0) {
+    return {
+      ok: false, kind: "not_configured",
+      message:
+        "No news source is set up. Add at least one free key (GNEWS_API_KEY, " +
+        "NEWSDATA_API_KEY, THENEWSAPI_KEY or CURRENTSAPI_KEY) and redeploy.",
+    };
+  }
+
+  const page = Math.max(1, Math.floor(Number(opts.page) || 1));
+  try {
+    const result = await aggregateTrending({
+      enabled,
+      query: {
+        query: typeof opts.query === "string" ? opts.query.trim() : "",
+        category: typeof opts.category === "string" && opts.category ? opts.category : "general",
+        lang: "en", country: "us", page,
+      },
+    });
+    const items = trendingToItems(result.items);
+    if (items.length === 0) {
+      // Every source can be configured and still return nothing — a rate limit,
+      // an outage, or simply no match. Say which, rather than an empty list.
+      const failed = result.sources.filter((s) => !s.ok);
+      return {
+        ok: false, kind: "invalid",
+        message: failed.length
+          ? `No headlines came back. ${failed.map((f) => `${f.label}: ${f.note ?? "failed"}`).join("; ")}`
+          : "No headlines matched. Try another category or search term.",
+      };
+    }
+    return { ok: true, data: items };
+  } catch (e) {
+    return {
+      ok: false, kind: "network",
+      message: e instanceof Error ? e.message : "Could not reach the news sources.",
+    };
+  }
+}
+
+/**
+ * Drafts an article with the SAME pipeline the article editor uses, including
+ * its originality guardrails: the model is given only the headline and topic,
+ * never scraped source text, and is instructed to write from general knowledge.
+ */
+export async function draftWordPressArticle(input: {
+  headline?: unknown; topic?: unknown; model?: unknown;
+}): Promise<WpResult<WpAiDraft>> {
+  await requireAdmin();
+
+  const headline = typeof input.headline === "string" ? input.headline.trim() : "";
+  if (!headline) return invalid("Give the AI a headline or topic to write about.");
+  if (headline.length > 300) return invalid("That headline is too long.");
+  if (!isAiConfigured()) {
+    return {
+      ok: false, kind: "not_configured",
+      message: "AI drafting needs ANTHROPIC_API_KEY set in your environment, then a redeploy.",
+    };
+  }
+
+  const topic = typeof input.topic === "string" ? input.topic.trim() : "";
+  const model = isValidModel(input.model) ? input.model : undefined;
+
+  try {
+    const result = await generateAiAssist({ headline, topic, model });
+    const fields = draftToEditorFields(result, headline);
+    if (!fields.content) return invalid("The AI returned an empty draft. Try again.");
+    return { ok: true, data: fields };
+  } catch (e) {
+    if (e instanceof AiAssistError) {
+      // Reuse the same kinds the WordPress errors use so the UI needs one path.
+      const kind = e.code === "auth" ? "unauthorized"
+        : e.code === "quota" ? "rate_limited"
+        : e.code === "network" ? "network" : "invalid";
+      return { ok: false, kind, message: e.message };
+    }
+    return { ok: false, kind: "invalid", message: e instanceof Error ? e.message : "Drafting failed." };
+  }
 }

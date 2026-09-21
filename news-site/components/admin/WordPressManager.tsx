@@ -8,8 +8,9 @@ import {
   updateWordPressPost,
 } from "@/app/admin/wordpress-actions";
 import type {
-  WpConfigStatus, WpContentFormat, WpPost, WpStatus, WpTerm,
+  WpAiDraft, WpComposeStatus, WpConfigStatus, WpContentFormat, WpPost, WpStatus, WpTerm,
 } from "@/lib/wordpress/types";
+import { WordPressCompose } from "@/components/admin/WordPressCompose";
 import {
   CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, RefreshIcon, TrashIcon,
 } from "@/components/admin/icons";
@@ -120,7 +121,14 @@ function TermPicker({
   );
 }
 
-export function WordPressManager({ status }: { status: WpConfigStatus }) {
+export function WordPressManager({
+  status, compose, trendingCategories,
+}: {
+  status: WpConfigStatus;
+  compose: WpComposeStatus;
+  /** Named apart from the post's own `categories` state, which holds WP term IDs. */
+  trendingCategories: { id: string; label: string }[];
+}) {
   const { success, error } = useToast();
   const [pending, startTransition] = useTransition();
 
@@ -145,6 +153,8 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
   const [loadingPost, setLoadingPost] = useState(false);
+  /** The story a generated draft came from, shown so it can be checked. */
+  const [sourceLink, setSourceLink] = useState<string | null>(null);
 
   // ── taxonomies + list ──────────────────────────────────────────────────────
   const [terms, setTerms] = useState<{ categories: WpTerm[]; tags: WpTerm[] }>({ categories: [], tags: [] });
@@ -190,7 +200,7 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
     setEditingId(null); setTitle(""); setContent(""); setPostStatus("draft");
     setExcerpt(""); setSlug(""); setCategories([]); setTags([]); setFeaturedMedia("");
     setFieldErrors({}); setShowPreview(false); setPreviewHtml("");
-    setFormat("markdown");
+    setFormat("markdown"); setSourceLink(null);
   }
 
   function validate(): boolean {
@@ -200,6 +210,22 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
     if (!content.trim()) errs.content = "Add some content before publishing.";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
+  }
+
+  function applyDraft(draft: WpAiDraft, sourceUrl?: string) {
+    // Deliberately drops out of edit mode: filling a generated draft into a post
+    // loaded from WordPress would overwrite live content with one click.
+    setEditingId(null);
+    setTitle(draft.title);
+    setContent(draft.content);
+    setFormat("markdown");          // the AI returns Markdown
+    if (draft.excerpt) setExcerpt(draft.excerpt);
+    setPostStatus("draft");         // never jump straight to publish
+    setFieldErrors({});
+    setShowPreview(false);
+    setPreviewHtml("");
+    setSourceLink(sourceUrl ?? null);
+    document.getElementById("wp-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function openForEdit(id: number) {
@@ -212,7 +238,7 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
     // WordPress stores HTML, so that is what comes back — regardless of how the
     // post was originally written. Treating it as Markdown and converting on
     // save would mangle it, so the editor switches to HTML for a loaded post.
-    setFormat("html"); setShowPreview(false); setPreviewHtml("");
+    setFormat("html"); setShowPreview(false); setPreviewHtml(""); setSourceLink(null);
     setPostStatus((STATUS_OPTIONS.some((s) => s.id === p.status) ? p.status : "draft") as WpStatus);
     setExcerpt(p.excerptRaw); setSlug(p.slug);
     setCategories(p.categories); setTags(p.tags);
@@ -337,6 +363,13 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
         )}
       </div>
 
+      <WordPressCompose
+        status={compose}
+        categories={trendingCategories}
+        onApply={applyDraft}
+        busy={pending || loadingPost}
+      />
+
       {/* ── editor ───────────────────────────────────────────────────────── */}
       <div className="adm-card adm-card-pad" id="wp-editor">
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -350,6 +383,15 @@ export function WordPressManager({ status }: { status: WpConfigStatus }) {
           )}
         </div>
         {loadingPost && <div className="adm-card-sub" style={{ marginTop: 8 }}>Loading post…</div>}
+        {sourceLink && (
+          <div className="adm-card-sub" style={{ marginTop: 8 }}>
+            Drafted from a trending headline —{" "}
+            <a className="adm-link" href={sourceLink} target="_blank" rel="noopener noreferrer">
+              read the original
+            </a>{" "}
+            and check the facts before publishing.
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
           <label className="adm-field">

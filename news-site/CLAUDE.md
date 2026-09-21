@@ -428,6 +428,43 @@ mapping, and Markdown conversion).
   posts. `testConnection` reports the account and its capabilities, and the UI
   disables Publish when the account lacks `publish_posts`.
 
+### Find a story: trending headlines + AI drafting (in the WordPress panel)
+
+`components/admin/WordPressCompose.tsx`, above the editor. Reuses the pipelines
+that already power `/admin/trending` and the article editor's AI Assist — the
+same keys, prompts and originality guardrails. **Nothing new talks to an
+external service**; this only makes the two reachable from the WordPress panel,
+so a story can go from headline to published post without leaving it.
+
+- **Two entry points, one path.** Type a topic, or pick a trending headline —
+  both call `draftWordPressArticle`, which runs `generateAiAssist` and maps the
+  result onto the editor's fields.
+- **Inspiration only, structurally.** The model receives the HEADLINE and topic,
+  never the source article's text, and writes from general knowledge. The source
+  link is kept and shown in the editor so the original can be read and the facts
+  checked before publishing.
+- **A generated draft always starts a NEW post.** Applying one drops out of edit
+  mode: filling it into a post loaded from WordPress would overwrite live content
+  with a single click. It also forces status back to Draft — never straight to
+  Publish.
+- **`lib/wordpress/compose.ts` holds the mapping** (`draftToEditorFields`,
+  `trendingToItems`) as pure functions, deliberately separate from the actions.
+  The calls they sit between reach api.anthropic.com and the news APIs, which no
+  test here can exercise; the shape of what lands in the editor is the part that
+  can go wrong, so that is the part covered by `npm run check:wordpress`.
+- It strips the `Headline:` prefixes and wrapping quotes models add despite the
+  prompt, de-duplicates suggestions case-insensitively, and **falls back to the
+  source headline** so a generation that produced a body but no usable headline
+  never leaves the title box empty.
+- **Unconfigured keys are named, not hidden.** No `ANTHROPIC_API_KEY` → drafting
+  is disabled with the variable named (trending still works, so a headline can be
+  picked and written by hand). No news key → the four free options are listed.
+- ⚠️ **Not covered by tests here:** the live round trip to Anthropic and the news
+  APIs. Neither endpoint is overridable and this environment has no keys and no
+  egress to them. What IS covered: the mapping, and — with dummy keys set — that
+  the enabled controls activate, that a failing call is reported rather than
+  crashing, and that a failed draft writes nothing into the editor.
+
 ## Facebook Pages integration (Graph API)
 
 Distribute published articles to Facebook Pages from the admin panel using the
