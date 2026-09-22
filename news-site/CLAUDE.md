@@ -202,9 +202,12 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 - It stays in the PUBLIC layout, never the root one, so `/admin` loads no ad
   code — verified.
 - **A widget fills only ONE container per page.** Two slots on the same page
-  therefore need different ids — but the SAME id on different pages is fine and
-  is used deliberately (the homepage header and the article header share
-  `2070978`). Get this wrong and the second slot silently stays empty.
+  therefore need different ids — but the SAME id on different pages is fine, and
+  `HOME_FEED` / `GALLERY_FEED` still share `2071391` on that basis. Get this
+  wrong and the second slot silently stays empty.
+  The article top slot USED to share `2070978` with the homepage header; it now
+  has its own `2085551`, so the two report separate earnings lines instead of
+  one figure covering both.
 - **Unset slots collapse, they do not leave holes.** Any id still reading
   `REPLACE_WITH_…` is treated as a placeholder (`isPlaceholder`), and the slot
   renders nothing — no empty box, no reserved gap. `adSlotLive()` is the gate.
@@ -213,7 +216,8 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 
 | slot | widget | where |
 |---|---|---|
-| `IN_ARTICLE_TOP` / `HOME` | `2070978` | header unit, above the headline and above the hero |
+| `IN_ARTICLE_TOP` | `2085551` | above the article title, first thing under the site header |
+| `HOME` | `2070978` | homepage header, above the hero |
 | `AFTER_KEY_POINTS` · `IN_ARTICLE` · `RECOMMENDED` | `2071423` | three positions in the article body, **one shared id** |
 | `SIDEBAR_1` | `2071408` | desktop rail beside the article body |
 | `SITEWIDE_FEED` | `2071410` | above the footer on EVERY public page |
@@ -268,7 +272,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   DISTINCT in-content widget per section, and repeating an id would not produce
   more ads. The article falls back to paragraph-based placement.
 
-Verified by `verify-adskeeper.mjs` (69 assertions): zero Adsterra markers and
+Verified by `verify-adskeeper.mjs` (76 assertions): zero Adsterra markers and
 zero requests to any Adsterra host on home/article/category/search, the loader
 present and carrying **1108814** rather than the legacy id, every expected widget
 container on the page, no `REPLACE_WITH` placeholder reaching the DOM, the rail

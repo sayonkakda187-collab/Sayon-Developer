@@ -172,12 +172,15 @@ export const ADS_LEGACY = {
  * keys, IAB display -> STICKY_FOOTER).
  */
 export const ADS_PRIMARY = {
-  /** AdsKeeper HEADER WIDGET (4 columns desktop / 2 mobile, "Interesting for
-   *  you"). Its dashboard entry states it "should be placed above the page
-   *  content", which on an article means above the headline and cover — so it
-   *  goes here and nowhere else. Do NOT also map it to HOME: that slot sits
-   *  below the hero, which is not a header position. */
-  IN_ARTICLE_TOP: "2070978",
+  /** Widget 2085551 — the unit ABOVE THE ARTICLE TITLE, the first thing under
+   *  the site header on a story page.
+   *
+   *  It replaced 2070978 here at the owner's request. 2070978 still serves the
+   *  HOMEPAGE header below, so the two pages no longer share one widget: each
+   *  now fills independently AND reports its own earnings line, instead of one
+   *  figure covering both. Sharing was always allowed (a widget fills one slot
+   *  per PAGE, and these are different pages) — it was just less legible. */
+  IN_ARTICLE_TOP: "2085551",
   /** In-body unit. Empty — awaiting an In-content / Feed widget. The only other
    *  id this site has (2071266) is an In-site Notification and belongs on
    *  NOTIFICATION, not here. */
@@ -199,9 +202,9 @@ export const ADS_PRIMARY = {
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
   /** Placement 3 — end of the article content, before the comments. */
   RECOMMENDED: "2071423",
-  /** HEADER WIDGET 2070978 on the HOMEPAGE — same id as IN_ARTICLE_TOP, which is
-   *  fine and intended: a widget fills one slot per PAGE, and these are different
-   *  pages. AdsKeeper types it "Header widget — a responsive single-row ad unit
+  /** HEADER WIDGET 2070978 — now the HOMEPAGE's alone, since the article's top
+   *  slot moved to its own widget (2085551) above.
+   *  AdsKeeper types it "Header widget — a responsive single-row ad unit
    *  that should be placed ABOVE the page content", so it renders at the very top
    *  of the homepage, above the hero. */
   HOME: "2070978",
