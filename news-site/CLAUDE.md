@@ -218,7 +218,8 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 |---|---|---|
 | `IN_ARTICLE_TOP` | `2085551` | above the article title, first thing under the site header |
 | `HOME` | `2070978` | homepage header, above the hero |
-| `AFTER_KEY_POINTS` · `IN_ARTICLE` · `RECOMMENDED` | `2071423` | three positions in the article body, **one shared id** |
+| `AFTER_KEY_POINTS` · `IN_ARTICLE` | `2071423` | two positions in the body, **one shared id** — see the warning below |
+| `RECOMMENDED` | `2085571` | end of the article, after the story, above the comments |
 | `SIDEBAR_1` | `2071408` | desktop rail beside the article body |
 | `SITEWIDE_FEED` | `2071410` | above the footer on EVERY public page |
 | `HOME_FEED` / `GALLERY_FEED` | `2071391` | homepage feed band, gallery grid |
@@ -227,11 +228,14 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 | `STICKY_FOOTER` | `2071425` | dismissible bar pinned to the bottom |
 | `INTERSTITIAL` | `2071426` | self-triggering full-screen unit |
 
-- **The three body slots deliberately share one id.** AdsKeeper's own install
-  snippet says the container "can be added in multiple places on page `<body>`",
-  so one widget is meant to serve several positions — and it keeps the earnings
-  on one line. If AdsKeeper turns out to fill only the first, give the other two
-  their own ids; the slots do not change either way.
+- ⚠️ **`AFTER_KEY_POINTS` and `IN_ARTICLE` still share `2071423`, and that
+  costs a slot.** A widget fills only ONE container per page, so on any given
+  article just one of those two can serve — the other renders nothing. The
+  end-of-article slot used to be a third sharer until it was given `2085571`.
+  AdsKeeper's install snippet does say a container "can be added in multiple
+  places on page `<body>`", which is what the arrangement was based on, but
+  one-fill-per-page is the behaviour that decides it. **Give each its own widget
+  to recover the wasted slot**; until then treat one of the two as decorative.
 - **The paragraph-anchored slots count PARAGRAPHS, not blocks.** A heading, pull quote,
   list or image between the first two paragraphs does not advance the count, so
   the unit lands before the second thing a reader would call a paragraph.
@@ -272,7 +276,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   DISTINCT in-content widget per section, and repeating an id would not produce
   more ads. The article falls back to paragraph-based placement.
 
-Verified by `verify-adskeeper.mjs` (76 assertions): zero Adsterra markers and
+Verified by `verify-adskeeper.mjs` (84 assertions): zero Adsterra markers and
 zero requests to any Adsterra host on home/article/category/search, the loader
 present and carrying **1108814** rather than the legacy id, every expected widget
 container on the page, no `REPLACE_WITH` placeholder reaching the DOM, the rail

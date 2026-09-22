@@ -186,22 +186,29 @@ export const ADS_PRIMARY = {
    *  NOTIFICATION, not here. */
   /** Placement 2 — mid-article, centred by text length (see buildArticleParts).
    *
-   *  ⚠️ All three in-body slots share ONE id (2071423), which is deliberate.
-   *  AdsKeeper's own install snippet says the container "can be added in multiple
-   *  places on page <body> where you want your widgets to appear", so a single
-   *  widget is meant to serve several positions. This replaces the previous
-   *  patchwork of 2071391 / 2071409 / 2071266 in the article body — one widget,
-   *  three positions, one earnings line to read.
-   *
-   *  If AdsKeeper turns out to fill only the first of the three, give the other
-   *  two their own ids; the slots are unchanged either way. */
+   *  ⚠️ This id is ALSO used by AFTER_KEY_POINTS below, and a widget fills only
+   *  ONE container per page — so on any given article only one of the two can
+   *  actually serve, and the other renders nothing. The end-of-article slot was
+   *  the third sharer until it got its own 2085571. Giving these two their own
+   *  ids too would recover the wasted slot; until then, treat one of them as
+   *  decorative. */
   IN_ARTICLE: "2071423",
   /** Placement 1 — below the title/meta block, before the first body paragraph. */
   AFTER_KEY_POINTS: "2071423",
   IN_ARTICLE_2: "REPLACE_WITH_IN_ARTICLE_2_ID",
   IN_ARTICLE_3: "REPLACE_WITH_IN_ARTICLE_3_ID",
-  /** Placement 3 — end of the article content, before the comments. */
-  RECOMMENDED: "2071423",
+  /** Widget 2085571 — the END-OF-ARTICLE unit, after the final paragraph and the
+   *  share buttons, above the comments.
+   *
+   *  It replaced 2071423 here at the owner's request, and the swap is worth more
+   *  than tidiness: a widget fills only ONE container per page, so while this
+   *  slot shared 2071423 with AFTER_KEY_POINTS and IN_ARTICLE, only one of those
+   *  three could ever fill on a given article — the other two rendered nothing.
+   *  With its own id this one fills independently, and reports its own earnings.
+   *
+   *  ⚠️ 2071423 is still shared by the two remaining slots below, so one of THEM
+   *  is still going empty. Give each its own widget to recover it. */
+  RECOMMENDED: "2085571",
   /** HEADER WIDGET 2070978 — now the HOMEPAGE's alone, since the article's top
    *  slot moved to its own widget (2085551) above.
    *  AdsKeeper types it "Header widget — a responsive single-row ad unit
