@@ -45,6 +45,13 @@ const STATUS_OPTIONS: { id: WpStatus; label: string }[] = [
 
 type FieldErrors = { title?: string; content?: string };
 
+/** What the secondary action button says, per status. Never "publish". */
+const SECONDARY_LABEL: Record<Exclude<WpStatus, "publish">, string> = {
+  draft: "Save draft",
+  pending: "Save as pending",
+  private: "Save as private",
+};
+
 function StatusPill({ status }: { status: string }) {
   const tone =
     status === "publish" ? { bg: "rgb(var(--sa) / 0.14)", fg: "var(--section-link)" }
@@ -260,10 +267,19 @@ export function WordPressManager({
     document.getElementById("wp-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function submit() {
+  /**
+   * Save the post. `as` overrides the Status control, because the two action
+   * buttons ARE the decision: "Publish" means publish whatever the segmented
+   * control happens to say, and "Save draft" means draft. The control is left in
+   * sync so what you pressed is visible afterwards, and so Pending/Private —
+   * which have no button of their own — still work through it.
+   */
+  function submit(as?: WpStatus) {
     if (!validate()) return;
+    const status = as ?? postStatus;
+    if (as && as !== postStatus) setPostStatus(as);
     const form = {
-      title: title.trim(), content, format, status: postStatus,
+      title: title.trim(), content, format, status,
       excerpt, slug: slug.trim(), categories, tags,
       featuredMedia: featuredMedia.trim() === "" ? null : Number(featuredMedia),
     };
@@ -327,6 +343,12 @@ export function WordPressManager({
 
   const canPublish =
     connection?.ok === true ? connection.caps.includes("publish_posts") : true;
+
+  // What the non-publish button saves as. "publish" is not one of its options:
+  // that is the other button's job, and a button labelled "Save draft" that
+  // published would be a trap.
+  const secondaryStatus: Exclude<WpStatus, "publish"> =
+    postStatus === "publish" ? "draft" : postStatus;
 
   // ── not configured ─────────────────────────────────────────────────────────
   if (!status.configured) {
@@ -546,13 +568,39 @@ export function WordPressManager({
           </label>
         </div>
 
-        <div className="adm-settings-actions" style={{ marginTop: 14 }}>
-          <button type="button" className="adm-btn-primary" onClick={submit} disabled={pending || loadingPost}>
-            {pending ? <span className="adm-spinner" aria-hidden /> : editingId === null ? <PlusIcon className="h-4 w-4" /> : <CheckIcon className="h-4 w-4" />}
-            {editingId === null
-              ? (postStatus === "publish" ? "Publish to WordPress" : "Save draft to WordPress")
-              : "Save changes"}
+        {/*
+          Two buttons, not one whose label depends on a control above it. The
+          old single button said "Save draft to WordPress" until you found the
+          Status row and switched it to Publish — so the way to publish was
+          invisible unless you already knew where it was.
+
+          Pending and Private keep no button of their own: they are rare, and the
+          Status row still sets them, at which point the secondary button names
+          the status it will save.
+        */}
+        <div className="adm-settings-actions" style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button" className="adm-btn-ghost" data-action="save"
+            onClick={() => submit(editingId === null ? secondaryStatus : undefined)}
+            disabled={pending || loadingPost}
+          >
+            {pending ? <span className="adm-spinner" aria-hidden /> : <CheckIcon className="h-4 w-4" />}
+            {editingId === null ? SECONDARY_LABEL[secondaryStatus] : "Save changes"}
           </button>
+
+          {/* Hidden only when the post is ALREADY live — there is nothing left to
+              publish, and "Save changes" above does the job. */}
+          {!(editingId !== null && postStatus === "publish") && (
+            <button
+              type="button" className="adm-btn-primary" data-action="publish"
+              onClick={() => submit("publish")}
+              disabled={pending || loadingPost || !canPublish}
+              title={canPublish ? undefined : "This WordPress account cannot publish"}
+            >
+              {pending ? <span className="adm-spinner" aria-hidden /> : <PlusIcon className="h-4 w-4" />}
+              Publish to WordPress
+            </button>
+          )}
         </div>
       </div>
 
