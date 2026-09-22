@@ -14,14 +14,24 @@ import { isNonHumanView } from "@/lib/botDetect";
 import { Markdown } from "@/components/Markdown";
 import { ArticleCard } from "@/components/ArticleCard";
 import { CommentForm } from "@/components/CommentForm";
-import { AdsterraNativeBanner } from "@/components/AdsterraNativeBanner";
-import { AdsterraBanner300x250 } from "@/components/AdsterraBanner300x250";
-import { splitArticleForAd } from "@/lib/articleSplit";
 import { Reveal } from "@/components/Reveal";
 import { ShareButtons } from "@/components/ShareButtons";
 import { ReadingProgress } from "@/components/ReadingProgress";
+import { AdSlot } from "@/components/AdSlot";
+import { AdRail } from "@/components/AdRail";
+import { adsForHost, adSlotLive } from "@/lib/ads";
 import { parseKeyPoints } from "@/lib/keyPoints";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
+
+type Props = { params: { slug: string } };
+
+type ArticlePart =
+  | { type: "md"; content: string }
+  | { type: "ad" }
+  | { type: "ad2" }
+  | { type: "ad3" }
+  /** An after-a-section slot; `slot` indexes into the host's sectionAds list. */
+  | { type: "section"; slot: number };
 
 // Homepage (with required UTM for Unsplash) for the cover credit line's source link.
 const COVER_SOURCE_HOME: Record<string, string> = {
@@ -30,7 +40,141 @@ const COVER_SOURCE_HOME: Record<string, string> = {
   Pixabay: "https://pixabay.com",
   "Wikimedia Commons": "https://commons.wikimedia.org",
 };
-type Props = { params: { slug: string } };
+
+/**
+ * One ad below every "## " section of the story.
+ *
+ * Sections are the H2 headings the articles are written with ("Trump Delays 50%
+ * Tariffs", "Consumers Could Feel the Effects", …). A slot goes after each
+ * section EXCEPT the last — an ad there would sit directly above the
+ * end-of-article unit, stacking two ads back to back.
+ *
+ * ⚠️ Capped at `sectionAdCount`, the number of DISTINCT widget ids the host has
+ * for these slots. An AdsKeeper widget fills only one container per page, so
+ * emitting more containers than ids would just add empty ones. Sections beyond
+ * the cap simply run on without an ad.
+ *
+ * Returns null when the piece has fewer than two headings — nothing to divide —
+ * so the caller can fall back to paragraph-based placement.
+ */
+function buildSectionParts(blocks: string[], sectionAdCount: number): ArticlePart[] | null {
+  // A heading block starts with "## " (H2). "###" and deeper stay inside a section.
+  const isHeading = (b: string) => /^##\s+\S/.test(b.trim()) && !/^###/.test(b.trim());
+  const headings = blocks.reduce<number[]>((acc, b, i) => (isHeading(b) ? [...acc, i] : acc), []);
+  if (headings.length < 2) return null;
+
+  // Section boundaries: intro (before the first heading, may be empty) then one
+  // run per heading. Cuts land ON a heading, so each ad closes the section above.
+  const bounds = headings[0] === 0 ? headings : [0, ...headings];
+  const parts: ArticlePart[] = [];
+  let used = 0;
+  for (let i = 0; i < bounds.length; i++) {
+    const start = bounds[i];
+    const end = i + 1 < bounds.length ? bounds[i + 1] : blocks.length;
+    const body = blocks.slice(start, end).join("\n\n");
+    if (body.trim()) parts.push({ type: "md", content: body });
+    // No ad after the final section — it would collide with the end-of-article unit.
+    const isLast = i === bounds.length - 1;
+    if (!isLast && used < sectionAdCount) {
+      parts.push({ type: "section", slot: used });
+      used++;
+    }
+  }
+  return used > 0 ? parts : null;
+}
+
+/**
+ * Split the article body to inject in-article ads between paragraphs, scaled to
+ * length so short reads stay clean and long reads carry more:
+ *   • a first slot after the opening (~4th paragraph) on pieces with ≥4 paragraphs;
+ *   • a second slot ~⅔ through, only on longer pieces (≥8 paragraphs);
+ *   • a third slot ~85% through, only on VERY long pieces (≥12 paragraphs).
+ * Each is kept ≥3 paragraphs clear of the previous one, so ads never crowd. Short
+ * pieces (<4 paragraphs) get none. A cut never lands inside a ``` code fence. The
+ * prominent top-of-page ad and the end-of-article recommendation are rendered
+ * separately (above the headline and after the body), not here.
+ */
+function buildArticleParts(content: string, sectionAdCount = 0, inBodyAdCount = 3): ArticlePart[] {
+  const blocks = content.split(/\n{2,}/).filter((b) => b.trim().length > 0);
+
+  // Preferred layout: one ad BELOW EACH "## " section of the story. Only used
+  // when the piece actually has sections to divide (2+ headings) and there are
+  // widget ids to fill the slots — otherwise fall through to the paragraph-based
+  // placement below, so a heading-less article still carries its ads.
+  if (sectionAdCount > 0) {
+    const sectioned = buildSectionParts(blocks, sectionAdCount);
+    if (sectioned) return sectioned;
+  }
+
+  const n = blocks.length;
+  if (n === 0) return [{ type: "md", content }];
+
+  // A slice of the body as one markdown part.
+  const md = (a: number, b?: number): ArticlePart => ({ type: "md", content: blocks.slice(a, b).join("\n\n") });
+  const fenceCount = (s: string) => (s.match(/```/g) || []).length;
+  // Move the cut forward until the leading slice has balanced code fences.
+  const balancedCut = (idx: number): number => {
+    let i = idx;
+    while (i < n && fenceCount(blocks.slice(0, i).join("\n\n")) % 2 !== 0) i++;
+    return i < n ? i : -1;
+  };
+
+  // With only ONE in-body widget to fill, that single ad belongs in the MIDDLE of
+  // the story rather than just after the opening — otherwise the whole lower half
+  // runs without one. (The multi-slot ladder below is for sites with several ids:
+  // its first cut sits early precisely because more ads follow it.)
+  if (inBodyAdCount <= 1) {
+    if (n < 4) return [{ type: "md", content }];
+    // Midpoint by TEXT LENGTH, not block count. Blocks are wildly uneven — a
+    // heading is a few words, a paragraph is a few lines — so splitting at
+    // block n/2 lands well above the visual middle on a story with many
+    // headings. Cutting where half the prose has been read is what "the middle
+    // of the article" actually means to a reader.
+    const half = blocks.reduce((sum, b) => sum + b.length, 0) / 2;
+    let run = 0;
+    let target = 1;
+    for (let i = 0; i < n; i++) {
+      run += blocks[i].length;
+      if (run >= half) { target = i + 1; break; }
+    }
+    const mid = balancedCut(Math.min(Math.max(target, 1), n - 1));
+    if (mid < 1 || mid >= n) return [{ type: "md", content }];
+    return [md(0, mid), { type: "ad" }, md(mid)];
+  }
+
+  // First mid-article slot after the opening, only when the body is long enough.
+  let cut = n >= 4 ? balancedCut(3) : -1;
+  if (cut < 1 || cut >= n) cut = -1;
+  if (cut === -1) return [{ type: "md", content }];
+
+  // Optional SECOND slot ~⅔ in — only on longer pieces, ≥3 blocks past the first
+  // cut, and with ≥2 blocks of story still after it.
+  let cut2 = -1;
+  if (n >= 8) {
+    const b = balancedCut(Math.max(cut + 3, Math.round(n * 0.66)));
+    if (b > cut && b <= n - 2) cut2 = b;
+  }
+  // Optional THIRD slot deeper still (~85%) — only on VERY long pieces (≥12
+  // paragraphs), ≥3 blocks past the second, so three ads never crowd.
+  let cut3 = -1;
+  if (cut2 !== -1 && n >= 12) {
+    const b = balancedCut(Math.max(cut2 + 3, Math.round(n * 0.85)));
+    if (b > cut2 && b <= n - 2) cut3 = b;
+  }
+
+  const parts: ArticlePart[] = [md(0, cut), { type: "ad" }];
+  let prev = cut;
+  if (cut2 !== -1) {
+    parts.push(md(prev, cut2), { type: "ad2" });
+    prev = cut2;
+  }
+  if (cut3 !== -1) {
+    parts.push(md(prev, cut3), { type: "ad3" });
+    prev = cut3;
+  }
+  parts.push(md(prev));
+  return parts;
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const article = await getArticleBySlug(params.slug);
@@ -85,6 +229,7 @@ export default async function ArticlePage({ params }: Props) {
   // Live-readers numbers reflect actual people (and line up with AdsKeeper).
   // (This does NOT affect the private-gallery Live Audience — that's separate.)
   const h = headers();
+  const { ads, sectionAds } = adsForHost(h.get("host"));
   if (!isNonHumanView(h)) {
     await incrementViews(
       article.id,
@@ -101,11 +246,6 @@ export default async function ArticlePage({ params }: Props) {
   ]);
 
   const shareUrl = `${siteConfig.url}/news/${article.slug}`;
-
-  // Where the in-article 300x250 banner goes. `after` comes back empty when the
-  // article has fewer than two paragraphs, which means the ad lands at the end
-  // of the body instead of inside it.
-  const body = splitArticleForAd(article.content, 2);
 
   // NewsArticle structured data (schema.org) — helps Google News/Search render
   // the story with headline, image, dates, author, and publisher logo. Server-
@@ -127,8 +267,7 @@ export default async function ArticlePage({ params }: Props) {
     mainEntityOfPage: { "@type": "WebPage", "@id": shareUrl },
   };
 
-  // "Key Points" bullets (empty → box doesn't render) and whether the reserved
-  // AdSense slots should render (resolved once, passed to each slot).
+  // "Key Points" bullets — empty means the box doesn't render.
   const keyPoints = parseKeyPoints(article.keyPoints);
 
   const metaItems = (
@@ -147,6 +286,8 @@ export default async function ArticlePage({ params }: Props) {
 
   // How many of the three in-body slots this domain can actually fill. One → the
   // single ad is centred in the story; several → the staggered ladder.
+  const inBodyAdCount = [ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3].filter(adSlotLive).length;
+  const parts = buildArticleParts(article.content, sectionAds.length, inBodyAdCount);
 
   return (
     <main>
@@ -156,6 +297,12 @@ export default async function ArticlePage({ params }: Props) {
       />
       <ReadingProgress />
 
+      {/* Top-of-page ad — placed ABOVE the headline + cover (just under the site
+          header) for maximum visibility, per the requested layout. It collapses
+          cleanly if AdsKeeper returns no ad, so it never leaves an empty box. */}
+      <div className="px-4 sm:px-6">
+        <AdSlot widgetId={ads.IN_ARTICLE_TOP} minHeight={300} />
+      </div>
 
       {/* Immersive hero (headline over cover) */}
       {article.coverImage ? (
@@ -265,13 +412,30 @@ export default async function ArticlePage({ params }: Props) {
               </aside>
             )}
 
+            {/* Ad directly below the Key Points box. Deliberately OUTSIDE the
+                keyPoints check — an article with no key points still shows it here,
+                in the same spot right after the standfirst. */}
+            <AdSlot widgetId={ads.AFTER_KEY_POINTS} minHeight={250} className="mb-9" />
+
             <ShareButtons url={shareUrl} title={article.title} className="mb-8" />
 
-            <Markdown content={body.before} />
-
-            <AdsterraBanner300x250 />
-
-            {body.after ? <Markdown content={body.after} /> : null}
+            {/* Body with its in-article ads. Preferred layout is one unit below
+                each "## " section; a piece with no sections falls back to the
+                paragraph-based placement. Every unit lazy-loads and removes itself
+                when the network returns nothing. */}
+            {parts.map((p, i) =>
+              p.type === "md" ? (
+                <Markdown key={i} content={p.content} />
+              ) : p.type === "section" ? (
+                <AdSlot key={i} widgetId={sectionAds[p.slot]} />
+              ) : p.type === "ad" ? (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
+              ) : p.type === "ad2" ? (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} />
+              ) : (
+                <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
+              ),
+            )}
 
             {article.tags.length > 0 && (
               <div className="mt-12 flex flex-wrap gap-2">
@@ -291,10 +455,10 @@ export default async function ArticlePage({ params }: Props) {
             </div>
           </div>
 
-          {/* Native banner: directly after the article body, before comments.
-              Collapses to zero height (and zero margin) until the unit fills,
-              so an unfilled ad never leaves a gap here. */}
-          <AdsterraNativeBanner />
+          {/* END-OF-ARTICLE recommendation — the AdsKeeper "Interesting for you"
+              widget lives here, AFTER the story ends (never above it). */}
+          <AdSlot widgetId={ads.RECOMMENDED} minHeight={300} />
+
 
           <section
             id="comments"
@@ -360,6 +524,7 @@ export default async function ArticlePage({ params }: Props) {
           )}
         </div>
 
+        <AdRail widgetIds={[ads.SIDEBAR_1]} />
       </div>
     </main>
   );
