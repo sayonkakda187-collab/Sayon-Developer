@@ -88,37 +88,58 @@ export function isParagraph(block: string): boolean {
 }
 
 /**
- * Split a body so an ad can sit immediately BEFORE the second paragraph.
+ * Split a body so an ad can sit immediately BEFORE the Nth paragraph.
  *
- * Returns null — meaning place nothing — when the body has no second paragraph
- * to sit in front of. An ad appended to a one-paragraph article would land at
- * the end of the story, which is not what "before paragraph 2" asks for, and
- * there is already an end-of-article unit there.
+ * `alreadySeen` is how many paragraphs appeared in EARLIER parts of the body.
+ * The article layout has usually already cut the body for its own slots, so
+ * paragraph 4 may live in the second or third piece — counting from zero within
+ * each piece would put the ad in the wrong place, or lose it entirely.
  *
- * A link-reference or footnote definition below the cut is NOT a reason to
- * refuse here: the two halves are rendered as separate markdown documents, so
- * references are resolved per half either way — that is a pre-existing property
- * of splitting the body at all, not something this placement introduces.
+ * Returns null — meaning place nothing here — when this piece does not contain
+ * the Nth paragraph, or when the split would leave one side empty. An ad at the
+ * very start or end of the body is not "before paragraph N"; those positions
+ * already have units of their own.
+ *
+ * `paragraphs` is the running count including this piece, so a caller walking
+ * several pieces can carry it forward.
  */
-export function splitBeforeSecondParagraph(
+export function splitBeforeParagraph(
   content: string,
-): { before: string; after: string } | null {
-  if (!content || !content.trim()) return null;
-
-  const blocks = splitIntoBlocks(content);
-  let seen = 0;
+  n: number,
+  alreadySeen = 0,
+): { before: string; after: string; paragraphs: number } | null {
+  const blocks = content && content.trim() ? splitIntoBlocks(content) : [];
+  let seen = alreadySeen;
+  let cut = -1;
 
   for (let i = 0; i < blocks.length; i++) {
     if (!isParagraph(blocks[i])) continue;
     seen++;
-    if (seen < 2) continue;
-
-    const before = blocks.slice(0, i).join("\n\n").trim();
-    const after = blocks.slice(i).join("\n\n").trim();
-    // Both sides must carry something, or the ad ends up at one edge of the
-    // body rather than inside it.
-    return before && after ? { before, after } : null;
+    if (seen === n && cut === -1) cut = i;
   }
 
-  return null;
+  const paragraphs = seen;
+  if (cut < 1) return null; // not here, or it would sit before the body opens
+
+  const before = blocks.slice(0, cut).join("\n\n").trim();
+  const after = blocks.slice(cut).join("\n\n").trim();
+  if (!before || !after) return null;
+  return { before, after, paragraphs };
+}
+
+/** Paragraphs of prose in a body — what "paragraph N" counts. */
+export function countParagraphs(content: string): number {
+  if (!content || !content.trim()) return 0;
+  return splitIntoBlocks(content).filter(isParagraph).length;
+}
+
+/**
+ * Kept as the name the paragraph-2 slot was introduced with. `splitBeforeParagraph`
+ * is the general form; this is the same call with n = 2.
+ */
+export function splitBeforeSecondParagraph(
+  content: string,
+): { before: string; after: string } | null {
+  const r = splitBeforeParagraph(content, 2);
+  return r ? { before: r.before, after: r.after } : null;
 }

@@ -219,6 +219,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 | `SITEWIDE_FEED` | `2071410` | above the footer on EVERY public page |
 | `HOME_FEED` / `GALLERY_FEED` | `2071391` | homepage feed band, gallery grid |
 | `BEFORE_PARAGRAPH_2` | `2085515` | immediately before the body's 2nd paragraph |
+| `BEFORE_PARAGRAPH_4` | `2085525` | immediately before the body's 4th paragraph |
 | `STICKY_FOOTER` | `2071425` | dismissible bar pinned to the bottom |
 | `INTERSTITIAL` | `2071426` | self-triggering full-screen unit |
 
@@ -227,20 +228,29 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   so one widget is meant to serve several positions — and it keeps the earnings
   on one line. If AdsKeeper turns out to fill only the first, give the other two
   their own ids; the slots do not change either way.
-- **`BEFORE_PARAGRAPH_2` counts PARAGRAPHS, not blocks.** A heading, pull quote,
+- **The paragraph-anchored slots count PARAGRAPHS, not blocks.** A heading, pull quote,
   list or image between the first two paragraphs does not advance the count, so
   the unit lands before the second thing a reader would call a paragraph.
   `lib/articleAds.ts` holds that logic, pure and covered by `npm run check:ads`
-  (35 assertions). Its block splitter is fence-aware, carried over from the
+  (57 assertions). Its block splitter is fence-aware, carried over from the
   retired `articleSplit.ts`: the naive `content.split(/\n{2,}/)` used elsewhere
   on this page treats a blank line INSIDE a fenced code block as a boundary, and
   cutting there halves the fence and renders the rest of the story as code.
-  It is applied as a pass over the finished parts list (`withBeforeParagraph2`),
-  so it holds on all three layout branches without any of them knowing about it,
-  and a body with no second paragraph is left untouched.
-  ⚠️ It lands one paragraph below `AFTER_KEY_POINTS`, so two units sit close
-  together near the top of an article. That is what was asked for — if they read
-  as crowded, move or drop `AFTER_KEY_POINTS`, not this one.
+  Applied as one pass over the finished parts list (`withParagraphAds`), so both
+  slots hold on all three layout branches without any of them knowing about it,
+  and a body too short for a slot is left untouched.
+- **Paragraphs are counted CUMULATIVELY across every markdown part**, which is
+  the whole difficulty of the paragraph-4 slot: the layout has usually already
+  sliced the body for its own ads, so paragraph 4 frequently lives in the second
+  or third slice. Counting from zero within each slice would put that unit after
+  the wrong paragraph, or drop it entirely — `splitBeforeParagraph` therefore
+  takes the running count, and `check:ads` covers exactly that case.
+- **Paragraph 1 is refused.** An ad there sits above the body rather than inside
+  it, which is `AFTER_KEY_POINTS`'s job, not this one's.
+  ⚠️ With both slots live an article carries THREE units in its opening
+  stretch: `AFTER_KEY_POINTS` above the body, then one before paragraph 2 and
+  another before paragraph 4. That is what was asked for — if it reads as
+  crowded, `AFTER_KEY_POINTS` is the one to move, not these.
 - **`SITEWIDE_FEED` is the only ad that reaches `/category` and `/search`**,
   which otherwise carry none. On an article it lands after the comments, so it is
   the lowest-viewability unit of the set — the listing pages are its value.
@@ -258,7 +268,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   DISTINCT in-content widget per section, and repeating an id would not produce
   more ads. The article falls back to paragraph-based placement.
 
-Verified by `verify-adskeeper.mjs` (63 assertions): zero Adsterra markers and
+Verified by `verify-adskeeper.mjs` (69 assertions): zero Adsterra markers and
 zero requests to any Adsterra host on home/article/category/search, the loader
 present and carrying **1108814** rather than the legacy id, every expected widget
 container on the page, no `REPLACE_WITH` placeholder reaching the DOM, the rail

@@ -1,4 +1,7 @@
-import { splitBeforeSecondParagraph, isParagraph, splitIntoBlocks } from "../lib/articleAds";
+import {
+  splitBeforeSecondParagraph, splitBeforeParagraph, countParagraphs,
+  isParagraph, splitIntoBlocks,
+} from "../lib/articleAds";
 
 let pass = 0, fail = 0;
 const is = (c: boolean, m: string) => { c ? (pass++, console.log("  ✓ " + m)) : (fail++, console.log("  ✗ " + m)); };
@@ -97,6 +100,64 @@ console.log("\n=== nothing is lost or duplicated ===");
   eq(rejoined.replace(/\s+/g, " ").trim(), body.replace(/\s+/g, " ").trim(),
      "before + after reconstructs the original body exactly");
 }
+
+console.log("\n=== splitBeforeParagraph: any N, not just 2 ===");
+{
+  const body = [P(1), P(2), P(3), P(4), P(5)].join("\n\n");
+  const r4 = splitBeforeParagraph(body, 4);
+  is(r4 !== null, "a five-paragraph body splits before paragraph 4");
+  is(!!r4 && r4.before.includes(P(3)), "paragraphs 1-3 are above the ad");
+  is(!!r4 && !r4.before.includes(P(4)), "paragraph 4 is NOT above it");
+  is(!!r4 && r4.after.startsWith(P(4)), "the ad sits directly before paragraph 4");
+  eq(r4?.paragraphs, 5, "it reports the running paragraph total");
+
+  const r2 = splitBeforeParagraph(body, 2);
+  is(!!r2 && r2.after.startsWith(P(2)), "and still works for paragraph 2");
+}
+{
+  // Too short: paragraph 4 does not exist, so nothing is placed.
+  eq(splitBeforeParagraph([P(1), P(2), P(3)].join("\n\n"), 4), null,
+     "a three-paragraph body gets no paragraph-4 unit");
+  eq(splitBeforeParagraph(P(1), 4), null, "nor does a one-paragraph body");
+  eq(splitBeforeParagraph("", 4), null, "nor an empty one");
+}
+{
+  // n = 1 would put the ad above the whole body, which is a different slot's job.
+  eq(splitBeforeParagraph([P(1), P(2)].join("\n\n"), 1), null,
+     "paragraph 1 is refused — that is above the body, not inside it");
+}
+
+console.log("\n=== the cumulative count: paragraph 4 in a LATER slice ===");
+{
+  // The layout has already cut the body; paragraph 4 lives in the second piece.
+  const first = [P(1), P(2)].join("\n\n");
+  const second = [P(3), P(4), P(5)].join("\n\n");
+
+  eq(splitBeforeParagraph(second, 4), null,
+     "counting from zero inside the second slice MISSES it");
+
+  const seen = countParagraphs(first);
+  eq(seen, 2, "the first slice holds two paragraphs");
+  const r = splitBeforeParagraph(second, 4, seen);
+  is(r !== null, "carrying the count forward finds it");
+  is(!!r && r.before.trim() === P(3), "paragraph 3 stays above the ad");
+  is(!!r && r.after.startsWith(P(4)), "and the ad lands before paragraph 4");
+  eq(r?.paragraphs, 5, "the running total spans both slices");
+}
+{
+  // Non-paragraph blocks in an earlier slice must not inflate the count.
+  const first = [P(1), "## A heading", "- a list"].join("\n\n");
+  eq(countParagraphs(first), 1, "a heading and a list are not paragraphs");
+  const second = [P(2), P(3), P(4)].join("\n\n");
+  const r = splitBeforeParagraph(second, 4, countParagraphs(first));
+  is(!!r && r.after.startsWith(P(4)), "so paragraph 4 is still found correctly");
+}
+
+console.log("\n=== countParagraphs ===");
+eq(countParagraphs([P(1), P(2), P(3)].join("\n\n")), 3, "counts prose paragraphs");
+eq(countParagraphs("## A\n\n## B"), 0, "headings count for nothing");
+eq(countParagraphs(""), 0, "empty content");
+eq(countParagraphs("```\ntext\n\nmore\n```"), 0, "a fenced block is not a paragraph");
 
 console.log("\n=== the building blocks behave ===");
 eq(splitIntoBlocks("a\n\nb\n\nc").length, 3, "splitIntoBlocks counts top-level blocks");

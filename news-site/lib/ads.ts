@@ -150,6 +150,8 @@ export const ADS_LEGACY = {
   SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
   /** Before the article's SECOND paragraph. No widget on the legacy site. */
   BEFORE_PARAGRAPH_2: "REPLACE_WITH_BEFORE_PARAGRAPH_2_ID",
+  /** Before the article's FOURTH paragraph. No widget on the legacy site. */
+  BEFORE_PARAGRAPH_4: "REPLACE_WITH_BEFORE_PARAGRAPH_4_ID",
   SITEWIDE_FEED: "2047761",
 } as const;
 
@@ -263,6 +265,16 @@ export const ADS_PRIMARY = {
    *  carries two units close together near the top. That is what was asked for;
    *  if they read as crowded, move or drop AFTER_KEY_POINTS rather than this one. */
   BEFORE_PARAGRAPH_2: "2085515",
+  /** Widget 2085525 — the same idea, before the FOURTH paragraph, so the body
+   *  carries a second in-content unit further down without waiting for the
+   *  mid-article ladder.
+   *
+   *  Paragraph 4 often falls BEYOND the first slice the layout produces for its
+   *  own slots, so the insertion counts paragraphs cumulatively across the whole
+   *  body rather than within one piece of it — see withParagraphAds on the
+   *  article page. A story with fewer than four paragraphs simply does not get
+   *  this unit. */
+  BEFORE_PARAGRAPH_4: "2085525",
   /** FEED widget 2071410 — the site-wide unit above the footer, rendered once in
    *  (public)/layout.tsx so it appears on EVERY public page. It is the only ad
    *  that reaches /category and /search, which otherwise carry none.
