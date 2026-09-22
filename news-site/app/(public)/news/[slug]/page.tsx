@@ -21,6 +21,7 @@ import { AdSlot } from "@/components/AdSlot";
 import { AdRail } from "@/components/AdRail";
 import { adsForHost, adSlotLive } from "@/lib/ads";
 import { parseKeyPoints } from "@/lib/keyPoints";
+import { splitBeforeSecondParagraph } from "@/lib/articleAds";
 import { formatDate, formatNumber, siteConfig } from "@/lib/site";
 
 type Props = { params: { slug: string } };
@@ -30,6 +31,8 @@ type ArticlePart =
   | { type: "ad" }
   | { type: "ad2" }
   | { type: "ad3" }
+  /** The unit immediately before the body's SECOND paragraph. */
+  | { type: "adP2" }
   /** An after-a-section slot; `slot` indexes into the host's sectionAds list. */
   | { type: "section"; slot: number };
 
@@ -176,6 +179,36 @@ function buildArticleParts(content: string, sectionAdCount = 0, inBodyAdCount = 
   return parts;
 }
 
+/**
+ * Put the "before paragraph 2" unit into an already-built parts list.
+ *
+ * Applied AFTER the layout branches rather than inside each of them: all three
+ * (section ads, the single mid-article ad, the multi-slot ladder) start with a
+ * markdown part covering the top of the body, so one pass here covers every
+ * case and none of them has to know about this slot.
+ *
+ * Only the FIRST markdown part is considered — that is where the opening of the
+ * story is. A body with no second paragraph is left alone.
+ */
+function withBeforeParagraph2(parts: ArticlePart[]): ArticlePart[] {
+  const i = parts.findIndex((p) => p.type === "md");
+  if (i === -1) return parts;
+
+  const first = parts[i];
+  if (first.type !== "md") return parts;
+
+  const split = splitBeforeSecondParagraph(first.content);
+  if (!split) return parts;
+
+  return [
+    ...parts.slice(0, i),
+    { type: "md", content: split.before },
+    { type: "adP2" },
+    { type: "md", content: split.after },
+    ...parts.slice(i + 1),
+  ];
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const article = await getArticleBySlug(params.slug);
   if (!article) return { title: "Article not found" };
@@ -287,7 +320,13 @@ export default async function ArticlePage({ params }: Props) {
   // How many of the three in-body slots this domain can actually fill. One → the
   // single ad is centred in the story; several → the staggered ladder.
   const inBodyAdCount = [ads.IN_ARTICLE, ads.IN_ARTICLE_2, ads.IN_ARTICLE_3].filter(adSlotLive).length;
-  const parts = buildArticleParts(article.content, sectionAds.length, inBodyAdCount);
+  // The before-paragraph-2 unit is layered on afterwards so it holds whichever
+  // layout branch ran, and is skipped entirely when its widget id is a
+  // placeholder (the legacy domain) — adSlotLive() gates the slot itself, but
+  // splitting the body for a slot that renders nothing would leave a seam.
+  const parts = adSlotLive(ads.BEFORE_PARAGRAPH_2)
+    ? withBeforeParagraph2(buildArticleParts(article.content, sectionAds.length, inBodyAdCount))
+    : buildArticleParts(article.content, sectionAds.length, inBodyAdCount);
 
   return (
     <main>
@@ -432,6 +471,8 @@ export default async function ArticlePage({ params }: Props) {
                 <AdSlot key={i} widgetId={ads.IN_ARTICLE} />
               ) : p.type === "ad2" ? (
                 <AdSlot key={i} widgetId={ads.IN_ARTICLE_2} />
+              ) : p.type === "adP2" ? (
+                <AdSlot key={i} widgetId={ads.BEFORE_PARAGRAPH_2} />
               ) : (
                 <AdSlot key={i} widgetId={ads.IN_ARTICLE_3} />
               ),

@@ -186,10 +186,21 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   serving old shared links). A widget from one site never fills on the other, so
   this is not cosmetic. An unknown host (preview, localhost) falls back to
   primary; AdsKeeper serves nothing off an authorized domain anyway.
-- **Two parts, both wired up:** a head preloader (`jsc.adskeeper.com/site/ID.js`,
-  `components/AdsHead.tsx`) loaded once site-wide, and one
+- **Two parts, both wired up:** the head preloader
+  (`jsc.adskeeper.com/site/ID.js`, `components/AdsHead.tsx`) and one
   `<div data-type="_mgwidget" data-widget-id="…">` per placement
   (`components/AdSlot.tsx`).
+- **The loader is a PLAIN `<script async>` in the served `<head>`, not
+  `next/script`.** With `strategy="afterInteractive"` the raw HTML carried only
+  a `<link rel="preload">` and the real tag was injected into `<body>` after
+  hydration. AdsKeeper documents it as a `<head>` tag and "view source" is how a
+  publisher checks their install, so it belongs where they look for it. React
+  hoists an async script rendered in the public layout into `<head>`;
+  `verify-adskeeper.mjs` asserts that against the RAW response, and that exactly
+  ONE loader TAG exists (the same URL also appears in Next's RSC flight payload,
+  which is serialized data, not a second script).
+- It stays in the PUBLIC layout, never the root one, so `/admin` loads no ad
+  code — verified.
 - **A widget fills only ONE container per page.** Two slots on the same page
   therefore need different ids — but the SAME id on different pages is fine and
   is used deliberately (the homepage header and the article header share
@@ -207,6 +218,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
 | `SIDEBAR_1` | `2071408` | desktop rail beside the article body |
 | `SITEWIDE_FEED` | `2071410` | above the footer on EVERY public page |
 | `HOME_FEED` / `GALLERY_FEED` | `2071391` | homepage feed band, gallery grid |
+| `BEFORE_PARAGRAPH_2` | `2085515` | immediately before the body's 2nd paragraph |
 | `STICKY_FOOTER` | `2071425` | dismissible bar pinned to the bottom |
 | `INTERSTITIAL` | `2071426` | self-triggering full-screen unit |
 
@@ -215,6 +227,20 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   so one widget is meant to serve several positions — and it keeps the earnings
   on one line. If AdsKeeper turns out to fill only the first, give the other two
   their own ids; the slots do not change either way.
+- **`BEFORE_PARAGRAPH_2` counts PARAGRAPHS, not blocks.** A heading, pull quote,
+  list or image between the first two paragraphs does not advance the count, so
+  the unit lands before the second thing a reader would call a paragraph.
+  `lib/articleAds.ts` holds that logic, pure and covered by `npm run check:ads`
+  (35 assertions). Its block splitter is fence-aware, carried over from the
+  retired `articleSplit.ts`: the naive `content.split(/\n{2,}/)` used elsewhere
+  on this page treats a blank line INSIDE a fenced code block as a boundary, and
+  cutting there halves the fence and renders the rest of the story as code.
+  It is applied as a pass over the finished parts list (`withBeforeParagraph2`),
+  so it holds on all three layout branches without any of them knowing about it,
+  and a body with no second paragraph is left untouched.
+  ⚠️ It lands one paragraph below `AFTER_KEY_POINTS`, so two units sit close
+  together near the top of an article. That is what was asked for — if they read
+  as crowded, move or drop `AFTER_KEY_POINTS`, not this one.
 - **`SITEWIDE_FEED` is the only ad that reaches `/category` and `/search`**,
   which otherwise carry none. On an article it lands after the comments, so it is
   the lowest-viewability unit of the set — the listing pages are its value.
@@ -232,7 +258,7 @@ and the sticky bottom banner, plus the older `AdsterraScripts` / `AdsterraBanner
   DISTINCT in-content widget per section, and repeating an id would not produce
   more ads. The article falls back to paragraph-based placement.
 
-Verified by `verify-adskeeper.mjs` (38 assertions): zero Adsterra markers and
+Verified by `verify-adskeeper.mjs` (63 assertions): zero Adsterra markers and
 zero requests to any Adsterra host on home/article/category/search, the loader
 present and carrying **1108814** rather than the legacy id, every expected widget
 container on the page, no `REPLACE_WITH` placeholder reaching the DOM, the rail

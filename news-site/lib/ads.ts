@@ -148,6 +148,8 @@ export const ADS_LEGACY = {
    *  widget on THIS site already appears elsewhere on the article page, and a
    *  widget fills only one slot per page — this needs its own id. */
   SIDEBAR_1: "REPLACE_WITH_SIDEBAR_1_ID",
+  /** Before the article's SECOND paragraph. No widget on the legacy site. */
+  BEFORE_PARAGRAPH_2: "REPLACE_WITH_BEFORE_PARAGRAPH_2_ID",
   SITEWIDE_FEED: "2047761",
 } as const;
 
@@ -248,6 +250,19 @@ export const ADS_PRIMARY = {
    *  never mounts below 1024px, so phones never receive the container and the
    *  impression is never served to a reader who cannot see it. */
   SIDEBAR_1: "2071408",
+  /** Widget 2085515 — an in-content unit placed immediately BEFORE the article's
+   *  SECOND paragraph, per the owner's instruction and AdsKeeper's own install
+   *  snippet (which says a container "can be added in multiple places on page
+   *  <body>").
+   *
+   *  "Second paragraph" counts PARAGRAPHS of prose, not blocks: a standfirst
+   *  heading, a pull quote or a list between the first two paragraphs does not
+   *  advance the count. See lib/articleAds.ts.
+   *
+   *  ⚠️ This lands one paragraph below AFTER_KEY_POINTS (2071423), so an article
+   *  carries two units close together near the top. That is what was asked for;
+   *  if they read as crowded, move or drop AFTER_KEY_POINTS rather than this one. */
+  BEFORE_PARAGRAPH_2: "2085515",
   /** FEED widget 2071410 — the site-wide unit above the footer, rendered once in
    *  (public)/layout.tsx so it appears on EVERY public page. It is the only ad
    *  that reaches /category and /search, which otherwise carry none.
