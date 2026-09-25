@@ -1291,6 +1291,32 @@ UI; adds one nullable `Article.coverImageSource` column (migration
   `BLOB_READ_WRITE_TOKEN` re-hosts Pixabay (already set in production). Route:
   `app/api/admin/image-search` (GET search + POST resolve, `requireAdmin`).
 
+### Repairing cover images (`/api/admin/fix-covers`)
+
+Admin-gated. `GET` reports, `GET ?json=1` reports as JSON, `POST` repairs.
+Verified by `verify-covers.mjs` (15 assertions).
+
+- **It handles THREE failures, not two.** `host` (a cover pointing at a host
+  `next/image` refuses, e.g. pixabay), `missing` (the file is gone), and
+  **`none` — no cover at all**. The third was the gap: the scan queried
+  `where: { coverImage: { not: null } }`, so an article whose automatic image
+  pick came back empty was invisible to the repair and stayed image-less
+  forever. `pickFeaturedImage` returns `null` on ANY failure, so one photo-API
+  outage produces exactly that, silently.
+- **A `none` article is never "cleared".** Writing null over null would report a
+  phantom repair and bump `updatedAt` for nothing. It is counted as
+  `stillEmpty` and left for a later run, when a photo source may be reachable.
+- **Only 404/410 count as gone** when probing an existing cover. An earlier
+  version treated `head.ok` as the test, which made a 403/429/503 look identical
+  to a deleted file — a CDN rate-limiting the scan would have wiped working
+  covers site-wide.
+- The scan and the repair have SEPARATE time budgets inside one 60s
+  `maxDuration`, so a wall of slow URLs cannot consume the request and return
+  nothing. Idempotent, so a timed-out run resumes by calling again.
+- ⚠️ It repairs what is already stored. It does not stop new articles being
+  saved without a cover — that is `pickFeaturedImage` at creation time, and it
+  fails quietly by design so an image problem never blocks a draft.
+
 ## Scheduled publishing (with agent control)
 
 Articles can be **scheduled** to auto-publish at a chosen time, and the **Facebook

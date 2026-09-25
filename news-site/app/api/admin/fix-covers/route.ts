@@ -36,8 +36,9 @@ type Broken = {
   slug: string;
   coverImage: string | null;
   categoryId: string | null;
-  /** Why it is broken — the two causes need different explanations. */
-  reason: "host" | "missing";
+  /** Why it is broken — the three causes need different explanations, and
+   *  "none" is repaired differently (there is nothing to clear). */
+  reason: "host" | "missing" | "none";
 };
 
 /** A probe is cheap but not free; bound it so a wall of dead URLs cannot eat the
@@ -120,6 +121,19 @@ async function findBroken(
     take: limit,
   });
 
+  // Articles with NO cover at all. The query above EXCLUDES them, which is why
+  // nothing ever backfilled an article whose automatic image pick came back
+  // empty — pickFeaturedImage returns null on any failure, so an outage or an
+  // exhausted photo-API key leaves a permanently image-less article that this
+  // repair could not even see. They render the first-letter tile in the admin
+  // list and the branded card publicly, and stay that way forever.
+  const none = await prisma.article.findMany({
+    where: { coverImage: null },
+    select: { id: true, title: true, slug: true, coverImage: true, categoryId: true },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
   const wrongHost = rows.filter((a) => !isRenderableImageUrl(a.coverImage));
   const rightHost = rows.filter((a) => isRenderableImageUrl(a.coverImage));
 
@@ -137,9 +151,11 @@ async function findBroken(
       ...wrongHost.map((a) => ({ ...a, reason: "host" as const })),
       // `undefined` means "not reached before the budget ran out" — not broken.
       ...rightHost.filter((_, i) => results[i] === true).map((a) => ({ ...a, reason: "missing" as const })),
+      // No probe needed: these have no URL to probe.
+      ...none.map((a) => ({ ...a, reason: "none" as const })),
     ],
-    scanned: wrongHost.length + checked,
-    total: rows.length,
+    scanned: wrongHost.length + checked + none.length,
+    total: rows.length + none.length,
   };
 }
 
@@ -156,6 +172,7 @@ export async function GET(req: Request): Promise<Response> {
       total,
       wrongHost: broken.filter((b) => b.reason === "host").length,
       missingFile: broken.filter((b) => b.reason === "missing").length,
+      noCover: broken.filter((b) => b.reason === "none").length,
       sample: broken.slice(0, 8).map((a) => ({ title: a.title, cover: a.coverImage, reason: a.reason })),
     });
   }
@@ -163,12 +180,13 @@ export async function GET(req: Request): Promise<Response> {
   const { broken, scanned, total } = await findBroken();
   const wrongHost = broken.filter((b) => b.reason === "host").length;
   const missingFile = broken.filter((b) => b.reason === "missing").length;
-  const hosts = [...new Set(broken.map((a) => {
-    try { return new URL(a.coverImage!).hostname; } catch { return "(not a URL)"; }
+  const noCover = broken.filter((b) => b.reason === "none").length;
+  const hosts = [...new Set(broken.filter((a) => a.coverImage).map((a) => {
+    try { return new URL(a.coverImage as string).hostname; } catch { return "(not a URL)"; }
   }))];
   // Show real stored addresses. Every wrong guess in this investigation came
   // from not being able to see one.
-  const samples = broken.slice(0, 3).map((a) => a.coverImage ?? "");
+  const samples = broken.filter((a) => a.coverImage).slice(0, 3).map((a) => a.coverImage as string);
 
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 
@@ -194,7 +212,9 @@ export async function GET(req: Request): Promise<Response> {
 
 <div class="card">
   <p class="big">${broken.length}</p>
-  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} with a cover that cannot be displayed${
+  <p class="sub" style="margin:0">article${broken.length === 1 ? "" : "s"} needing a cover${
+    noCover ? ` &middot; ${noCover} with no cover at all` : ""
+  }${
     scanned < total ? ` &middot; checked ${scanned} of ${total} so far` : ""
   }</p>
   ${
@@ -267,15 +287,16 @@ export async function POST(): Promise<NextResponse> {
   const started = Date.now();
   const { broken, scanned, total } = await findBroken(500, 20_000);
   if (broken.length === 0) {
-    return NextResponse.json({ done: scanned >= total, replaced: 0, cleared: 0, scanned, total });
+    return NextResponse.json({ done: scanned >= total, replaced: 0, cleared: 0, stillEmpty: 0, scanned, total });
   }
 
   const deadline = started + 45_000;
   let replaced = 0;
   let cleared = 0;
+  let stillEmpty = 0;
 
   for (const a of broken) {
-    if (Date.now() > deadline) return NextResponse.json({ done: false, replaced, cleared, scanned, total });
+    if (Date.now() > deadline) return NextResponse.json({ done: false, replaced, cleared, stillEmpty, scanned, total });
 
     let category: string | undefined;
     if (a.categoryId) {
@@ -295,6 +316,11 @@ export async function POST(): Promise<NextResponse> {
         },
       });
       replaced++;
+    } else if (a.reason === "none") {
+      // Nothing to clear — it is already empty. Writing null over null would
+      // count a phantom repair and touch updatedAt for no reason. Leave it; a
+      // later run can try again once a photo source is reachable.
+      stillEmpty++;
     } else {
       // The floor: an article with no cover renders the branded OG card, which
       // is a deliberate-looking design. An unusable URL renders an empty box
@@ -308,5 +334,5 @@ export async function POST(): Promise<NextResponse> {
   }
 
   // Not done while part of the list went unscanned — the page calls again.
-  return NextResponse.json({ done: scanned >= total, replaced, cleared, scanned, total });
+  return NextResponse.json({ done: scanned >= total, replaced, cleared, stillEmpty, scanned, total });
 }
