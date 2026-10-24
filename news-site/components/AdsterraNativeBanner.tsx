@@ -1,15 +1,28 @@
 "use client";
 
-import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
 /**
  * Adsterra Native Banner — end of the article body, above comments.
  *
  * Two parts that must both be present: the `invoke.js` loader and a div whose
- * id the loader looks up. The div is server-rendered here, and the script runs
- * `afterInteractive` (i.e. after hydration), so the container is always in the
- * DOM before the loader goes looking for it.
+ * id the loader looks up. The div is rendered here and the loader is appended
+ * from the effect below, AFTER the container exists, so it is always in the DOM
+ * before the loader goes looking for it.
+ *
+ * WHY NOT `next/script`. It was `<Script id="adsterra-native-banner">`, and
+ * next/script deduplicates by that id: on a client-side move from one article
+ * to the next, the component remounts with a fresh EMPTY container but the
+ * loader is considered already loaded and never runs again. The unit filled on
+ * the first article of a session and was blank on every one after it — which is
+ * precisely the reader who followed a Related Stories link. Verified by probe:
+ * loader executions stayed at 1 across two articles while the second
+ * container's childElementCount stayed 0.
+ *
+ * So the tag is appended per mount with a cache-busting query, and removed on
+ * unmount. The query matters: without it the browser serves the cached script
+ * and, more importantly, Adsterra's loader guards against running twice for the
+ * same source in one document.
  *
  * WHY THE MARGINS ARE CONDITIONAL. An element with vertical margins occupies
  * flow even when it is completely empty — that is exactly the dead-space bug
@@ -57,7 +70,20 @@ export function AdsterraNativeBanner() {
       }
     });
     observer.observe(el, { childList: true, subtree: true });
-    return () => observer.disconnect();
+
+    // Append the loader HERE rather than rendering a <Script>, so it runs again
+    // on every article — see the note above. The container is in the DOM by now
+    // because this effect runs after the commit.
+    const script = document.createElement("script");
+    script.src = `${NATIVE_SRC}?r=${Date.now()}`;
+    script.async = true;
+    script.setAttribute("data-cfasync", "false");
+    document.body.appendChild(script);
+
+    return () => {
+      observer.disconnect();
+      script.remove();
+    };
   }, []);
 
   return (
@@ -79,13 +105,6 @@ export function AdsterraNativeBanner() {
       >
         <div id={CONTAINER_ID} ref={containerRef} style={{ maxWidth: "100%" }} />
       </div>
-      <Script
-        id="adsterra-native-banner"
-        src={NATIVE_SRC}
-        strategy="afterInteractive"
-        async
-        data-cfasync="false"
-      />
     </>
   );
 }

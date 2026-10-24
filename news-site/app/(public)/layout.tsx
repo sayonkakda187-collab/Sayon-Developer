@@ -7,6 +7,7 @@ import { MarketsTicker } from "@/components/ledger/MarketsTicker";
 import { Masthead } from "@/components/ledger/Masthead";
 import { LedgerNewsletter } from "@/components/ledger/LedgerNewsletter";
 import { LedgerFooter } from "@/components/ledger/LedgerFooter";
+import { ReadersOnline } from "@/components/ReadersOnline";
 import { AdsterraSocialBar } from "@/components/AdsterraSocialBar";
 import { AdsterraPopunder } from "@/components/AdsterraPopunder";
 import { AdsterraStickyAd } from "@/components/AdsterraStickyAd";
@@ -47,6 +48,9 @@ export default async function PublicLayout({
       </Suspense>
       <div className="flex-1">{children}</div>
       <LedgerNewsletter />
+      {/* Live reader count (whos.amung.us), above the footer. Public pages only
+          — counting the owner's own admin refreshes would inflate it. */}
+      <ReadersOnline />
       <LedgerFooter sections={sections} />
       {/* Last children of the layout, so they are the final things in <body>.
           Both are self-displaying Adsterra units with no container to place, and

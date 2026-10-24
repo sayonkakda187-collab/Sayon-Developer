@@ -331,6 +331,32 @@ self-executing loader with no container — and loaded the same way
 > `AdRail`, `AdStickyFooter`, `lib/articleAds.ts` and `npm run check:ads` are
 > gone; `lib/ads.ts` is back to the single AdSense publisher id.
 
+### Live reader counter (whos.amung.us)
+
+`components/ReadersOnline.tsx`, mounted above the footer in the public layout.
+Not an ad — it reports how many people are reading now and feeds the owner's
+whos.amung.us dashboard. Verified by `verify-readers.mjs` (26 assertions).
+
+- **Public pages only, never `/admin`** — the owner refreshing the editor would
+  be counted as readers, and an inflated number is worse than none.
+- **Built in an effect, not two `<script>` tags.** The config (`_wau.push`) must
+  run BEFORE the loader or the loader finds nothing, and React hoists
+  `<script async src>` into `<head>` — which would put the loader EARLIER in the
+  document than an inline config left in the body, inverting the order the
+  snippet assumes. Appending both from the effect makes the order explicit.
+  A test asserts the loader saw a populated `_wau` when it executed.
+- **The id IS the anchor.** `_waug8v` is both the config script's id and what the
+  loader looks up to decide where to draw, so a duplicate would be ambiguous —
+  hence the guard, and a test that two client-side article moves still leave
+  exactly one anchor and one loader.
+- It mounts in the LAYOUT, which does not unmount between articles, so it counts
+  once per full page load and keeps running across client-side navigation.
+  ⚠️ A reader moving between articles without a reload is therefore not
+  re-counted: the LIVE figure is right, a page-view total would under-count. The
+  admin **Audience** tab is the per-article view count.
+- The snippet's protocol-relative `//waust.at/d.js` is written as explicit
+  `https://`. The site is HTTPS-only and the legacy form buys nothing.
+
 ### Google AdSense (verification signals only — no ad units)
 
 No AdSense ad renders anywhere; only the ownership signals remain, so the pending
