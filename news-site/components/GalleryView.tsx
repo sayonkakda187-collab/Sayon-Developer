@@ -2,20 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { AdSlot } from "@/components/AdSlot";
-import { ADS } from "@/lib/ads";
-
-// In-content AdsKeeper widget ids interspersed among the images. Each id appears
-// ONCE on this page (a widget fills only one slot per page). GALLERY_FEED (2047583)
-// is the DEDICATED in-content gallery Feed unit (its own earnings reporting) and
-// leads the rotation; the rest are reused from the article/home placements, which
-// live on different pages, so they fill independently here. (The gallery's two
-// in-site NOTIFICATIONS — 2047612 / 2047642 — are NOT here; they're self-displaying
-// overlays mounted on the gallery page.) Layout: a header unit up top, feed units
-// woven into the grid, a recommendation unit at the end. All AdsKeeper.
-const TOP_AD = ADS.HOME;
-const FEED_ADS = [ADS.GALLERY_FEED, ADS.IN_ARTICLE, ADS.IN_ARTICLE_2, ADS.IN_ARTICLE_3] as const;
-const END_AD = ADS.RECOMMENDED;
 
 export function GalleryView({
   title,
@@ -50,7 +36,6 @@ export function GalleryView({
   // Weave the grid: after every 5th image, drop in the next unused feed ad
   // (each ad id used once, so we never exceed one-slot-per-widget-per-page).
   const cells: ReactNode[] = [];
-  let adCursor = 0;
   images.forEach((src, i) => {
     cells.push(
       <button
@@ -69,14 +54,6 @@ export function GalleryView({
         />
       </button>,
     );
-    if ((i + 1) % 5 === 0 && adCursor < FEED_ADS.length) {
-      const id = FEED_ADS[adCursor++];
-      cells.push(
-        <div key={`ad-${i}`} className="col-span-full">
-          <AdSlot widgetId={id} minHeight={120} />
-        </div>,
-      );
-    }
   });
 
   return (
@@ -85,7 +62,6 @@ export function GalleryView({
         {title}
       </h1>
 
-      <AdSlot widgetId={TOP_AD} minHeight={120} />
 
       {videos.length > 0 && (
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -108,9 +84,6 @@ export function GalleryView({
         <p className="py-16 text-center text-fg-muted">This gallery is empty.</p>
       ) : null}
 
-      <div className="mt-6">
-        <AdSlot widgetId={END_AD} minHeight={250} />
-      </div>
 
       {/* Tap-to-enlarge viewer */}
       {active !== null && images[active] ? (
